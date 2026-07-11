@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>Donote — can't reach the server</title>
+        <style>
+            :root { color-scheme: light dark; }
+            body {
+                font-family: -apple-system, system-ui, sans-serif;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                margin: 0;
+            }
+            main { text-align: center; max-width: 26rem; padding: 2rem; }
+            h1 { font-size: 1.2rem; }
+            p { color: #777; font-size: 0.92rem; line-height: 1.5; }
+            button {
+                margin-top: 0.75rem;
+                padding: 0.5rem 1.1rem;
+                border-radius: 8px;
+                border: 1px solid #8884;
+                background: transparent;
+                font-size: 0.9rem;
+                cursor: pointer;
+            }
+        </style>
+    </head>
+    <body>
+        <main>
+            <h1>Can't reach your Donote server</h1>
+            <p id="detail"></p>
+            <p>
+                Notes you already opened are safe locally — the app reconnects
+                and syncs as soon as the server is reachable again.
+            </p>
+            <button onclick="retry()">Try again</button>
+        </main>
+        <script>
+            const params = new URLSearchParams(location.search);
+            const url = params.get('url') || '';
+            document.getElementById('detail').textContent =
+                url + ' did not respond' +
+                (params.get('error') ? ' (' + params.get('error') + ')' : '') + '.';
+            function retry() { location.href = url; }
+            setInterval(() => {
+                fetch(url, { mode: 'no-cors' }).then(retry).catch(() => {});
+            }, 5000);
+        </script>
+    </body>
+</html>

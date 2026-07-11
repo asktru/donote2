@@ -1,0 +1,37 @@
+{
+    "name": "donote-desktop",
+    "productName": "Donote",
+    "version": "1.0.0",
+    "description": "Donote desktop shell for macOS",
+    "private": true,
+    "main": "main.js",
+    "scripts": {
+        "start": "electron .",
+        "pack": "electron-builder --mac --dir",
+        "dist": "electron-builder --mac"
+    },
+    "devDependencies": {
+        "electron": "^38.1.0",
+        "electron-builder": "^26.0.12"
+    },
+    "build": {
+        "appId": "io.air.donote",
+        "productName": "Donote",
+        "directories": {
+            "output": "dist"
+        },
+        "files": [
+            "main.js",
+            "offline.html"
+        ],
+        "mac": {
+            "category": "public.app-category.productivity",
+            "target": [
+                "dmg",
+                "zip"
+            ],
+            "hardenedRuntime": true,
+            "gatekeeperAssess": false
+        }
+    }
+}
