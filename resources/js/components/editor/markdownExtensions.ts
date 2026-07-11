@@ -59,6 +59,37 @@ export interface EditorCallbacks {
 /* Widgets                                                             */
 /* ------------------------------------------------------------------ */
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+const CHECK_ICONS: Partial<Record<TaskState, string>> = {
+    done: 'M3.8 8.7 6.7 11.4 12.2 4.8',
+    cancelled: 'M5.2 5.2l5.6 5.6M10.8 5.2l-5.6 5.6',
+    scheduled: 'M6.2 3.8 10.4 8l-4.2 4.2',
+};
+
+function checkIcon(state: TaskState): SVGElement | null {
+    const path = CHECK_ICONS[state];
+
+    if (!path) {
+        return null;
+    }
+
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 16 16');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('aria-hidden', 'true');
+
+    const stroke = document.createElementNS(SVG_NS, 'path');
+    stroke.setAttribute('d', path);
+    stroke.setAttribute('stroke', 'currentColor');
+    stroke.setAttribute('stroke-width', '2.4');
+    stroke.setAttribute('stroke-linecap', 'round');
+    stroke.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(stroke);
+
+    return svg;
+}
+
 class CheckboxWidget extends WidgetType {
     constructor(
         private kind: 'task' | 'checklist',
@@ -87,12 +118,10 @@ class CheckboxWidget extends WidgetType {
         box.title =
             this.kind === 'task' ? 'Toggle task (⌘⏎)' : 'Toggle checklist item';
 
-        if (this.state === 'done') {
-            box.textContent = '✓';
-        } else if (this.state === 'cancelled') {
-            box.textContent = '✕';
-        } else if (this.state === 'scheduled') {
-            box.textContent = '›';
+        const icon = checkIcon(this.state);
+
+        if (icon) {
+            box.appendChild(icon);
         }
 
         return box;
@@ -683,6 +712,49 @@ function buildDecorations(state: EditorState): DecorationSet {
 
     return builder.finish();
 }
+
+const strikeDecoration = Decoration.mark({ class: 'cm-task-strike' });
+
+/**
+ * Strikethrough for done/cancelled tasks lives in its own decoration layer
+ * so it can span the whole text (overlapping tag/date/pill marks) while
+ * starting after the task marker — not across the checkbox or the indent.
+ */
+function buildStrikes(state: EditorState): DecorationSet {
+    const builder = new RangeSetBuilder<Decoration>();
+    const doc = state.doc;
+
+    for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber++) {
+        const line = doc.line(lineNumber);
+        const marker = line.text.match(MARKER_RE);
+
+        if (!marker) {
+            continue;
+        }
+
+        const stateChar = marker[2].match(/\[(.)\]/)?.[1] ?? ' ';
+
+        if (stateChar !== 'x' && stateChar !== 'X' && stateChar !== '-') {
+            continue;
+        }
+
+        const from = line.from + marker[0].length;
+
+        if (from < line.to) {
+            builder.add(from, line.to, strikeDecoration);
+        }
+    }
+
+    return builder.finish();
+}
+
+const strikeField = StateField.define<DecorationSet>({
+    create: buildStrikes,
+    update(value, transaction) {
+        return transaction.docChanged ? buildStrikes(transaction.state) : value;
+    },
+    provide: (field) => EditorView.decorations.from(field),
+});
 
 const decorationsField = StateField.define<DecorationSet>({
     create: buildDecorations,
@@ -1452,6 +1524,10 @@ const editorTheme = EditorView.theme({
     '.cm-check-task': { borderRadius: '9999px' },
     '.cm-check-checklist': { borderRadius: '4px' },
     '.cm-check:hover': { transform: 'scale(1.12)' },
+    '.cm-check svg': {
+        width: '72%',
+        height: '72%',
+    },
     '.cm-check-p3': {
         borderColor: PRIORITY_COLORS[3],
         backgroundColor: 'color-mix(in oklab, #dc4c3e 12%, transparent)',
@@ -1485,24 +1561,27 @@ const editorTheme = EditorView.theme({
         color: '#fff',
     },
     '.cm-check-cancelled': {
-        borderColor: 'var(--muted-foreground)',
+        borderColor:
+            'color-mix(in oklab, var(--muted-foreground) 55%, transparent)',
         color: 'var(--muted-foreground)',
-        backgroundColor: 'transparent',
+        backgroundColor: 'color-mix(in oklab, var(--muted) 70%, transparent)',
     },
     '.cm-check-scheduled': {
         borderColor: 'var(--muted-foreground)',
         color: 'var(--muted-foreground)',
     },
     '.cm-line-done': {
-        textDecoration: 'line-through',
-        textDecorationColor:
-            'color-mix(in oklab, var(--muted-foreground) 60%, transparent)',
         color: 'var(--muted-foreground)',
     },
     '.cm-line-cancelled': {
-        textDecoration: 'line-through',
         color: 'var(--muted-foreground)',
         opacity: '0.7',
+    },
+    '.cm-task-strike': {
+        textDecoration: 'line-through',
+        textDecorationColor:
+            'color-mix(in oklab, var(--muted-foreground) 55%, transparent)',
+        textDecorationThickness: '1px',
     },
 
     '.cm-priority': { fontWeight: '700' },
@@ -1571,6 +1650,7 @@ export function donoteMarkdown(callbacks: EditorCallbacks): Extension {
         markdown({ base: markdownLanguage }),
         syntaxHighlighting(highlightStyle),
         decorationsField,
+        strikeField,
         codeFolding(),
         donoteFoldService,
         foldGutter({
