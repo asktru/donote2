@@ -1,0 +1,130 @@
+<?php
+
+namespace App\Actions\Google;
+
+use App\Models\GoogleAccount;
+use App\Models\User;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+
+class FetchGoogleEvents
+{
+    /**
+     * Fetch events for the given range across all of the user's Google accounts.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function execute(User $user, Carbon $start, Carbon $end): array
+    {
+        $cacheKey = sprintf('google-events:%d:%s:%s', $user->id, $start->toDateString(), $end->toDateString());
+
+        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($user, $start, $end): array {
+            return $user->googleAccounts()
+                ->get()
+                ->flatMap(fn (GoogleAccount $account) => $this->eventsForAccount($account, $start, $end))
+                ->sortBy('start')
+                ->values()
+                ->all();
+        });
+    }
+
+    /**
+     * Fetch events from every selected calendar of one account.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function eventsForAccount(GoogleAccount $account, Carbon $start, Carbon $end): array
+    {
+        $this->refreshTokenIfNeeded($account);
+
+        $calendars = collect($account->calendars ?? [])
+            ->filter(fn (array $calendar): bool => $calendar['selected'] ?? false);
+
+        return $calendars
+            ->flatMap(function (array $calendar) use ($account, $start, $end): array {
+                try {
+                    $items = Http::withToken($account->access_token)
+                        ->get(
+                            'https://www.googleapis.com/calendar/v3/calendars/'.urlencode((string) $calendar['id']).'/events',
+                            [
+                                'timeMin' => $start->toRfc3339String(),
+                                'timeMax' => $end->toRfc3339String(),
+                                'singleEvents' => 'true',
+                                'orderBy' => 'startTime',
+                                'maxResults' => 100,
+                            ],
+                        )
+                        ->throw()
+                        ->json('items', []);
+                } catch (RequestException) {
+                    return [];
+                }
+
+                $events = [];
+
+                foreach (is_array($items) ? $items : [] as $item) {
+                    if (! is_array($item) || ($item['status'] ?? '') === 'cancelled') {
+                        continue;
+                    }
+
+                    $events[] = $this->mapEvent($item, $account, $calendar);
+                }
+
+                return $events;
+            })
+            ->all();
+    }
+
+    /**
+     * Normalize a Google event payload for the client.
+     *
+     * @param  array<string, mixed>  $item
+     * @param  array<string, mixed>  $calendar
+     * @return array<string, mixed>
+     */
+    protected function mapEvent(array $item, GoogleAccount $account, array $calendar): array
+    {
+        $allDay = isset($item['start']['date']);
+
+        return [
+            'id' => $item['id'],
+            'calendar_id' => $calendar['id'],
+            'calendar_name' => $calendar['summary'],
+            'account_email' => $account->email,
+            'summary' => $item['summary'] ?? '(no title)',
+            'location' => $item['location'] ?? null,
+            'html_link' => $item['htmlLink'] ?? null,
+            'color' => $calendar['color'] ?? null,
+            'all_day' => $allDay,
+            'start' => $allDay ? $item['start']['date'] : ($item['start']['dateTime'] ?? null),
+            'end' => $allDay ? $item['end']['date'] : ($item['end']['dateTime'] ?? null),
+        ];
+    }
+
+    /**
+     * Refresh the account's access token when it is about to expire.
+     */
+    protected function refreshTokenIfNeeded(GoogleAccount $account): void
+    {
+        if (! $account->tokenNeedsRefresh() || $account->refresh_token === null) {
+            return;
+        }
+
+        $tokens = Http::asForm()
+            ->post('https://oauth2.googleapis.com/token', [
+                'client_id' => config('services.google.client_id'),
+                'client_secret' => config('services.google.client_secret'),
+                'refresh_token' => $account->refresh_token,
+                'grant_type' => 'refresh_token',
+            ])
+            ->throw()
+            ->json();
+
+        $account->update([
+            'access_token' => $tokens['access_token'],
+            'token_expires_at' => now()->addSeconds((int) ($tokens['expires_in'] ?? 3600)),
+        ]);
+    }
+}
