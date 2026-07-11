@@ -1481,7 +1481,10 @@ const editorTheme = EditorView.theme({
         position: 'absolute',
         left: '0.4em',
         top: '-0.36em',
-        bottom: '-0.36em',
+        // --wrap-extra (set per line by the hanging-indent plugin) is the
+        // extra height of wrapped lines; without it the guide would only
+        // cover the first visual row and leave gaps under wraps.
+        bottom: 'calc(-0.36em - var(--wrap-extra, 0px))',
         width: '1.5px',
         backgroundColor:
             'color-mix(in oklab, var(--border) 55%, var(--muted-foreground))',
@@ -1705,15 +1708,33 @@ const hangingIndents = ViewPlugin.fromClass(
                     seen.add(line.from);
                     const prefix = this.prefixOf(line.text);
                     const width = this.widths.get(prefix);
+                    const styles: string[] = [];
 
                     if (prefix !== '' && width !== undefined && width > 0) {
+                        styles.push(
+                            `text-indent:-${width}px`,
+                            `padding-left:${width + 4}px`,
+                        );
+                    }
+
+                    if (prefix !== '') {
+                        // Wrapped lines are taller than one row; indent
+                        // guides read this to span the whole logical line.
+                        const extra =
+                            view.lineBlockAt(line.from).height -
+                            view.defaultLineHeight;
+
+                        if (extra > 1) {
+                            styles.push(`--wrap-extra:${extra}px`);
+                        }
+                    }
+
+                    if (styles.length > 0) {
                         builder.add(
                             line.from,
                             line.from,
                             Decoration.line({
-                                attributes: {
-                                    style: `text-indent:-${width}px;padding-left:${width + 4}px`,
-                                },
+                                attributes: { style: styles.join(';') },
                             }),
                         );
                     }
