@@ -30,3 +30,4 @@ yarn-error.log
 /electron/node_modules
 /electron/dist
 /.playwright-mcp
+/electron/eventkit/donote-eventkit

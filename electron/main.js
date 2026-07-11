@@ -1,5 +1,6 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { execFile } = require('child_process');
 const path = require('path');
+const { app, BrowserWindow, ipcMain, Menu, shell } = require('electron');
 
 /**
  * The Donote web app this shell wraps. Point it at your Herd URL in
@@ -23,6 +24,7 @@ function createWindow() {
             contextIsolation: true,
             nodeIntegration: false,
             spellcheck: true,
+            preload: path.join(__dirname, 'preload.js'),
         },
     });
 
@@ -104,6 +106,57 @@ function buildMenu() {
         ]),
     );
 }
+
+/**
+ * Apple Calendar access goes through a small Swift helper (see eventkit/)
+ * because EventKit has no Node binding. macOS attributes the calendar
+ * permission prompt to this app; the usage string lives in Info.plist
+ * (extendInfo in package.json for packaged builds).
+ */
+const EVENTKIT_HELPER = app.isPackaged
+    ? path.join(process.resourcesPath, 'eventkit', 'donote-eventkit')
+    : path.join(__dirname, 'eventkit', 'donote-eventkit');
+
+function runEventKit(args) {
+    return new Promise((resolve, reject) => {
+        execFile(
+            EVENTKIT_HELPER,
+            args,
+            { timeout: 120000, maxBuffer: 16 * 1024 * 1024 },
+            (error, stdout) => {
+                if (error) {
+                    reject(error);
+
+                    return;
+                }
+
+                try {
+                    resolve(JSON.parse(stdout));
+                } catch (parseError) {
+                    reject(parseError);
+                }
+            },
+        );
+    });
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}T[0-9:.]+(Z|[+-]\d{2}:?\d{2})$/;
+
+ipcMain.handle('apple-calendar:status', () => runEventKit(['status']));
+ipcMain.handle('apple-calendar:request', () => runEventKit(['request']));
+ipcMain.handle('apple-calendar:calendars', () => runEventKit(['calendars']));
+ipcMain.handle('apple-calendar:events', (_event, from, to) => {
+    if (
+        typeof from !== 'string' ||
+        typeof to !== 'string' ||
+        !ISO_DATE.test(from) ||
+        !ISO_DATE.test(to)
+    ) {
+        return Promise.reject(new Error('invalid date range'));
+    }
+
+    return runEventKit(['events', from, to]);
+});
 
 const hasLock = app.requestSingleInstanceLock();
 

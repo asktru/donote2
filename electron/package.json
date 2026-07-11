@@ -6,8 +6,12 @@
     "private": true,
     "main": "main.js",
     "scripts": {
+        "build:eventkit": "swiftc -O eventkit/donote-eventkit.swift -o eventkit/donote-eventkit",
+        "prestart": "npm run build:eventkit",
         "start": "electron .",
+        "prepack": "npm run build:eventkit",
         "pack": "electron-builder --mac --dir",
+        "predist": "npm run build:eventkit",
         "dist": "electron-builder --mac"
     },
     "devDependencies": {
@@ -22,7 +26,14 @@
         },
         "files": [
             "main.js",
+            "preload.js",
             "offline.html"
+        ],
+        "extraResources": [
+            {
+                "from": "eventkit/donote-eventkit",
+                "to": "eventkit/donote-eventkit"
+            }
         ],
         "mac": {
             "category": "public.app-category.productivity",
@@ -31,7 +42,11 @@
                 "zip"
             ],
             "hardenedRuntime": true,
-            "gatekeeperAssess": false
+            "gatekeeperAssess": false,
+            "extendInfo": {
+                "NSCalendarsUsageDescription": "Donote shows your calendar events next to your notes.",
+                "NSCalendarsFullAccessUsageDescription": "Donote shows your calendar events next to your notes."
+            }
         }
     }
 }
