@@ -1,5 +1,13 @@
 {
     "mcpServers": {
+        "donote": {
+            "command": "php",
+            "args": [
+                "artisan",
+                "mcp:start",
+                "donote"
+            ]
+        },
         "laravel-boost": {
             "command": "php",
             "args": [

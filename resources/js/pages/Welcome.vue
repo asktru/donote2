@@ -11,6 +11,7 @@ import {
     Users,
 } from '@lucide/vue';
 import { computed } from 'vue';
+import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import { dashboard, login, register } from '@/routes';
 
 const page = usePage();
@@ -67,11 +68,7 @@ const features = [
     <div class="min-h-screen bg-background text-foreground">
         <header class="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-5">
             <div class="flex items-center gap-2.5">
-                <span
-                    class="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"
-                >
-                    <NotebookPen class="size-4.5" />
-                </span>
+                <AppLogoIcon class="size-8" />
                 <span class="text-lg font-semibold tracking-tight">Donote</span>
             </div>
             <nav class="flex items-center gap-2 text-sm">
