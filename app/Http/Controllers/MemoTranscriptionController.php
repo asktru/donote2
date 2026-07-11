@@ -16,7 +16,7 @@ class MemoTranscriptionController extends Controller
     public function __invoke(Request $request): JsonResponse
     {
         $request->validate([
-            'audio' => ['required', 'file', 'max:25600', 'mimetypes:audio/webm,video/webm,audio/ogg,audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/flac'],
+            'audio' => ['required', 'file', 'max:25600', 'mimetypes:audio/webm,video/webm,audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,video/mp4,audio/aac,audio/wav,audio/x-wav,audio/flac'],
         ]);
 
         $key = config('services.openai.key');

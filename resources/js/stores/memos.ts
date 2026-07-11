@@ -193,11 +193,30 @@ async function captureStreams(): Promise<{
     }
 }
 
+/** Chromium records webm/opus; iOS WebKit only does mp4 (AAC). */
+function recordingMimeType(): string | undefined {
+    for (const candidate of [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+    ]) {
+        if (MediaRecorder.isTypeSupported(candidate)) {
+            return candidate;
+        }
+    }
+
+    return undefined;
+}
+
+function containerOf(mimeType: string): { mime: string; extension: string } {
+    return mimeType.startsWith('audio/mp4')
+        ? { mime: 'audio/mp4', extension: 'm4a' }
+        : { mime: 'audio/webm', extension: 'webm' };
+}
+
 function makeRecorder(stream: MediaStream): MediaRecorder {
     return new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-            ? 'audio/webm;codecs=opus'
-            : 'audio/webm',
+        mimeType: recordingMimeType(),
         audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
     });
 }
@@ -214,9 +233,11 @@ function attachRecorder(current: ActiveRecording): void {
 
 /** Stop the current recorder and return the segment's blob. */
 function collectSegment(current: ActiveRecording): Promise<Blob> {
+    const { mime } = containerOf(current.recorder.mimeType || 'audio/webm');
+
     return new Promise((resolve) => {
         current.recorder.onstop = () => {
-            resolve(new Blob(current.chunks, { type: 'audio/webm' }));
+            resolve(new Blob(current.chunks, { type: mime }));
         };
 
         current.recorder.stop();
@@ -240,7 +261,7 @@ async function persistPart(
         partsTotal: null,
         dateKey: current.dateKey,
         blob,
-        mimeType: 'audio/webm',
+        mimeType: blob.type || 'audio/webm',
         durationSec: Math.round((Date.now() - current.segmentStartedAt) / 1000),
         status: 'pending',
         transcript: null,
@@ -543,9 +564,11 @@ async function uploadMemo(memo: MemoRecord): Promise<void> {
         const form = new FormData();
         form.append(
             'audio',
-            new File([memo.blob], `memo-${memo.id}.webm`, {
-                type: memo.mimeType,
-            }),
+            new File(
+                [memo.blob],
+                `memo-${memo.id}.${containerOf(memo.mimeType).extension}`,
+                { type: memo.mimeType },
+            ),
         );
 
         const { text } = await apiUpload<{ text: string }>(
