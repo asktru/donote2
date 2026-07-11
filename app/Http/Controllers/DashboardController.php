@@ -3,13 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\TeamInvitation;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request): Response
+    public function __invoke(Request $request): Response|RedirectResponse
     {
         $email = strtolower($request->user()->email);
 
@@ -30,6 +31,10 @@ class DashboardController extends Controller
                     'slug' => $invitation->team->slug,
                 ],
             ]);
+
+        if ($pendingInvitations->isEmpty()) {
+            return redirect()->route('notes');
+        }
 
         return Inertia::render('Dashboard', [
             'pendingInvitations' => $pendingInvitations,

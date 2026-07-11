@@ -14,7 +14,7 @@ test('guests are redirected to the login page', function () {
     $response->assertRedirect(route('login'));
 });
 
-test('authenticated users can visit the dashboard', function () {
+test('the dashboard redirects to the notes app when there are no pending invitations', function () {
     $user = User::factory()->create();
     $team = $user->currentTeam;
 
@@ -22,7 +22,24 @@ test('authenticated users can visit the dashboard', function () {
         ->actingAs($user)
         ->get(route('dashboard'));
 
-    $response->assertOk();
+    $response->assertRedirect(route('notes', ['current_team' => $team->slug]));
+});
+
+test('the home page redirects authenticated users to the notes app', function () {
+    $user = User::factory()->create();
+    $team = $user->currentTeam;
+
+    $response = $this
+        ->actingAs($user)
+        ->get(route('home'));
+
+    $response->assertRedirect(route('notes', ['current_team' => $team->slug]));
+});
+
+test('the home page renders the landing for guests', function () {
+    $this->get(route('home'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->component('Welcome'));
 });
 
 test('dashboard includes pending invitations for the authenticated user', function () {
@@ -71,11 +88,7 @@ test('dashboard does not include accepted invitations', function () {
         ->actingAs($invitedUser)
         ->get(route('dashboard'));
 
-    $response->assertOk();
-    $response->assertInertia(fn (Assert $page) => $page
-        ->component('Dashboard')
-        ->has('pendingInvitations', 0),
-    );
+    $response->assertRedirect(route('notes', ['current_team' => $invitedUser->currentTeam->slug]));
 });
 
 test('dashboard excludes expired invitations without deleting them', function () {
@@ -95,11 +108,7 @@ test('dashboard excludes expired invitations without deleting them', function ()
         ->actingAs($invitedUser)
         ->get(route('dashboard'));
 
-    $response->assertOk();
-    $response->assertInertia(fn (Assert $page) => $page
-        ->component('Dashboard')
-        ->has('pendingInvitations', 0),
-    );
+    $response->assertRedirect(route('notes', ['current_team' => $invitedUser->currentTeam->slug]));
 
     $this->assertDatabaseHas('team_invitations', [
         'id' => $invitation->id,
@@ -123,11 +132,7 @@ test('dashboard does not include or delete other users invitations', function ()
         ->actingAs($invitedUser)
         ->get(route('dashboard'));
 
-    $response->assertOk();
-    $response->assertInertia(fn (Assert $page) => $page
-        ->component('Dashboard')
-        ->has('pendingInvitations', 0),
-    );
+    $response->assertRedirect(route('notes', ['current_team' => $invitedUser->currentTeam->slug]));
 
     $this->assertDatabaseHas('team_invitations', [
         'id' => $invitation->id,

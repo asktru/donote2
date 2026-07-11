@@ -12,11 +12,11 @@ import {
 } from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
-import { dashboard, login, register } from '@/routes';
+import { login, notes, register } from '@/routes';
 
 const page = usePage();
 const dashboardUrl = computed(() =>
-    page.props.currentTeam ? dashboard(page.props.currentTeam.slug).url : '/',
+    page.props.currentTeam ? notes(page.props.currentTeam.slug).url : '/',
 );
 
 const features = [

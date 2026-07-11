@@ -16,6 +16,7 @@ import { computed, ref, watch } from 'vue';
 
 import MarkdownEditor from '@/components/editor/MarkdownEditor.vue';
 import BacklinksSection from '@/components/notes/BacklinksSection.vue';
+import MobileSidebarButton from '@/components/notes/MobileSidebarButton.vue';
 import PieProgress from '@/components/notes/PieProgress.vue';
 import { Button } from '@/components/ui/button';
 import { addPeriods, humanizeKey, todayKey } from '@/core/dates';
@@ -229,6 +230,7 @@ defineExpose({ focusEditor });
                 )
             "
         >
+            <MobileSidebarButton v-if="!isSplit" />
             <template v-if="isCalendar">
                 <h1 class="truncate text-base font-semibold">
                     {{ calendarTitle }}

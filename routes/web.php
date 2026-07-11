@@ -8,9 +8,23 @@ use App\Http\Controllers\NoteSearchController;
 use App\Http\Controllers\NoteSyncController;
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamMembership;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 
-Route::inertia('/', 'Welcome')->name('home');
+Route::get('/', function (Request $request) {
+    $user = $request->user();
+
+    if ($user !== null) {
+        $team = $user->currentTeam ?? $user->personalTeam();
+
+        if ($team !== null) {
+            return redirect()->route('notes', ['current_team' => $team->slug]);
+        }
+    }
+
+    return Inertia::render('Welcome');
+})->name('home');
 
 Route::prefix('{current_team}')
     ->middleware(['auth', 'verified', EnsureTeamMembership::class])

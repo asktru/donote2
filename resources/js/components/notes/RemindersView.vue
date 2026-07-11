@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { AlarmClock, BellOff, Check, RotateCcw } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import MobileSidebarButton from '@/components/notes/MobileSidebarButton.vue';
 
 import { Button } from '@/components/ui/button';
 import { humanizeKey } from '@/core/dates';
@@ -140,6 +141,7 @@ onBeforeUnmount(() => {
         <header
             class="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4"
         >
+            <MobileSidebarButton />
             <AlarmClock class="size-4 text-muted-foreground" />
             <h1 class="text-base font-semibold">Reminders</h1>
             <span class="text-xs text-muted-foreground">{{ rows.length }}</span>

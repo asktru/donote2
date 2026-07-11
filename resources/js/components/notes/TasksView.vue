@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { AtSign, CalendarClock, Flag, Hash, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
+import MobileSidebarButton from '@/components/notes/MobileSidebarButton.vue';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -169,6 +170,7 @@ function dueLabel(task: WorkspaceTask): string | null {
         <header
             class="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4"
         >
+            <MobileSidebarButton v-if="!isSplit" />
             <h1 class="text-base font-semibold">
                 <template v-if="filterTag">#{{ filterTag }}</template>
                 <template v-else-if="filterMention"

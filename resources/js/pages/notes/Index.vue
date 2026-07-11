@@ -12,6 +12,7 @@ import RemindersView from '@/components/notes/RemindersView.vue';
 import SearchDialog from '@/components/notes/SearchDialog.vue';
 import ShortcutsDialog from '@/components/notes/ShortcutsDialog.vue';
 import TasksView from '@/components/notes/TasksView.vue';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { kindOfKey, todayDailyKey, todayKey } from '@/core/dates';
@@ -21,6 +22,7 @@ import {
     closeSplit,
     currentView,
     initViewFromUrl,
+    mobileSidebarOpen,
     openCalendar,
     openGraphView,
     openMentionView,
@@ -213,10 +215,19 @@ onBeforeUnmount(() => {
 
     <TooltipProvider :delay-duration="300">
         <div
-            class="flex h-screen w-full overflow-hidden bg-background text-foreground"
+            class="flex h-dvh w-full overflow-hidden bg-background text-foreground"
         >
             <template v-if="ready && booted">
-                <NotesSidebar />
+                <div class="hidden h-full shrink-0 md:flex">
+                    <NotesSidebar />
+                </div>
+
+                <Sheet v-model:open="mobileSidebarOpen">
+                    <SheetContent side="left" class="w-64 gap-0 p-0">
+                        <SheetTitle class="sr-only">Navigation</SheetTitle>
+                        <NotesSidebar />
+                    </SheetContent>
+                </Sheet>
 
                 <main class="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
                     <div

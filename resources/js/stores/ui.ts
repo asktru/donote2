@@ -1,6 +1,6 @@
 import { ref } from 'vue';
 
-import { todayDailyKey } from '@/core/dates';
+import { todayDailyKey, todayKey } from '@/core/dates';
 import type { CalendarKind } from '@/core/dates';
 import { recordVisit } from '@/stores/workspace';
 
@@ -29,6 +29,8 @@ export const currentView = ref<MainView>({
 export const splitView = ref<SplitView | null>(null);
 export const searchOpen = ref(false);
 export const shortcutsOpen = ref(false);
+/** Off-canvas sidebar state on small screens. */
+export const mobileSidebarOpen = ref(false);
 /** Line index the main editor should scroll to after opening a note. */
 export const pendingScrollLine = ref<number | null>(null);
 
@@ -93,6 +95,11 @@ function deserializeView(raw: string): MainView | SplitView | null {
     return null;
 }
 
+/** Last-view memory, keyed by pathname so each team remembers its own. */
+function lastViewKey(): string {
+    return `donote:last-view:${window.location.pathname}`;
+}
+
 function pushUrl(): void {
     const params = new URLSearchParams(window.location.search);
     params.set('v', serializeView(currentView.value));
@@ -108,11 +115,35 @@ function pushUrl(): void {
         '',
         `${window.location.pathname}?${params}`,
     );
+
+    // Any navigation dismisses the off-canvas sidebar on small screens.
+    mobileSidebarOpen.value = false;
+
+    try {
+        localStorage.setItem(lastViewKey(), params.toString());
+    } catch {
+        // Storage full or unavailable — last-view memory is best-effort.
+    }
 }
 
-/** Restore the selection encoded in the URL (deep links, reloads). */
+/**
+ * Restore the selection encoded in the URL (deep links, reloads), falling
+ * back to the last remembered view when the URL carries none.
+ */
 export function initViewFromUrl(): void {
-    const params = new URLSearchParams(window.location.search);
+    let params = new URLSearchParams(window.location.search);
+
+    let fromMemory = false;
+
+    if (!params.has('v')) {
+        const remembered = localStorage.getItem(lastViewKey());
+
+        if (remembered !== null) {
+            params = new URLSearchParams(remembered);
+            fromMemory = true;
+        }
+    }
+
     const main = params.get('v');
     const split = params.get('s');
 
@@ -120,6 +151,12 @@ export function initViewFromUrl(): void {
         const view = deserializeView(main);
 
         if (view !== null && view.kind !== 'graph') {
+            if (view.kind === 'calendar' && fromMemory) {
+                // A fresh launch lands on the current period, not the one
+                // that happened to be open last time.
+                view.dateKey = todayKey(view.calKind);
+            }
+
             currentView.value = view;
         }
     }
