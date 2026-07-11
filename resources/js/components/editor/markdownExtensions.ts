@@ -1671,12 +1671,16 @@ const hangingIndents = ViewPlugin.fromClass(
         }
 
         update(update: ViewUpdate) {
+            // Rebuild on every update: the width-measurement pass finishes
+            // with an empty transaction, which carries none of the usual
+            // change flags but must still re-apply decorations.
+            this.decorations = this.build(update.view);
+
             if (
                 update.docChanged ||
                 update.viewportChanged ||
                 update.geometryChanged
             ) {
-                this.decorations = this.build(update.view);
                 this.measure(update.view);
             }
         }
@@ -1762,21 +1766,24 @@ const hangingIndents = ViewPlugin.fromClass(
                     return measured;
                 },
                 write: (measured: Map<string, number>) => {
-                    if (measured.size === 0 || this.scheduled) {
+                    if (measured.size === 0) {
                         return;
                     }
 
                     measured.forEach((width, prefix) =>
                         this.widths.set(prefix, width),
                     );
-                    this.scheduled = true;
-                    setTimeout(() => {
-                        this.scheduled = false;
 
-                        // Empty transaction re-pulls decorations with the
-                        // freshly measured widths.
-                        view.dispatch({});
-                    });
+                    if (!this.scheduled) {
+                        this.scheduled = true;
+                        setTimeout(() => {
+                            this.scheduled = false;
+
+                            // Empty transaction re-pulls decorations with
+                            // the freshly measured widths.
+                            view.dispatch({});
+                        });
+                    }
                 },
             });
         }
