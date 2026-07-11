@@ -206,7 +206,7 @@ function dueLabel(task: WorkspaceTask): string | null {
                     variant="outline"
                     size="sm"
                     class="ml-2 h-7 gap-1 px-2 text-xs text-muted-foreground"
-                    title="Close split (⌘\\)"
+                    title="Close split (Esc)"
                     @click="emit('close')"
                 >
                     <X class="size-3.5" /> Close

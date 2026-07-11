@@ -15,7 +15,7 @@ const groups: ShortcutGroup[] = [
             ['⌘T', "Go to today's daily note"],
             ['⌘1', 'Focus main pane'],
             ['⌘2', 'Focus split pane'],
-            ['⌘\\', 'Close split pane'],
+            ['Esc', 'Close split pane'],
             [
                 'Click tag / date / [[link]]',
                 'Open it (when not editing that line)',
@@ -32,6 +32,7 @@ const groups: ShortcutGroup[] = [
             ['⌘⇧L', 'Turn line into a checklist item (and back)'],
             ['⌘⏎', 'Complete / reopen task (link under cursor wins)'],
             ['⌘⇧⏎', 'Cancel / restore task'],
+            ['⌘⇧1', 'Cycle priority (! → !! → !!! → none)'],
             ['⌘⇧S', 'Schedule task (>date, date selected)'],
             ['⌘⇧D', 'Set due date (@due(date), date selected)'],
             ['Tab / ⇧Tab', 'Indent / outdent line'],
@@ -49,6 +50,7 @@ const groups: ShortcutGroup[] = [
             ['⌘⇧X', 'Strikethrough'],
             ['[[', 'Link a note (autocompletes)'],
             ['# / @', 'Tag or mention (autocompletes)'],
+            ['// comment', 'Muted end-of-line comment'],
         ],
     },
     {

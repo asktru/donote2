@@ -62,6 +62,28 @@ const mainNoteExists = computed(() => {
 });
 
 function onKeydown(event: KeyboardEvent): void {
+    // Esc closes the split pane — unless something closer to the user
+    // (a dialog, menu, or the editor's autocomplete) already consumed it.
+    if (event.key === 'Escape') {
+        if (
+            event.defaultPrevented ||
+            searchOpen.value ||
+            shortcutsOpen.value ||
+            document.querySelector(
+                '[role="dialog"][data-state="open"], [role="menu"][data-state="open"]',
+            ) !== null
+        ) {
+            return;
+        }
+
+        if (splitView.value !== null) {
+            event.preventDefault();
+            closeSplit();
+        }
+
+        return;
+    }
+
     const modifier = event.metaKey || event.ctrlKey;
 
     if (!modifier) {
@@ -74,12 +96,6 @@ function onKeydown(event: KeyboardEvent): void {
     } else if (event.key.toLowerCase() === 't' && !event.shiftKey) {
         event.preventDefault();
         openCalendar('daily', todayDailyKey());
-    } else if (event.key === '\\') {
-        event.preventDefault();
-
-        if (splitView.value !== null) {
-            closeSplit();
-        }
     } else if (event.key === '/') {
         event.preventDefault();
         shortcutsOpen.value = !shortcutsOpen.value;

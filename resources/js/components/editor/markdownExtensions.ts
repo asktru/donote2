@@ -35,7 +35,7 @@ import type { DecorationSet } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 
 import { todayDailyKey } from '@/core/dates';
-import { parseLine } from '@/core/parser';
+import { COMMENT_RE, parseLine } from '@/core/parser';
 import type { ParsedLine, Priority, TaskState } from '@/core/parser';
 import { buildNextOccurrenceLine } from '@/core/repeat';
 import { generateSyncId } from '@/core/syncedLines';
@@ -405,6 +405,18 @@ function buildDecorations(state: EditorState): DecorationSet {
             }
         }
 
+        {
+            const comment = line.text.match(COMMENT_RE);
+
+            if (comment && comment.index !== undefined) {
+                tokens.push({
+                    from: line.from + comment.index + comment[1].length,
+                    to: line.to,
+                    decoration: Decoration.mark({ class: 'cm-line-comment' }),
+                });
+            }
+        }
+
         for (const match of line.text.matchAll(SCHEDULE_TOKEN_RE)) {
             tokens.push({
                 from: line.from + match.index,
@@ -738,6 +750,46 @@ const makeChecklistCommand = (view: EditorView): boolean => {
     const { parsed } = parsedAt(view.state, view.state.selection.main.head);
 
     return rewriteLineMarker(view, parsed.kind === 'checklist' ? '' : '+ [ ] ');
+};
+
+/**
+ * ⌘⇧1 — cycle the task's priority: none → ! → !! → !!! → none.
+ */
+const cyclePriorityCommand = (view: EditorView): boolean => {
+    const line = view.state.doc.lineAt(view.state.selection.main.head);
+    const marker = line.text.match(MARKER_RE);
+
+    if (!marker) {
+        return false;
+    }
+
+    const markerEnd = line.from + marker[0].length;
+    const priority = line.text.match(PRIORITY_TOKEN_RE);
+
+    if (!priority) {
+        view.dispatch({
+            changes: { from: markerEnd, to: markerEnd, insert: '! ' },
+        });
+
+        return true;
+    }
+
+    const from = line.from + priority[1].length;
+    const to = from + priority[2].length;
+
+    view.dispatch(
+        priority[2].length >= 3
+            ? { changes: { from, to: to + 1, insert: '' } }
+            : {
+                  changes: {
+                      from,
+                      to,
+                      insert: '!'.repeat(priority[2].length + 1),
+                  },
+              },
+    );
+
+    return true;
 };
 
 /* ------------------------------------------------------------------ */
@@ -1206,6 +1258,10 @@ const editorTheme = EditorView.theme({
         cursor: 'pointer',
     },
 
+    '.cm-line-comment': {
+        color: 'var(--muted-foreground)',
+        fontStyle: 'italic',
+    },
     '.cm-sync-id': {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
         fontSize: '0.8em',
@@ -1428,6 +1484,10 @@ export function donoteMarkdown(callbacks: EditorCallbacks): Extension {
             { key: 'Mod-Shift-s', run: scheduleTaskCommand },
             { key: 'Mod-Shift-d', run: dueTaskCommand },
             { key: 'Mod-Shift-y', run: makeSyncedLineCommand },
+            { key: 'Mod-Shift-1', run: cyclePriorityCommand },
+            // Consume Mod-/ so CodeMirror's comment toggle never fires; the
+            // app-level handler opens the shortcuts cheatsheet instead.
+            { key: 'Mod-/', run: () => true },
             ...completionKeymap,
             ...foldKeymap,
             ...markdownKeymap,

@@ -224,6 +224,40 @@ describe('parseLine — tags, mentions, wiki links', () => {
     });
 });
 
+describe('parseLine — end-line comments', () => {
+    it('extracts the comment and strips it from parsing', () => {
+        const line = parseLine(
+            '- [ ] Ship it >2026-07-15 // check with @bob #maybe',
+        );
+
+        expect(line.comment).toBe('check with @bob #maybe');
+        expect(line.title).toBe('Ship it');
+        expect(line.schedule).toBe('2026-07-15');
+        expect(line.mentions).toEqual([]);
+        expect(line.tags).toEqual([]);
+    });
+
+    it('ignores metadata inside comments', () => {
+        const line = parseLine('- [ ] Task // maybe @due(2026-08-01) >2026-09');
+
+        expect(line.due).toBeNull();
+        expect(line.schedule).toBeNull();
+    });
+
+    it('does not treat URLs as comments', () => {
+        const line = parseLine('- [ ] Read https://example.com/docs #work');
+
+        expect(line.comment).toBeNull();
+        expect(line.title).toBe('Read https://example.com/docs #work');
+        expect(line.tags).toEqual(['work']);
+    });
+
+    it('supports comments on bullets and plain text', () => {
+        expect(parseLine('- a bullet // aside').comment).toBe('aside');
+        expect(parseLine('plain text // aside').comment).toBe('aside');
+    });
+});
+
 describe('parseNote — hierarchy', () => {
     const note = [
         '# Today',

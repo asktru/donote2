@@ -52,6 +52,8 @@ export interface ParsedLine {
     wikiLinks: WikiLink[];
     /** Synced-line block id (`text ^abc123`), shared across notes. */
     syncId: string | null;
+    /** End-of-line comment text (after `//`), excluded from parsing. */
+    comment: string | null;
 }
 
 const TASK_RE = /^(\s*)([-*])\s\[([ xX>-])\]\s(.*)$/;
@@ -69,6 +71,8 @@ const MENTION_RE = /(^|[^\w@.])@([A-Za-z][\w/.-]*)/g;
 const WIKI_LINK_RE = /\[\[([^\]|\n]+?)(?:\s*\|\s*([^\]\n]*?))?\]\]/g;
 const PRIORITY_RE = /^(!{1,3})\s+/;
 export const SYNC_ID_RE = /\s\^([a-z0-9]{4,12})\s*$/;
+/** `// comment` — requires start-of-text or whitespace so URLs stay intact. */
+export const COMMENT_RE = /(^|\s)\/\/.*$/;
 
 const WEEKDAY_NAMES: Record<string, number> = {
     mon: 1,
@@ -276,6 +280,7 @@ export function parseLine(raw: string, index = 0): ParsedLine {
         mentions: [],
         wikiLinks: extractWikiLinks(raw),
         syncId: raw.match(SYNC_ID_RE)?.[1] ?? null,
+        comment: null,
     };
 
     if (raw.trim() === '') {
@@ -324,6 +329,14 @@ export function parseLine(raw: string, index = 0): ParsedLine {
             line.indent = indentWidth(leading?.[1] ?? '');
             body = raw.trim();
         }
+    }
+
+    const commentMatch = body.match(COMMENT_RE);
+
+    if (commentMatch && commentMatch.index !== undefined) {
+        const start = commentMatch.index + commentMatch[1].length;
+        line.comment = body.slice(start + 2).trim();
+        body = body.slice(0, commentMatch.index).trimEnd();
     }
 
     const metaStripped = body
