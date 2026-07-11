@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { addPeriods, humanizeKey, todayKey } from '@/core/dates';
 import { daysUntil, dueLabel, isReviewDue } from '@/core/frontmatter';
 import type { NoteKind } from '@/core/frontmatter';
+import { isMacDesktopShell } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import type { LocalNote } from '@/stores/db';
 import type { PaneView } from '@/stores/ui';
@@ -224,6 +225,7 @@ defineExpose({ focusEditor });
                 cn(
                     'flex h-12 shrink-0 items-center gap-1 border-b border-border/60 px-4',
                     isSplit && 'bg-muted/30',
+                    isMacDesktopShell && 'app-region-drag',
                 )
             "
         >

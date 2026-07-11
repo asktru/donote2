@@ -87,6 +87,18 @@
             'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
             'Noto Color Emoji';
     }
+
+    .app-region-drag {
+        -webkit-app-region: drag;
+    }
+
+    .app-region-drag :is(button, a, input, [role='button']) {
+        -webkit-app-region: no-drag;
+    }
+
+    .app-region-no-drag {
+        -webkit-app-region: no-drag;
+    }
 }
 
 :root {

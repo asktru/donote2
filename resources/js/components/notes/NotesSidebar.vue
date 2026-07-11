@@ -42,6 +42,7 @@ import UserMenuContent from '@/components/UserMenuContent.vue';
 import { todayKey } from '@/core/dates';
 import type { CalendarKind } from '@/core/dates';
 import type { NoteKind } from '@/core/frontmatter';
+import { isMacDesktopShell } from '@/lib/platform';
 import { acceptTreeDrop, TREE_DND_MIME } from '@/lib/treeDnd';
 import { cn } from '@/lib/utils';
 import { syncStatus, pendingChanges } from '@/stores/sync';
@@ -154,6 +155,10 @@ const syncLabel = computed(() => {
     <aside
         class="flex h-full w-64 shrink-0 flex-col border-r border-border/60 bg-muted/20"
     >
+        <div
+            v-if="isMacDesktopShell"
+            class="app-region-drag h-7 shrink-0"
+        />
         <div class="flex items-center gap-1 px-3 pt-3 pb-1">
             <TeamSwitcher in-header class="min-w-0 flex-1" />
             <Tooltip>
