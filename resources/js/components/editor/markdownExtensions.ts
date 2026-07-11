@@ -19,6 +19,7 @@ import {
     foldGutter,
     foldKeymap,
     foldService,
+    indentUnit,
     syntaxHighlighting,
     syntaxTree,
     HighlightStyle,
@@ -182,7 +183,49 @@ function selectionTouches(
 }
 
 const hideDecoration = Decoration.replace({});
-const indentGuideDecoration = Decoration.mark({ class: 'cm-indent-guide' });
+/**
+ * Ancestor list-item indents per line (1-based), mirroring the parser's
+ * nesting rules: headings reset, empty lines carry no guides (breaking the
+ * visual run) while the surrounding structure survives them.
+ */
+function computeGuideLevels(state: EditorState, fmEnd: number): number[][] {
+    const doc = state.doc;
+    const levels: number[][] = new Array(doc.lines + 2).fill([]) as number[][];
+    const stack: number[] = [];
+
+    for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber++) {
+        if (fmEnd !== -1 && lineNumber <= fmEnd) {
+            continue;
+        }
+
+        const parsed = parseLine(doc.line(lineNumber).text);
+
+        if (parsed.kind === 'heading') {
+            stack.length = 0;
+            continue;
+        }
+
+        if (parsed.kind === 'empty') {
+            continue;
+        }
+
+        while (stack.length > 0 && stack[stack.length - 1] >= parsed.indent) {
+            stack.pop();
+        }
+
+        levels[lineNumber] = [...stack];
+
+        if (
+            parsed.kind === 'task' ||
+            parsed.kind === 'checklist' ||
+            parsed.kind === 'bullet'
+        ) {
+            stack.push(parsed.indent);
+        }
+    }
+
+    return levels;
+}
 
 /**
  * Char offset of the given indent width inside a line's leading whitespace
@@ -321,9 +364,7 @@ function buildDecorations(state: EditorState): DecorationSet {
     const doc = state.doc;
     const syntaxMarks = collectSyntaxMarks(state);
     const fmEnd = frontMatterEnd(state);
-
-    // Ancestor list-item indents, for the indentation guide lines.
-    const guideStack: number[] = [];
+    const guideLevels = computeGuideLevels(state, fmEnd);
 
     for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber++) {
         const line = doc.line(lineNumber);
@@ -338,37 +379,46 @@ function buildDecorations(state: EditorState): DecorationSet {
         const revealed = selectionTouches(state, line.from, line.to);
         const tokens: TokenDecoration[] = [];
 
-        // Indentation guides: one thin line per ancestor level (mirrors the
-        // parser's nesting rules — headings reset, empty lines pass through).
-        if (parsed.kind === 'heading') {
-            guideStack.length = 0;
-        } else if (parsed.kind !== 'empty') {
-            while (
-                guideStack.length > 0 &&
-                guideStack[guideStack.length - 1] >= parsed.indent
-            ) {
-                guideStack.pop();
-            }
+        // Indentation guides: one widened segment per ancestor level. The
+        // guide line runs from the center of a run's first line to the
+        // center of its last line, fading out at both ends.
+        const ancestors = guideLevels[lineNumber];
 
-            for (const ancestorIndent of guideStack) {
-                const offset = indentWidthToOffset(line.text, ancestorIndent);
-
-                if (offset !== null) {
-                    tokens.push({
-                        from: line.from + offset,
-                        to: line.from + offset + 1,
-                        decoration: indentGuideDecoration,
-                    });
-                }
-            }
+        for (let level = 0; level < ancestors.length; level++) {
+            const ancestorIndent = ancestors[level];
+            const boundary =
+                level + 1 < ancestors.length
+                    ? ancestors[level + 1]
+                    : parsed.indent;
+            const fromOffset = indentWidthToOffset(line.text, ancestorIndent);
+            const toOffset = indentWidthToOffset(line.text, boundary);
 
             if (
-                parsed.kind === 'task' ||
-                parsed.kind === 'checklist' ||
-                parsed.kind === 'bullet'
+                fromOffset === null ||
+                toOffset === null ||
+                toOffset <= fromOffset
             ) {
-                guideStack.push(parsed.indent);
+                continue;
             }
+
+            const isFirst =
+                !guideLevels[lineNumber - 1]?.includes(ancestorIndent);
+            const isLast =
+                !guideLevels[lineNumber + 1]?.includes(ancestorIndent);
+
+            tokens.push({
+                from: line.from + fromOffset,
+                to: line.from + toOffset,
+                decoration: Decoration.mark({
+                    class: [
+                        'cm-indent-guide',
+                        isFirst ? 'cm-indent-guide-first' : '',
+                        isLast ? 'cm-indent-guide-last' : '',
+                    ]
+                        .filter(Boolean)
+                        .join(' '),
+                }),
+            });
         }
 
         // Wiki tokens get bespoke hiding below; drop the markdown parser's
@@ -1344,21 +1394,40 @@ const editorTheme = EditorView.theme({
 
     '.cm-indent-guide': {
         position: 'relative',
+        // Widen nested indentation: every whitespace char in the guide
+        // segment gets extra tracking, scaling the indent with depth.
+        letterSpacing: '0.35em',
     },
     '.cm-indent-guide::before': {
         content: "''",
         position: 'absolute',
-        left: '0.5px',
+        left: '0.4em',
         top: '-0.36em',
         bottom: '-0.36em',
-        borderLeft:
-            '1px solid color-mix(in oklab, var(--border) 85%, var(--muted-foreground))',
+        width: '1.5px',
+        backgroundColor:
+            'color-mix(in oklab, var(--border) 55%, var(--muted-foreground))',
         pointerEvents: 'none',
+    },
+    // A guide run starts at the vertical center of its first line and ends
+    // at the center of its last line, fading out at both tips.
+    '.cm-indent-guide-first::before': {
+        top: '50%',
+        background:
+            'linear-gradient(to bottom, transparent, color-mix(in oklab, var(--border) 55%, var(--muted-foreground)) 12px)',
+    },
+    '.cm-indent-guide-last::before': {
+        bottom: '50%',
+        background:
+            'linear-gradient(to top, transparent, color-mix(in oklab, var(--border) 55%, var(--muted-foreground)) 12px)',
+    },
+    '.cm-indent-guide-first.cm-indent-guide-last::before': {
+        display: 'none',
     },
 
     '.cm-bullet-dot': {
         display: 'inline-block',
-        width: '1ch',
+        width: '0.84em',
         textAlign: 'center',
         color: 'var(--muted-foreground)',
     },
@@ -1498,6 +1567,7 @@ const editorTheme = EditorView.theme({
 export function donoteMarkdown(callbacks: EditorCallbacks): Extension {
     return [
         history(),
+        indentUnit.of('    '),
         markdown({ base: markdownLanguage }),
         syntaxHighlighting(highlightStyle),
         decorationsField,
