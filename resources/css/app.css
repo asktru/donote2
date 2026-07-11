@@ -96,6 +96,14 @@
         -webkit-app-region: no-drag;
     }
 
+    /* iOS zooms into any focused editable below 16px — keep the editor
+       at 16px on touch devices so focusing a note never triggers it. */
+    @media (pointer: coarse) {
+        .donote-editor .cm-editor {
+            font-size: 16px !important;
+        }
+    }
+
     .app-region-no-drag {
         -webkit-app-region: no-drag;
     }
