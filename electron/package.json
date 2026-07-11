@@ -45,7 +45,8 @@
             "gatekeeperAssess": false,
             "extendInfo": {
                 "NSCalendarsUsageDescription": "Donote shows your calendar events next to your notes.",
-                "NSCalendarsFullAccessUsageDescription": "Donote shows your calendar events next to your notes."
+                "NSCalendarsFullAccessUsageDescription": "Donote shows your calendar events next to your notes.",
+                "NSMicrophoneUsageDescription": "Donote records voice memos that are transcribed into your notes."
             }
         }
     }

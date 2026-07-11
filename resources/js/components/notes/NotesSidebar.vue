@@ -24,6 +24,7 @@ import { computed, ref } from 'vue';
 
 import FolderTree from '@/components/notes/FolderTree.vue';
 import PieProgress from '@/components/notes/PieProgress.vue';
+import RecordingsSection from '@/components/notes/RecordingsSection.vue';
 import TagTree from '@/components/notes/TagTree.vue';
 import TeamSwitcher from '@/components/TeamSwitcher.vue';
 import { Button } from '@/components/ui/button';
@@ -261,6 +262,8 @@ const syncLabel = computed(() => {
                     Reminders
                 </button>
             </section>
+
+            <RecordingsSection />
 
             <section v-if="reviewQueue.length > 0">
                 <p

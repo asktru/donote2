@@ -3,6 +3,7 @@
 use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GoogleCalendarController;
+use App\Http\Controllers\MemoTranscriptionController;
 use App\Http\Controllers\NotesAppController;
 use App\Http\Controllers\NoteSearchController;
 use App\Http\Controllers\NoteSyncController;
@@ -40,6 +41,7 @@ Route::prefix('api/{current_team}')
         Route::post('notes/sync', [NoteSyncController::class, 'store'])->name('notes.sync.push');
         Route::get('search', NoteSearchController::class)->name('notes.search');
         Route::post('attachments', [AttachmentController::class, 'store'])->name('attachments.store');
+        Route::post('memos/transcriptions', MemoTranscriptionController::class)->name('memos.transcribe');
         Route::get('attachments/{attachment}', [AttachmentController::class, 'show'])->name('attachments.show');
     });
 

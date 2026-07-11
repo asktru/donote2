@@ -33,6 +33,11 @@ return [
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
     ],
 
+    'openai' => [
+        'key' => env('OPENAI_API_KEY'),
+        'transcription_model' => env('DONOTE_TRANSCRIPTION_MODEL', 'gpt-4o-transcribe'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

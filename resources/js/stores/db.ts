@@ -32,10 +32,24 @@ export interface ReminderState {
     until: number | null;
 }
 
+export interface MemoRecord {
+    id: string;
+    /** Daily key of the day the memo was recorded. */
+    dateKey: string;
+    blob: Blob;
+    mimeType: string;
+    durationSec: number;
+    status: 'pending' | 'uploading' | 'failed';
+    error: string | null;
+    attempts: number;
+    createdAt: string;
+}
+
 export type WorkspaceDb = Dexie & {
     notes: EntityTable<LocalNote, 'id'>;
     meta: EntityTable<MetaEntry, 'key'>;
     reminders: EntityTable<ReminderState, 'key'>;
+    memos: EntityTable<MemoRecord, 'id'>;
 };
 
 /** One IndexedDB database per (team, user) workspace. */
@@ -46,6 +60,10 @@ export function openWorkspaceDb(teamSlug: string, userId: number): WorkspaceDb {
         notes: 'id, type, dateKey, folder, deleted, dirty, [type+dateKey]',
         meta: 'key',
         reminders: 'key',
+    });
+
+    db.version(2).stores({
+        memos: 'id, status, createdAt',
     });
 
     return db;

@@ -7,6 +7,7 @@ import GraphView from '@/components/notes/GraphView.vue';
 import MiniCalendar from '@/components/notes/MiniCalendar.vue';
 import NotePane from '@/components/notes/NotePane.vue';
 import NotesSidebar from '@/components/notes/NotesSidebar.vue';
+import QuickCaptureFab from '@/components/notes/QuickCaptureFab.vue';
 import ReminderHost from '@/components/notes/ReminderHost.vue';
 import RemindersView from '@/components/notes/RemindersView.vue';
 import SearchDialog from '@/components/notes/SearchDialog.vue';
@@ -17,6 +18,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { kindOfKey, todayDailyKey, todayKey } from '@/core/dates';
 import type { CalendarKind } from '@/core/dates';
+import { startMemoUploader, stopMemoUploader } from '@/stores/memos';
 import { startSync, stopSync } from '@/stores/sync';
 import {
     closeSplit,
@@ -201,11 +203,13 @@ onMounted(async () => {
     initViewFromUrl();
     booted.value = true;
     window.addEventListener('keydown', onKeydown);
+    startMemoUploader();
     await startSync();
 });
 
 onBeforeUnmount(() => {
     window.removeEventListener('keydown', onKeydown);
+    stopMemoUploader();
     stopSync();
 });
 </script>
@@ -229,7 +233,10 @@ onBeforeUnmount(() => {
                     </SheetContent>
                 </Sheet>
 
-                <main class="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
+                <main
+                    class="relative flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row"
+                >
+                    <QuickCaptureFab />
                     <div
                         class="flex min-h-0 min-w-0 flex-1 basis-1/2 flex-col border-b border-border/40 lg:border-r lg:border-b-0"
                     >

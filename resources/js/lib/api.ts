@@ -39,3 +39,35 @@ export async function apiFetch<T>(
 
     return (await response.json()) as T;
 }
+
+/** Multipart upload — the browser sets the Content-Type boundary itself. */
+export async function apiUpload<T>(url: string, form: FormData): Promise<T> {
+    const response = await fetch(url, {
+        method: 'POST',
+        credentials: 'same-origin',
+        body: form,
+        headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-XSRF-TOKEN': xsrfToken(),
+        },
+    });
+
+    if (!response.ok) {
+        let message = `POST ${url} failed with ${response.status}`;
+
+        try {
+            const body = (await response.json()) as { message?: string };
+
+            if (typeof body.message === 'string' && body.message !== '') {
+                message = body.message;
+            }
+        } catch {
+            // Non-JSON error body — keep the generic message.
+        }
+
+        throw new ApiError(response.status, message);
+    }
+
+    return (await response.json()) as T;
+}

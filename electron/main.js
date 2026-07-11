@@ -1,6 +1,13 @@
 const { execFile } = require('child_process');
 const path = require('path');
-const { app, BrowserWindow, ipcMain, Menu, shell } = require('electron');
+const {
+    app,
+    BrowserWindow,
+    desktopCapturer,
+    ipcMain,
+    Menu,
+    shell,
+} = require('electron');
 
 /**
  * The Donote web app this shell wraps. Point it at your Herd URL in
@@ -43,6 +50,21 @@ function createWindow() {
             });
         }
     });
+
+    // Voice memos ask for getDisplayMedia purely to mix system audio
+    // (Meet/Preply participants on speakers or AirPods) with the mic.
+    // 'loopback' captures system output via ScreenCaptureKit; the video
+    // track is discarded by the renderer immediately.
+    mainWindow.webContents.session.setDisplayMediaRequestHandler(
+        (_request, callback) => {
+            desktopCapturer
+                .getSources({ types: ['screen'] })
+                .then((sources) => {
+                    callback({ video: sources[0], audio: 'loopback' });
+                })
+                .catch(() => callback({}));
+        },
+    );
 
     mainWindow.loadURL(APP_URL);
 
