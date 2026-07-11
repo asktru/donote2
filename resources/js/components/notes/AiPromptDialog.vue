@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Copy, Loader2, Play, Replace, Sparkles, Trash2, X } from '@lucide/vue';
+import { Copy, Loader2, Play, Replace, Sparkles, Trash2 } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 import { Button } from '@/components/ui/button';
@@ -14,10 +14,9 @@ import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import {
     aiDialogOpen,
-    deletePrompt,
-    loadSavedPrompts,
-    savedPrompts,
-    savePrompt,
+    createPromptNote,
+    promptNotes,
+    seedStarterPrompts,
 } from '@/stores/aiPrompts';
 import { activeEditor } from '@/stores/editorRegistry';
 import { workspaceConfig } from '@/stores/workspace';
@@ -61,7 +60,6 @@ watch(aiDialogOpen, (open) => {
         return;
     }
 
-    loadSavedPrompts();
     result.value = null;
     runError.value = null;
     showSave.value = false;
@@ -141,9 +139,12 @@ function applyResult(): void {
     view.focus();
 }
 
-function saveCurrentPrompt(): void {
+async function saveCurrentPrompt(): Promise<void> {
     if (saveTitle.value.trim() !== '' && customPrompt.value.trim() !== '') {
-        savePrompt(saveTitle.value.trim(), customPrompt.value.trim());
+        await createPromptNote(
+            saveTitle.value.trim(),
+            customPrompt.value.trim(),
+        );
         showSave.value = false;
         saveTitle.value = '';
     }
@@ -161,30 +162,39 @@ function saveCurrentPrompt(): void {
             </DialogHeader>
 
             <div class="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-                <div v-if="savedPrompts.length > 0" class="flex flex-wrap gap-1.5">
-                    <span
-                        v-for="prompt in savedPrompts"
+                <div
+                    v-if="promptNotes.length > 0"
+                    class="flex flex-wrap gap-1.5"
+                >
+                    <button
+                        v-for="prompt in promptNotes"
                         :key="prompt.id"
-                        class="group inline-flex items-center overflow-hidden rounded-full border border-border/70"
+                        type="button"
+                        class="rounded-full border border-border/70 px-2.5 py-1 text-xs font-medium hover:bg-muted/70 disabled:opacity-50"
+                        :disabled="running || !target"
+                        :title="prompt.prompt"
+                        @click="run(prompt.prompt)"
                     >
-                        <button
-                            type="button"
-                            class="px-2.5 py-1 text-xs font-medium hover:bg-muted/70 disabled:opacity-50"
-                            :disabled="running || !target"
-                            :title="prompt.prompt"
-                            @click="run(prompt.prompt)"
-                        >
-                            {{ prompt.title }}
-                        </button>
-                        <button
-                            type="button"
-                            class="hidden pr-1.5 text-muted-foreground group-hover:inline hover:text-foreground"
-                            :aria-label="`Delete prompt ${prompt.title}`"
-                            @click="deletePrompt(prompt.id)"
-                        >
-                            <X class="size-3" />
-                        </button>
-                    </span>
+                        {{ prompt.title }}
+                    </button>
+                </div>
+                <div
+                    v-else
+                    class="flex items-center justify-between gap-2 rounded-md border border-dashed border-border/70 px-3 py-2"
+                >
+                    <p class="text-xs text-muted-foreground">
+                        Notes with
+                        <code class="rounded bg-muted px-1">type: prompt</code>
+                        appear here as one-click prompts.
+                    </p>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        class="h-7 shrink-0 px-2 text-xs"
+                        @click="seedStarterPrompts"
+                    >
+                        Add starter prompts
+                    </Button>
                 </div>
 
                 <div class="space-y-2">

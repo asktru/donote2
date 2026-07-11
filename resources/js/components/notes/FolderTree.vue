@@ -15,6 +15,7 @@ import {
     Pin,
     PinOff,
     Shapes,
+    Sparkles,
     Target,
     Trash2,
 } from '@lucide/vue';
@@ -98,6 +99,7 @@ const NOTE_ICONS = {
     project: Target,
     area: Layers,
     list: ListTodo,
+    prompt: Sparkles,
 } as const;
 
 function iconFor(meta: NoteMeta): typeof FileText {
@@ -138,6 +140,7 @@ const TYPE_CHOICES: { kind: NoteKind | null; label: string }[] = [
     { kind: 'project', label: 'Project' },
     { kind: 'area', label: 'Area' },
     { kind: 'list', label: 'List' },
+    { kind: 'prompt', label: 'AI prompt' },
     { kind: null, label: 'Plain note' },
 ];
 

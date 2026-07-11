@@ -5,7 +5,7 @@ import { parseRepeatRule } from './parser';
 import type { ParsedLine, RepeatRule } from './parser';
 import { nextOccurrenceDay } from './repeat';
 
-export type NoteKind = 'project' | 'area' | 'list';
+export type NoteKind = 'project' | 'area' | 'list' | 'prompt';
 
 export interface NoteMeta {
     /** Special note type from the front matter, or null for plain notes. */
@@ -26,7 +26,7 @@ export interface NoteMeta {
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const KEY_VALUE_RE = /^([A-Za-z][\w-]*):\s*(.*)$/;
-const NOTE_KINDS: NoteKind[] = ['project', 'area', 'list'];
+const NOTE_KINDS: NoteKind[] = ['project', 'area', 'list', 'prompt'];
 
 export const EMPTY_META: NoteMeta = {
     type: null,

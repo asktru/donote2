@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronRight, FileText, Layers, ListTodo, Target } from '@lucide/vue';
+import { ChevronRight, FileText, Layers, ListTodo, Sparkles, Target } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 import { humanizeKey } from '@/core/dates';
@@ -24,6 +24,7 @@ const TYPE_ICONS: Record<NoteKind, typeof FileText> = {
     project: Target,
     area: Layers,
     list: ListTodo,
+    prompt: Sparkles,
 };
 
 interface ReferenceBlock {

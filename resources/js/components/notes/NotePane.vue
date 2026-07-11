@@ -7,6 +7,7 @@ import {
     ListTodo,
     Pin,
     PinOff,
+    Sparkles,
     Target,
     Trash2,
     Waypoints,
@@ -46,6 +47,7 @@ const TYPE_ICONS: Record<NoteKind, typeof Target> = {
     project: Target,
     area: Layers,
     list: ListTodo,
+    prompt: Sparkles,
 };
 
 const props = defineProps<{

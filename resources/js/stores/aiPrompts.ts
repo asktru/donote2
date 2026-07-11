@@ -1,101 +1,80 @@
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
-import { workspaceConfig } from '@/stores/workspace';
+import { createNote, liveNotes, noteMetaFor } from '@/stores/workspace';
 
 /**
- * Saved AI prompts (device-local, per workspace) and the state of the
- * "run a prompt" dialog.
+ * AI prompts are regular notes with `type: prompt` front matter: the
+ * title names the prompt, the body (below the front matter) is the
+ * instruction. Being notes, they sync across devices, show up in
+ * search, and are edited like anything else.
  */
 
-export interface SavedPrompt {
+export interface PromptNote {
     id: string;
     title: string;
     prompt: string;
 }
 
-const DEFAULT_PROMPTS: Omit<SavedPrompt, 'id'>[] = [
-    {
-        title: 'Clean up transcript',
-        prompt: 'Clean up this raw voice transcript: fix punctuation and obvious mistranscriptions, remove filler words, and split it into readable paragraphs. Keep every language as spoken; do not translate or summarize.',
-    },
-    {
-        title: 'Summarize',
-        prompt: 'Summarize this text as a few concise markdown bullet points, keeping the key decisions and facts.',
-    },
-    {
-        title: 'Extract action items',
-        prompt: 'Extract every task, commitment, and follow-up from this text as markdown tasks, one per line, in the form "- [ ] task". Include the owner in @mention form when named.',
-    },
-    {
-        title: 'Translate to English',
-        prompt: 'Translate this text to natural English, preserving the markdown structure.',
-    },
-];
-
-export const savedPrompts = ref<SavedPrompt[]>([]);
 export const aiDialogOpen = ref(false);
 
-let loadedFor: string | null = null;
+export const promptNotes = computed<PromptNote[]>(() =>
+    liveNotes.value
+        .filter(
+            (note) =>
+                note.type === 'note' &&
+                noteMetaFor(note.id).type === 'prompt',
+        )
+        .map((note) => {
+            const meta = noteMetaFor(note.id);
+            const body = note.content
+                .split('\n')
+                .slice(meta.endLine + 1)
+                .join('\n')
+                .trim();
 
-function storageKey(): string | null {
-    const config = workspaceConfig();
+            return {
+                id: note.id,
+                title: note.title || 'Untitled prompt',
+                prompt: body,
+            };
+        })
+        .filter((prompt) => prompt.prompt !== '')
+        .sort((a, b) => a.title.localeCompare(b.title)),
+);
 
-    return config
-        ? `donote:ai-prompts:${config.teamSlug}:${config.userId}`
-        : null;
+export async function createPromptNote(
+    title: string,
+    prompt: string,
+): Promise<void> {
+    await createNote({
+        title,
+        folder: 'Prompts',
+        content: `---\ntype: prompt\n---\n\n${prompt.trim()}\n`,
+    });
 }
 
-export function loadSavedPrompts(): void {
-    const key = storageKey();
+const STARTER_PROMPTS: [string, string][] = [
+    [
+        'Clean up transcript',
+        'Clean up this raw voice transcript: fix punctuation and obvious mistranscriptions, remove filler words, and split it into readable paragraphs. Keep every language as spoken; do not translate or summarize.',
+    ],
+    [
+        'Summarize',
+        'Summarize this text as a few concise markdown bullet points, keeping the key decisions and facts.',
+    ],
+    [
+        'Extract action items',
+        'Extract every task, commitment, and follow-up from this text as markdown tasks, one per line, in the form "- [ ] task". Include the owner in @mention form when named.',
+    ],
+    [
+        'Translate to English',
+        'Translate this text to natural English, preserving the markdown structure.',
+    ],
+];
 
-    if (key === null || key === loadedFor) {
-        return;
+/** Create the four starter prompt notes (offered when none exist yet). */
+export async function seedStarterPrompts(): Promise<void> {
+    for (const [title, prompt] of STARTER_PROMPTS) {
+        await createPromptNote(title, prompt);
     }
-
-    loadedFor = key;
-
-    try {
-        const raw = localStorage.getItem(key);
-
-        if (raw !== null) {
-            savedPrompts.value = JSON.parse(raw) as SavedPrompt[];
-
-            return;
-        }
-    } catch {
-        // Fall through to defaults.
-    }
-
-    savedPrompts.value = DEFAULT_PROMPTS.map((prompt) => ({
-        ...prompt,
-        id: crypto.randomUUID(),
-    }));
-    persist();
-}
-
-function persist(): void {
-    const key = storageKey();
-
-    if (key !== null) {
-        try {
-            localStorage.setItem(key, JSON.stringify(savedPrompts.value));
-        } catch {
-            // Best-effort.
-        }
-    }
-}
-
-export function savePrompt(title: string, prompt: string): void {
-    savedPrompts.value = [
-        ...savedPrompts.value,
-        { id: crypto.randomUUID(), title, prompt },
-    ];
-    persist();
-}
-
-export function deletePrompt(id: string): void {
-    savedPrompts.value = savedPrompts.value.filter(
-        (prompt) => prompt.id !== id,
-    );
-    persist();
 }

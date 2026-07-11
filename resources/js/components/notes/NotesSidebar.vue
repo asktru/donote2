@@ -18,6 +18,7 @@ import {
     Search,
     Settings,
     Sun,
+    Sparkles,
     Target,
 } from '@lucide/vue';
 import { computed, ref } from 'vue';
@@ -74,6 +75,7 @@ const REVIEW_ICONS: Record<NoteKind, typeof Target> = {
     project: Target,
     area: Layers,
     list: ListTodo,
+    prompt: Sparkles,
 };
 
 const page = usePage();
