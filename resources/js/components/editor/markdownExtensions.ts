@@ -31,8 +31,14 @@ import {
 } from '@codemirror/state';
 import type { EditorState } from '@codemirror/state';
 import type { Extension } from '@codemirror/state';
-import { Decoration, EditorView, keymap, WidgetType } from '@codemirror/view';
-import type { DecorationSet } from '@codemirror/view';
+import {
+    Decoration,
+    EditorView,
+    keymap,
+    ViewPlugin,
+    WidgetType,
+} from '@codemirror/view';
+import type { DecorationSet, ViewUpdate } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 
 import { todayDailyKey } from '@/core/dates';
@@ -1643,6 +1649,141 @@ const editorTheme = EditorView.theme({
 /* Assembly                                                            */
 /* ------------------------------------------------------------------ */
 
+/** Leading indent + list/task/quote marker of a line (the hanging prefix). */
+const HANGING_PREFIX_RE = /^(\s*)(?:[-+*] \[.\] |[-+*] |> |\d+[.)] )?/;
+
+/**
+ * Hanging indents: wrapped list, task, and quote lines continue under
+ * their text, not at column 0. The font is proportional and markers
+ * render as widgets, so prefix widths are measured from the live DOM
+ * (cached per prefix string) and applied as line decorations whose
+ * negative text-indent/padding pair leaves the first visual line put.
+ */
+const hangingIndents = ViewPlugin.fromClass(
+    class {
+        decorations: DecorationSet = Decoration.none;
+        widths = new Map<string, number>();
+        scheduled = false;
+
+        constructor(readonly view: EditorView) {
+            this.decorations = this.build(view);
+            this.measure(view);
+        }
+
+        update(update: ViewUpdate) {
+            if (
+                update.docChanged ||
+                update.viewportChanged ||
+                update.geometryChanged
+            ) {
+                this.decorations = this.build(update.view);
+                this.measure(update.view);
+            }
+        }
+
+        prefixOf(text: string): string {
+            return HANGING_PREFIX_RE.exec(text)?.[0] ?? '';
+        }
+
+        build(view: EditorView): DecorationSet {
+            const builder = new RangeSetBuilder<Decoration>();
+            const seen = new Set<number>();
+
+            for (const range of view.visibleRanges) {
+                for (let pos = range.from; pos <= range.to; ) {
+                    const line = view.state.doc.lineAt(pos);
+                    pos = line.to + 1;
+
+                    if (seen.has(line.from)) {
+                        continue;
+                    }
+
+                    seen.add(line.from);
+                    const prefix = this.prefixOf(line.text);
+                    const width = this.widths.get(prefix);
+
+                    if (prefix !== '' && width !== undefined && width > 0) {
+                        builder.add(
+                            line.from,
+                            line.from,
+                            Decoration.line({
+                                attributes: {
+                                    style: `text-indent:-${width}px;padding-left:${width + 4}px`,
+                                },
+                            }),
+                        );
+                    }
+                }
+            }
+
+            return builder.finish();
+        }
+
+        measure(view: EditorView): void {
+            const missing: { pos: number; end: number; prefix: string }[] = [];
+
+            for (const range of view.visibleRanges) {
+                for (let pos = range.from; pos <= range.to; ) {
+                    const line = view.state.doc.lineAt(pos);
+                    pos = line.to + 1;
+                    const prefix = this.prefixOf(line.text);
+
+                    if (
+                        prefix !== '' &&
+                        !this.widths.has(prefix) &&
+                        !missing.some((entry) => entry.prefix === prefix)
+                    ) {
+                        missing.push({
+                            pos: line.from,
+                            end: line.from + prefix.length,
+                            prefix,
+                        });
+                    }
+                }
+            }
+
+            if (missing.length === 0) {
+                return;
+            }
+
+            view.requestMeasure({
+                read: () => {
+                    const measured = new Map<string, number>();
+
+                    for (const entry of missing) {
+                        const start = view.coordsAtPos(entry.pos, 1);
+                        const end = view.coordsAtPos(entry.end, 1);
+
+                        if (start && end && end.left > start.left) {
+                            measured.set(entry.prefix, end.left - start.left);
+                        }
+                    }
+
+                    return measured;
+                },
+                write: (measured: Map<string, number>) => {
+                    if (measured.size === 0 || this.scheduled) {
+                        return;
+                    }
+
+                    measured.forEach((width, prefix) =>
+                        this.widths.set(prefix, width),
+                    );
+                    this.scheduled = true;
+                    setTimeout(() => {
+                        this.scheduled = false;
+
+                        // Empty transaction re-pulls decorations with the
+                        // freshly measured widths.
+                        view.dispatch({});
+                    });
+                },
+            });
+        }
+    },
+    { decorations: (plugin) => plugin.decorations },
+);
+
 export function donoteMarkdown(callbacks: EditorCallbacks): Extension {
     return [
         history(),
@@ -1669,6 +1810,7 @@ export function donoteMarkdown(callbacks: EditorCallbacks): Extension {
             icons: false,
         }),
         EditorView.lineWrapping,
+        hangingIndents,
         editorTheme,
         keymap.of([
             {
