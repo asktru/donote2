@@ -3,7 +3,7 @@ import { AlarmClock, Check, ExternalLink } from '@lucide/vue';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 import { Button } from '@/components/ui/button';
-import { reminderCandidates } from '@/core/reminders';
+import { formatReminderToken, reminderCandidates } from '@/core/reminders';
 import type { ReminderCandidate } from '@/core/reminders';
 import { openWorkspaceDb } from '@/stores/db';
 import type { WorkspaceDb } from '@/stores/db';
@@ -11,6 +11,7 @@ import {
     workspaceConfig,
     liveNotes,
     parsedNote,
+    rewriteReminderToken,
     toggleTaskLine,
 } from '@/stores/workspace';
 
@@ -22,8 +23,6 @@ const active = ref<ReminderCandidate[]>([]);
 
 let db: WorkspaceDb | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
-/** Keys already shown this session so a popup doesn't re-appear every tick. */
-const shown = new Set<string>();
 
 async function scan(): Promise<void> {
     if (!db) {
@@ -46,10 +45,7 @@ async function scan(): Promise<void> {
             continue;
         }
 
-        if (
-            shown.has(candidate.key) ||
-            active.value.some((entry) => entry.key === candidate.key)
-        ) {
+        if (active.value.some((entry) => entry.key === candidate.key)) {
             continue;
         }
 
@@ -67,7 +63,6 @@ async function scan(): Promise<void> {
             continue;
         }
 
-        shown.add(candidate.key);
         active.value = [...active.value, candidate];
     }
 }
@@ -85,14 +80,40 @@ async function snooze(
     candidate: ReminderCandidate,
     minutes: number | 'tomorrow',
 ): Promise<void> {
-    const until =
-        minutes === 'tomorrow'
-            ? new Date(new Date().setHours(24 + 9, 0, 0, 0)).getTime()
-            : Date.now() + minutes * 60000;
-
     active.value = active.value.filter((entry) => entry.key !== candidate.key);
-    shown.delete(candidate.key);
-    await db?.reminders.put({ key: candidate.key, status: 'snoozed', until });
+
+    if (minutes === 'tomorrow') {
+        await db?.reminders.put({
+            key: candidate.key,
+            status: 'snoozed',
+            until: new Date(new Date().setHours(24 + 9, 0, 0, 0)).getTime(),
+        });
+
+        return;
+    }
+
+    // Rewrite the @time token in the note so the snooze is visible and the
+    // reminder re-fires at the new time (which yields a fresh key).
+    const at = new Date(Date.now() + minutes * 60000);
+    const rewritten =
+        candidate.line.reminderRaw !== null &&
+        (await rewriteReminderToken(
+            candidate.noteId,
+            candidate.line,
+            candidate.line.reminderRaw,
+            formatReminderToken(at),
+        ));
+
+    // Silence the old firing; fall back to a plain snooze if the line moved.
+    await db?.reminders.put(
+        rewritten
+            ? { key: candidate.key, status: 'dismissed', until: null }
+            : {
+                  key: candidate.key,
+                  status: 'snoozed',
+                  until: at.getTime(),
+              },
+    );
 }
 
 async function complete(candidate: ReminderCandidate): Promise<void> {

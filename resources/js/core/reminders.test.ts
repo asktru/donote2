@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseLine, parseNote } from './parser';
-import { reminderCandidates, resolveReminderAt } from './reminders';
+import {
+    formatReminderToken,
+    reminderCandidates,
+    resolveReminderAt,
+} from './reminders';
 
 const ref = new Date(2026, 6, 11, 6, 0); // Sat July 11 2026, 06:00
 
@@ -35,6 +39,26 @@ describe('resolveReminderAt', () => {
     it('returns null for done tasks and tasks without reminders', () => {
         expect(resolveReminderAt(parseLine('- [x] Done @8am'), ref)).toBeNull();
         expect(resolveReminderAt(parseLine('- [ ] No time'), ref)).toBeNull();
+    });
+});
+
+describe('formatReminderToken', () => {
+    it('formats am/pm tokens the parser understands', () => {
+        expect(formatReminderToken(new Date(2026, 6, 11, 9, 0))).toBe('@9am');
+        expect(formatReminderToken(new Date(2026, 6, 11, 14, 42))).toBe(
+            '@2:42pm',
+        );
+        expect(formatReminderToken(new Date(2026, 6, 11, 0, 5))).toBe(
+            '@12:05am',
+        );
+        expect(formatReminderToken(new Date(2026, 6, 11, 12, 0))).toBe('@12pm');
+    });
+
+    it('round-trips through parseLine', () => {
+        const token = formatReminderToken(new Date(2026, 6, 11, 15, 7));
+        const line = parseLine(`- [ ] Task ${token}`);
+
+        expect(line.reminderMinutes).toBe(15 * 60 + 7);
     });
 });
 

@@ -841,6 +841,40 @@ async function renameToken(
     }
 }
 
+/**
+ * Replace a task's reminder token (e.g. `@9am` → `@2:42pm`) so a snoozed
+ * reminder is visible in the note itself. The line is matched by its raw
+ * text first (robust against the note shifting), falling back to the index.
+ */
+export async function rewriteReminderToken(
+    noteId: string,
+    line: { index: number; raw: string },
+    oldToken: string,
+    newToken: string,
+): Promise<boolean> {
+    const note = notes.get(noteId);
+
+    if (!note) {
+        return false;
+    }
+
+    const rawLines = note.content.split('\n');
+    let target = rawLines.findIndex((raw) => raw === line.raw);
+
+    if (target === -1 && rawLines[line.index]?.includes(oldToken)) {
+        target = line.index;
+    }
+
+    if (target === -1 || !rawLines[target].includes(oldToken)) {
+        return false;
+    }
+
+    rawLines[target] = rawLines[target].replace(oldToken, newToken);
+    await updateNoteContent(noteId, rawLines.join('\n'));
+
+    return true;
+}
+
 /* ------------------------------------------------------------------ */
 /* Navigation history (for the quick switcher)                         */
 /* ------------------------------------------------------------------ */

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
 import {
+    AlarmClock,
     Calendar,
     CalendarClock,
     CalendarDays,
@@ -238,6 +239,21 @@ const syncLabel = computed(() => {
                         class="size-4 shrink-0 text-muted-foreground"
                     />
                     Tasks
+                </button>
+                <button
+                    type="button"
+                    :class="
+                        cn(
+                            'flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted/70',
+                            isActive('reminders')
+                                ? 'bg-muted font-medium text-primary'
+                                : 'text-foreground/80',
+                        )
+                    "
+                    @click="openView({ kind: 'reminders' })"
+                >
+                    <AlarmClock class="size-4 shrink-0 text-muted-foreground" />
+                    Reminders
                 </button>
             </section>
 

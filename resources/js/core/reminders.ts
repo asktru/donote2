@@ -47,6 +47,21 @@ export function reminderKey(
     return `${noteId}|${line.title}|${at.getTime()}`;
 }
 
+/**
+ * Format a time as a reminder token: `@9am`, `@2:42pm`, `@12:05am`.
+ * Minutes are omitted on the hour.
+ */
+export function formatReminderToken(date: Date): string {
+    const hours24 = date.getHours();
+    const minutes = date.getMinutes();
+    const meridiem = hours24 >= 12 ? 'pm' : 'am';
+    const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
+
+    return minutes === 0
+        ? `@${hours12}${meridiem}`
+        : `@${hours12}:${String(minutes).padStart(2, '0')}${meridiem}`;
+}
+
 /** Collect reminder candidates from a parsed note. */
 export function reminderCandidates(
     noteId: string,

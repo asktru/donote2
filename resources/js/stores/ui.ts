@@ -17,6 +17,7 @@ export type SplitView =
 export type MainView =
     | PaneView
     | { kind: 'tasks' }
+    | { kind: 'reminders' }
     | { kind: 'tag'; tag: string }
     | { kind: 'mention'; mention: string };
 
@@ -41,6 +42,8 @@ function serializeView(view: MainView | SplitView): string {
             return `note:${view.id}`;
         case 'tasks':
             return 'tasks';
+        case 'reminders':
+            return 'reminders';
         case 'tag':
             return `tag:${view.tag}`;
         case 'mention':
@@ -54,6 +57,10 @@ function deserializeView(raw: string): MainView | SplitView | null {
 
     if (head === 'tasks') {
         return { kind: 'tasks' };
+    }
+
+    if (head === 'reminders') {
+        return { kind: 'reminders' };
     }
 
     if (head === 'graph' && payload !== '') {
@@ -120,7 +127,11 @@ export function initViewFromUrl(): void {
     if (split !== null) {
         const view = deserializeView(split);
 
-        if (view !== null && view.kind !== 'tasks') {
+        if (
+            view !== null &&
+            view.kind !== 'tasks' &&
+            view.kind !== 'reminders'
+        ) {
             splitView.value = view;
         }
     }

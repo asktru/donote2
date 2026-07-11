@@ -8,6 +8,7 @@ import MiniCalendar from '@/components/notes/MiniCalendar.vue';
 import NotePane from '@/components/notes/NotePane.vue';
 import NotesSidebar from '@/components/notes/NotesSidebar.vue';
 import ReminderHost from '@/components/notes/ReminderHost.vue';
+import RemindersView from '@/components/notes/RemindersView.vue';
 import SearchDialog from '@/components/notes/SearchDialog.vue';
 import ShortcutsDialog from '@/components/notes/ShortcutsDialog.vue';
 import TasksView from '@/components/notes/TasksView.vue';
@@ -223,6 +224,12 @@ onBeforeUnmount(() => {
                     >
                         <TasksView
                             v-if="currentView.kind === 'tasks'"
+                            @open-note="
+                                (id, line) => handleOpenNote(id, false, line)
+                            "
+                        />
+                        <RemindersView
+                            v-else-if="currentView.kind === 'reminders'"
                             @open-note="
                                 (id, line) => handleOpenNote(id, false, line)
                             "

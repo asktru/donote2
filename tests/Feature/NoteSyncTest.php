@@ -216,6 +216,26 @@ test('users cannot sync against a team they do not belong to', function () {
         ->assertForbidden();
 });
 
+test('note content whitespace survives the round trip untrimmed', function () {
+    $user = User::factory()->create();
+    $team = $user->currentTeam;
+    $content = "# Note\n\n- [ ] task with trailing space \n\n";
+    $change = syncChange(['content' => $content]);
+
+    $this->actingAs($user)
+        ->postJson(route('notes.sync.push', $team), ['changes' => [$change]])
+        ->assertSuccessful()
+        ->assertJsonPath('results.0.note.content', $content);
+
+    expect(Note::query()->findOrFail($change['id'])->content)->toBe($content);
+
+    $response = $this->actingAs($user)
+        ->getJson(route('notes.sync.pull', $team))
+        ->assertSuccessful();
+
+    expect($response->json('notes.0.content'))->toBe($content);
+});
+
 test('pull does not leak notes of other members in the same team', function () {
     $owner = User::factory()->create();
     $team = $owner->currentTeam;

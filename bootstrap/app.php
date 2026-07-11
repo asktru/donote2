@@ -18,6 +18,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
+        // Note markdown is whitespace-significant (trailing spaces after a
+        // task marker, blank lines at the end) — never trim it on sync.
+        $middleware->trimStrings(except: ['changes.*.content']);
+
         $middleware->web(append: [
             HandleAppearance::class,
             HandleInertiaRequests::class,
