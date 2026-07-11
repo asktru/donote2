@@ -34,12 +34,23 @@ export interface ReminderState {
 
 export interface MemoRecord {
     id: string;
+    /**
+     * Long recordings are split into ~10-minute parts so each upload
+     * stays well under provider size limits; parts share a groupId and
+     * their transcripts are stitched in `part` order once all are done.
+     */
+    groupId: string;
+    part: number;
+    /** Number of parts in the group; null while recording is ongoing. */
+    partsTotal: number | null;
     /** Daily key of the day the memo was recorded. */
     dateKey: string;
     blob: Blob;
     mimeType: string;
     durationSec: number;
-    status: 'pending' | 'uploading' | 'failed';
+    status: 'pending' | 'uploading' | 'failed' | 'done';
+    /** Transcribed text, set when this part reaches 'done'. */
+    transcript: string | null;
     error: string | null;
     attempts: number;
     createdAt: string;
@@ -65,6 +76,22 @@ export function openWorkspaceDb(teamSlug: string, userId: number): WorkspaceDb {
     db.version(2).stores({
         memos: 'id, status, createdAt',
     });
+
+    db.version(3)
+        .stores({
+            memos: 'id, status, createdAt, groupId',
+        })
+        .upgrade((transaction) =>
+            transaction
+                .table('memos')
+                .toCollection()
+                .modify((memo: Partial<MemoRecord> & { id: string }) => {
+                    memo.groupId = memo.groupId ?? memo.id;
+                    memo.part = memo.part ?? 0;
+                    memo.partsTotal = memo.partsTotal ?? 1;
+                    memo.transcript = memo.transcript ?? null;
+                }),
+        );
 
     return db;
 }

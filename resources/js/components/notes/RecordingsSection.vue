@@ -2,44 +2,54 @@
 import { CloudUpload, Loader2, Mic, TriangleAlert, X } from '@lucide/vue';
 import { computed } from 'vue';
 
-import type { MemoRecord } from '@/stores/db';
+import type { MemoGroup } from '@/stores/memos';
 import {
-    cancelMemo,
+    cancelMemoGroup,
     discardRecording,
     isRecording,
-    memoQueue,
+    memoGroups,
     recordingSeconds,
 } from '@/stores/memos';
 
-const hasContent = computed(() => isRecording.value || memoQueue.value.length > 0);
+const hasContent = computed(
+    () => isRecording.value || memoGroups.value.length > 0,
+);
 
-function statusLabel(memo: MemoRecord): string {
-    switch (memo.status) {
-        case 'uploading':
-            return 'Transcribing…';
-        case 'failed':
-            return memo.error ?? 'Failed — will retry';
-        default:
-            return navigator.onLine ? 'Waiting…' : 'Waiting for connection…';
+function statusLabel(group: MemoGroup): string {
+    if (group.status === 'failed') {
+        return group.error ?? 'Failed — will retry';
     }
+
+    const progress =
+        group.partsKnown > 1
+            ? ` ${Math.min(group.partsDone + 1, group.partsKnown)}/${group.partsKnown}`
+            : '';
+
+    if (group.status === 'uploading') {
+        return `Transcribing${progress}…`;
+    }
+
+    if (!group.finished) {
+        return 'Recording continues…';
+    }
+
+    return navigator.onLine ? 'Waiting…' : 'Waiting for connection…';
 }
 
-function timeLabel(memo: MemoRecord): string {
-    const time = new Date(memo.createdAt).toLocaleTimeString([], {
+function duration(totalSec: number): string {
+    const minutes = Math.floor(totalSec / 60);
+    const seconds = totalSec % 60;
+
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function timeLabel(group: MemoGroup): string {
+    const time = new Date(group.createdAt).toLocaleTimeString([], {
         hour: '2-digit',
         minute: '2-digit',
     });
-    const minutes = Math.floor(memo.durationSec / 60);
-    const seconds = memo.durationSec % 60;
 
-    return `${time} · ${minutes}:${String(seconds).padStart(2, '0')}`;
-}
-
-function recordingLabel(): string {
-    const minutes = Math.floor(recordingSeconds.value / 60);
-    const seconds = recordingSeconds.value % 60;
-
-    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+    return `${time} · ${duration(group.durationSec)}`;
 }
 </script>
 
@@ -64,7 +74,7 @@ function recordingLabel(): string {
                 />
             </span>
             <span class="min-w-0 flex-1 truncate">
-                Recording · {{ recordingLabel() }}
+                Recording · {{ duration(recordingSeconds) }}
             </span>
             <button
                 type="button"
@@ -78,16 +88,16 @@ function recordingLabel(): string {
         </div>
 
         <div
-            v-for="memo in memoQueue"
-            :key="memo.id"
+            v-for="memoGroup in memoGroups"
+            :key="memoGroup.groupId"
             class="group flex items-center gap-2 rounded-md px-2 py-1 text-sm"
         >
             <Loader2
-                v-if="memo.status === 'uploading'"
+                v-if="memoGroup.status === 'uploading'"
                 class="size-3.5 shrink-0 animate-spin text-muted-foreground"
             />
             <TriangleAlert
-                v-else-if="memo.status === 'failed'"
+                v-else-if="memoGroup.status === 'failed'"
                 class="size-3.5 shrink-0 text-amber-500"
             />
             <CloudUpload
@@ -97,21 +107,22 @@ function recordingLabel(): string {
             <span class="min-w-0 flex-1">
                 <span class="block truncate text-xs">
                     <Mic class="mr-0.5 inline size-3" />
-                    {{ timeLabel(memo) }}
+                    {{ timeLabel(memoGroup) }}
                 </span>
                 <span
                     class="block truncate text-[11px] text-muted-foreground"
-                    :title="memo.error ?? undefined"
+                    :title="memoGroup.error ?? undefined"
                 >
-                    {{ statusLabel(memo) }}
+                    {{ statusLabel(memoGroup) }}
                 </span>
             </span>
             <button
+                v-if="memoGroup.finished || !isRecording"
                 type="button"
                 class="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground"
-                title="Cancel this memo"
-                aria-label="Cancel memo"
-                @click="cancelMemo(memo.id)"
+                title="Cancel this recording"
+                aria-label="Cancel recording"
+                @click="cancelMemoGroup(memoGroup.groupId)"
             >
                 <X class="size-3.5" />
             </button>
