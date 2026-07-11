@@ -7,6 +7,7 @@ import { donoteDesktop } from '@/lib/desktop';
 import type { MemoRecord, WorkspaceDb } from '@/stores/db';
 import { openWorkspaceDb } from '@/stores/db';
 import {
+    createNote,
     getNote,
     openCalendarNote,
     updateNoteContent,
@@ -56,6 +57,16 @@ export const isRecording = ref(false);
 export const recordingSeconds = ref(0);
 export const recordingHasSystemAudio = ref(false);
 export const memoQueue = ref<MemoRecord[]>([]);
+/**
+ * Set after stopping a long (multi-segment) recording: the UI asks where
+ * the transcript should go. Finalization holds until the user answers or
+ * the app reloads (then the daily-note default applies).
+ */
+export const pendingDestination = ref<{
+    groupId: string;
+    durationSec: number;
+} | null>(null);
+const heldGroups = new Set<string>();
 
 export interface MemoGroup {
     groupId: string;
@@ -356,7 +367,49 @@ export async function stopRecording(): Promise<void> {
         await refreshQueue();
     }
 
+    if (current.part > 0) {
+        // Long recording — let the user pick where the transcript goes.
+        heldGroups.add(current.groupId);
+        pendingDestination.value = {
+            groupId: current.groupId,
+            durationSec: Math.round((Date.now() - current.startedAt) / 1000),
+        };
+    }
+
     void processQueue();
+}
+
+/** Resolve the destination question for a long recording. */
+export async function chooseDestination(
+    groupId: string,
+    destination: 'daily' | 'note',
+): Promise<void> {
+    pendingDestination.value = null;
+    heldGroups.delete(groupId);
+
+    const database = workspaceDb();
+
+    if (database) {
+        const parts = await database.memos
+            .where('groupId')
+            .equals(groupId)
+            .toArray();
+
+        for (const part of parts) {
+            await database.memos.update(part.id, { destination });
+        }
+    }
+
+    await finalizeGroup(groupId);
+}
+
+/** Keyboard-friendly start/stop switch. */
+export async function toggleRecording(): Promise<void> {
+    if (isRecording.value) {
+        await stopRecording();
+    } else {
+        await startRecording();
+    }
 }
 
 /** Discard the in-progress recording, including already-saved parts. */
@@ -416,11 +469,11 @@ export async function appendLinkToTodayNote(title: string): Promise<void> {
     );
 }
 
-/** When every part is transcribed, stitch them in order and append once. */
+/** When every part is transcribed, stitch them in order and file once. */
 async function finalizeGroup(groupId: string): Promise<void> {
     const database = workspaceDb();
 
-    if (!database) {
+    if (!database || heldGroups.has(groupId)) {
         return;
     }
 
@@ -445,7 +498,31 @@ async function finalizeGroup(groupId: string): Promise<void> {
         .replace(/\s+/g, ' ')
         .trim();
 
-    await appendTranscript(ordered[0], text === '' ? '(empty transcription)' : text);
+    const first = ordered[0];
+
+    if (first.destination === 'note') {
+        const time = new Date(first.createdAt).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+        const title = `Audio memo ${first.dateKey} ${time}`;
+        const paragraphs = ordered
+            .map((part) => part.transcript?.trim() ?? '')
+            .filter((paragraph) => paragraph !== '')
+            .join('\n\n');
+
+        await createNote({
+            title,
+            content: paragraphs === '' ? '(empty transcription)' : paragraphs,
+        });
+        await appendTranscript(first, `[[${title}]]`);
+    } else {
+        await appendTranscript(
+            first,
+            text === '' ? '(empty transcription)' : text,
+        );
+    }
+
     await database.memos.where('groupId').equals(groupId).delete();
     await refreshQueue();
 }

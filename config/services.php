@@ -36,6 +36,7 @@ return [
     'openai' => [
         'key' => env('OPENAI_API_KEY'),
         'transcription_model' => env('DONOTE_TRANSCRIPTION_MODEL', 'gpt-4o-transcribe'),
+        'ai_model' => env('DONOTE_AI_MODEL', 'gpt-4o-mini'),
     ],
 
     'slack' => [

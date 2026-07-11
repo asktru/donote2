@@ -2,15 +2,26 @@
 import { FilePlus2, Mic, Plus, Square } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
+import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import {
+    appendLinkToTodayNote,
+    chooseDestination,
     isRecording,
+    pendingDestination,
     recordingHasSystemAudio,
     recordingSeconds,
     startRecording,
     stopRecording,
 } from '@/stores/memos';
-import { appendLinkToTodayNote } from '@/stores/memos';
 import { openNote } from '@/stores/ui';
 import { createNote } from '@/stores/workspace';
 
@@ -54,6 +65,27 @@ async function newRecording(): Promise<void> {
 
 async function finishRecording(): Promise<void> {
     await stopRecording();
+}
+
+const destinationMinutes = computed(() =>
+    pendingDestination.value
+        ? Math.round(pendingDestination.value.durationSec / 60)
+        : 0,
+);
+
+function pickDestination(destination: 'daily' | 'note'): void {
+    const pending = pendingDestination.value;
+
+    if (pending) {
+        void chooseDestination(pending.groupId, destination);
+    }
+}
+
+function dismissDestination(open: boolean): void {
+    if (!open && pendingDestination.value) {
+        // Dismissed without choosing — default to the daily note.
+        pickDestination('daily');
+    }
 }
 </script>
 
@@ -118,5 +150,29 @@ async function finishRecording(): Promise<void> {
                 <Plus class="size-5.5" />
             </button>
         </div>
+
+        <Dialog
+            :open="pendingDestination !== null"
+            @update:open="dismissDestination"
+        >
+            <DialogContent class="pointer-events-auto sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Where should this memo go?</DialogTitle>
+                    <DialogDescription>
+                        That was a {{ destinationMinutes }}-minute recording —
+                        a long transcript can live in its own note, linked
+                        from today's daily note.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter class="gap-2 sm:justify-start">
+                    <Button variant="outline" @click="pickDestination('daily')">
+                        Append to daily note
+                    </Button>
+                    <Button @click="pickDestination('note')">
+                        Create a dedicated note
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </div>
 </template>

@@ -38,6 +38,9 @@ const groups: ShortcutGroup[] = [
             ['⌘N', 'New note (in the current folder)'],
             ['⌘⇧N', 'New folder (in the current folder)'],
             ['⌘⇧Y', 'Make synced line + copy (paste it anywhere)'],
+            ['⌘⇧R', 'Start / stop voice recording (desktop app)'],
+            ['⌃⌥R', 'Start / stop voice recording (browser)'],
+            ['⌘J', 'AI prompt on selection / note'],
         ],
     },
     {

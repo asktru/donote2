@@ -51,6 +51,12 @@ export interface MemoRecord {
     status: 'pending' | 'uploading' | 'failed' | 'done';
     /** Transcribed text, set when this part reaches 'done'. */
     transcript: string | null;
+    /**
+     * Where the finished transcript goes: inline under [[Audio memo]] in
+     * the daily note (default) or into a dedicated linked note — offered
+     * for recordings longer than one segment.
+     */
+    destination?: 'daily' | 'note';
     error: string | null;
     attempts: number;
     createdAt: string;

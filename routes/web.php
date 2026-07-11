@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AiCompletionController;
 use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GoogleCalendarController;
@@ -42,6 +43,7 @@ Route::prefix('api/{current_team}')
         Route::get('search', NoteSearchController::class)->name('notes.search');
         Route::post('attachments', [AttachmentController::class, 'store'])->name('attachments.store');
         Route::post('memos/transcriptions', MemoTranscriptionController::class)->name('memos.transcribe');
+        Route::post('ai/completions', AiCompletionController::class)->name('ai.complete');
         Route::get('attachments/{attachment}', [AttachmentController::class, 'show'])->name('attachments.show');
     });
 

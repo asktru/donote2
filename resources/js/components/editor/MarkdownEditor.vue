@@ -5,6 +5,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 import { donoteMarkdown } from '@/components/editor/markdownExtensions';
 import { recallCursor, rememberCursor } from '@/lib/cursorMemory';
+import { registerEditor, unregisterEditor } from '@/stores/editorRegistry';
 import { liveNotes, tagCounts, mentionCounts } from '@/stores/workspace';
 
 const props = defineProps<{
@@ -66,6 +67,10 @@ function createView(): void {
                     getMentions: () => [...mentionCounts.value.keys()],
                 }),
                 placeholderExt(props.placeholder ?? 'Type something…'),
+                EditorView.domEventHandlers({
+                    focus: (_event, focusedView) =>
+                        registerEditor(focusedView),
+                }),
                 EditorView.updateListener.of((update) => {
                     if (update.docChanged) {
                         lastEmitted = update.state.doc.toString();
@@ -135,9 +140,19 @@ function focus(): void {
 
 defineExpose({ scrollToLine, focus });
 
-onMounted(createView);
+onMounted(() => {
+    createView();
+
+    if (view) {
+        registerEditor(view);
+    }
+});
 
 onBeforeUnmount(() => {
+    if (view) {
+        unregisterEditor(view);
+    }
+
     view?.destroy();
     view = null;
 });

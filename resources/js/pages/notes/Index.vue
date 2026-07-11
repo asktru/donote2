@@ -2,6 +2,7 @@
 import { Head } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
+import AiPromptDialog from '@/components/notes/AiPromptDialog.vue';
 import EventsList from '@/components/notes/EventsList.vue';
 import GraphView from '@/components/notes/GraphView.vue';
 import MiniCalendar from '@/components/notes/MiniCalendar.vue';
@@ -18,7 +19,13 @@ import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { kindOfKey, todayDailyKey, todayKey } from '@/core/dates';
 import type { CalendarKind } from '@/core/dates';
-import { startMemoUploader, stopMemoUploader } from '@/stores/memos';
+import { isMacDesktopShell } from '@/lib/platform';
+import { aiDialogOpen } from '@/stores/aiPrompts';
+import {
+    startMemoUploader,
+    stopMemoUploader,
+    toggleRecording,
+} from '@/stores/memos';
 import { startSync, stopSync } from '@/stores/sync';
 import {
     closeSplit,
@@ -139,6 +146,19 @@ function onKeydown(event: KeyboardEvent): void {
         return;
     }
 
+    // Start/stop voice recording: ⌘⇧R in the desktop shell (Reflect
+    // parity), ⌃⌥R in browsers where ⌘⇧R means hard reload.
+    if (
+        event.code === 'KeyR' &&
+        ((isMacDesktopShell && event.metaKey && event.shiftKey) ||
+            (event.ctrlKey && event.altKey))
+    ) {
+        event.preventDefault();
+        void toggleRecording();
+
+        return;
+    }
+
     const modifier = event.metaKey || event.ctrlKey;
 
     if (!modifier) {
@@ -157,6 +177,9 @@ function onKeydown(event: KeyboardEvent): void {
     if (key === 'k') {
         event.preventDefault();
         searchOpen.value = !searchOpen.value;
+    } else if (key === 'j' && !event.shiftKey) {
+        event.preventDefault();
+        aiDialogOpen.value = !aiDialogOpen.value;
     } else if (key === 't' && !event.shiftKey) {
         event.preventDefault();
         openCalendar('daily', todayDailyKey());
@@ -373,6 +396,7 @@ onBeforeUnmount(() => {
                     @open-calendar="(key) => handleOpenCalendar(key)"
                 />
                 <ShortcutsDialog />
+                <AiPromptDialog />
                 <ReminderHost
                     @open-note="(id, line) => handleOpenNote(id, false, line)"
                 />
