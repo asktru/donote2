@@ -182,6 +182,31 @@ function selectionTouches(
 }
 
 const hideDecoration = Decoration.replace({});
+const indentGuideDecoration = Decoration.mark({ class: 'cm-indent-guide' });
+
+/**
+ * Char offset of the given indent width inside a line's leading whitespace
+ * (tabs count as width 4), or null when the width falls inside a tab.
+ */
+function indentWidthToOffset(text: string, width: number): number | null {
+    let current = 0;
+
+    for (let offset = 0; offset < text.length; offset++) {
+        if (current === width) {
+            return offset;
+        }
+
+        const char = text[offset];
+
+        if (char !== ' ' && char !== '\t') {
+            return null;
+        }
+
+        current += char === '\t' ? 4 : 1;
+    }
+
+    return null;
+}
 const frontMatterLine = Decoration.line({ class: 'cm-frontmatter' });
 
 /** End line (1-based) of a leading --- front matter block, or -1. */
@@ -297,6 +322,9 @@ function buildDecorations(state: EditorState): DecorationSet {
     const syntaxMarks = collectSyntaxMarks(state);
     const fmEnd = frontMatterEnd(state);
 
+    // Ancestor list-item indents, for the indentation guide lines.
+    const guideStack: number[] = [];
+
     for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber++) {
         const line = doc.line(lineNumber);
 
@@ -309,6 +337,39 @@ function buildDecorations(state: EditorState): DecorationSet {
         const parsed = parseLine(line.text);
         const revealed = selectionTouches(state, line.from, line.to);
         const tokens: TokenDecoration[] = [];
+
+        // Indentation guides: one thin line per ancestor level (mirrors the
+        // parser's nesting rules — headings reset, empty lines pass through).
+        if (parsed.kind === 'heading') {
+            guideStack.length = 0;
+        } else if (parsed.kind !== 'empty') {
+            while (
+                guideStack.length > 0 &&
+                guideStack[guideStack.length - 1] >= parsed.indent
+            ) {
+                guideStack.pop();
+            }
+
+            for (const ancestorIndent of guideStack) {
+                const offset = indentWidthToOffset(line.text, ancestorIndent);
+
+                if (offset !== null) {
+                    tokens.push({
+                        from: line.from + offset,
+                        to: line.from + offset + 1,
+                        decoration: indentGuideDecoration,
+                    });
+                }
+            }
+
+            if (
+                parsed.kind === 'task' ||
+                parsed.kind === 'checklist' ||
+                parsed.kind === 'bullet'
+            ) {
+                guideStack.push(parsed.indent);
+            }
+        }
 
         // Wiki tokens get bespoke hiding below; drop the markdown parser's
         // own LinkMark/URL marks inside them so both don't fight over ranges.
@@ -1279,6 +1340,20 @@ const editorTheme = EditorView.theme({
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
         fontSize: '0.82em',
         color: 'var(--muted-foreground)',
+    },
+
+    '.cm-indent-guide': {
+        position: 'relative',
+    },
+    '.cm-indent-guide::before': {
+        content: "''",
+        position: 'absolute',
+        left: '0.5px',
+        top: '-0.36em',
+        bottom: '-0.36em',
+        borderLeft:
+            '1px solid color-mix(in oklab, var(--border) 85%, var(--muted-foreground))',
+        pointerEvents: 'none',
     },
 
     '.cm-bullet-dot': {
