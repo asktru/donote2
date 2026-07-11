@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FilePlus, FileText, Search } from '@lucide/vue';
+import { FilePlus, FileText, History, Search } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -8,11 +8,19 @@ import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { LocalNote } from '@/stores/db';
 import { searchOpen } from '@/stores/ui';
-import { createNote, searchLocal, workspaceConfig } from '@/stores/workspace';
+import {
+    createNote,
+    findCalendarNote,
+    getNote,
+    recentVisits,
+    searchLocal,
+    workspaceConfig,
+} from '@/stores/workspace';
 import type { WorkspaceConfig } from '@/stores/workspace';
 
 const emit = defineEmits<{
     'open-note': [id: string];
+    'open-calendar': [dateKey: string];
 }>();
 
 interface ResultRow {
@@ -113,10 +121,64 @@ watch(searchOpen, (open) => {
     }
 });
 
+/** Recently visited notes/periods, shown while the query is empty. */
+const historyRows = computed<ResultRow[]>(() => {
+    const seen = new Set<string>();
+    const result: ResultRow[] = [];
+
+    for (const visit of recentVisits.value) {
+        if (visit.kind === 'note') {
+            const note = getNote(visit.id);
+
+            if (!note || note.deleted === 1 || seen.has(note.id)) {
+                continue;
+            }
+
+            seen.add(note.id);
+            result.push(...localRows([note]));
+        } else {
+            const key = `${visit.calKind}:${visit.dateKey}`;
+
+            if (seen.has(key)) {
+                continue;
+            }
+
+            seen.add(key);
+            const note = findCalendarNote(visit.calKind, visit.dateKey);
+            result.push({
+                id: note?.id ?? key,
+                title: humanizeKey(visit.dateKey),
+                type: visit.calKind,
+                dateKey: visit.dateKey,
+                folder: '',
+                snippet:
+                    note?.content.trim().split('\n')[0]?.slice(0, 120) ?? '',
+            });
+        }
+
+        if (result.length >= 15) {
+            break;
+        }
+    }
+
+    return result;
+});
+
+const showingHistory = computed(() => query.value.trim() === '');
+
+const displayRows = computed<ResultRow[]>(() =>
+    showingHistory.value ? historyRows.value : rows.value,
+);
+
 const showCreate = computed(() => query.value.trim() !== '');
 
 function pick(row: ResultRow): void {
-    emit('open-note', row.id);
+    if (row.type !== 'note' && row.dateKey !== null) {
+        emit('open-calendar', row.dateKey);
+    } else {
+        emit('open-note', row.id);
+    }
+
     searchOpen.value = false;
 }
 
@@ -127,7 +189,7 @@ async function createFromQuery(): Promise<void> {
 }
 
 function onKeydown(event: KeyboardEvent): void {
-    const total = rows.value.length + (showCreate.value ? 1 : 0);
+    const total = displayRows.value.length + (showCreate.value ? 1 : 0);
 
     if (event.key === 'ArrowDown') {
         highlighted.value = (highlighted.value + 1) % Math.max(total, 1);
@@ -139,8 +201,8 @@ function onKeydown(event: KeyboardEvent): void {
     } else if (event.key === 'Enter') {
         event.preventDefault();
 
-        if (highlighted.value < rows.value.length) {
-            const row = rows.value[highlighted.value];
+        if (highlighted.value < displayRows.value.length) {
+            const row = displayRows.value[highlighted.value];
 
             if (row) {
                 pick(row);
@@ -171,8 +233,14 @@ function onKeydown(event: KeyboardEvent): void {
             </div>
 
             <div class="max-h-80 overflow-y-auto p-1.5">
+                <p
+                    v-if="showingHistory && displayRows.length > 0"
+                    class="flex items-center gap-1.5 px-2.5 pt-1 pb-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
+                >
+                    <History class="size-3" /> Recently opened
+                </p>
                 <button
-                    v-for="(row, index) in rows"
+                    v-for="(row, index) in displayRows"
                     :key="row.id"
                     type="button"
                     :class="
@@ -209,12 +277,12 @@ function onKeydown(event: KeyboardEvent): void {
                     :class="
                         cn(
                             'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm',
-                            highlighted === rows.length
+                            highlighted === displayRows.length
                                 ? 'bg-muted'
                                 : 'hover:bg-muted/60',
                         )
                     "
-                    @mouseenter="highlighted = rows.length"
+                    @mouseenter="highlighted = displayRows.length"
                     @click="createFromQuery"
                 >
                     <FilePlus class="size-4 shrink-0 text-primary" />
@@ -222,7 +290,7 @@ function onKeydown(event: KeyboardEvent): void {
                 </button>
 
                 <p
-                    v-if="rows.length === 0 && !showCreate"
+                    v-if="displayRows.length === 0 && !showCreate"
                     class="px-2.5 py-6 text-center text-sm text-muted-foreground"
                 >
                     Type to search your workspace.

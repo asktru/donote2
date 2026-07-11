@@ -2,6 +2,7 @@ import { ref } from 'vue';
 
 import { todayDailyKey } from '@/core/dates';
 import type { CalendarKind } from '@/core/dates';
+import { recordVisit } from '@/stores/workspace';
 
 export type PaneView =
     | { kind: 'calendar'; calKind: CalendarKind; dateKey: string }
@@ -10,7 +11,8 @@ export type PaneView =
 export type SplitView =
     | PaneView
     | { kind: 'tag'; tag: string }
-    | { kind: 'mention'; mention: string };
+    | { kind: 'mention'; mention: string }
+    | { kind: 'graph'; noteId: string };
 
 export type MainView =
     | PaneView
@@ -29,8 +31,10 @@ export const shortcutsOpen = ref(false);
 /** Line index the main editor should scroll to after opening a note. */
 export const pendingScrollLine = ref<number | null>(null);
 
-function serializeView(view: MainView): string {
+function serializeView(view: MainView | SplitView): string {
     switch (view.kind) {
+        case 'graph':
+            return `graph:${view.noteId}`;
         case 'calendar':
             return `${view.calKind}:${view.dateKey}`;
         case 'note':
@@ -44,12 +48,16 @@ function serializeView(view: MainView): string {
     }
 }
 
-function deserializeView(raw: string): MainView | null {
+function deserializeView(raw: string): MainView | SplitView | null {
     const [head, ...rest] = raw.split(':');
     const payload = rest.join(':');
 
     if (head === 'tasks') {
         return { kind: 'tasks' };
+    }
+
+    if (head === 'graph' && payload !== '') {
+        return { kind: 'graph', noteId: payload };
     }
 
     if (head === 'note' && payload !== '') {
@@ -104,7 +112,7 @@ export function initViewFromUrl(): void {
     if (main !== null) {
         const view = deserializeView(main);
 
-        if (view !== null) {
+        if (view !== null && view.kind !== 'graph') {
             currentView.value = view;
         }
     }
@@ -120,6 +128,17 @@ export function initViewFromUrl(): void {
 
 export function openView(view: MainView): void {
     currentView.value = view;
+
+    if (view.kind === 'note') {
+        recordVisit({ kind: 'note', id: view.id });
+    } else if (view.kind === 'calendar') {
+        recordVisit({
+            kind: 'calendar',
+            calKind: view.calKind,
+            dateKey: view.dateKey,
+        });
+    }
+
     pushUrl();
 }
 
@@ -129,6 +148,7 @@ export function openNote(
 ): void {
     if (options.split) {
         splitView.value = { kind: 'note', id };
+        recordVisit({ kind: 'note', id });
     } else {
         if (options.line !== undefined) {
             pendingScrollLine.value = options.line;
@@ -147,6 +167,7 @@ export function openCalendar(
 ): void {
     if (options.split) {
         splitView.value = { kind: 'calendar', calKind, dateKey };
+        recordVisit({ kind: 'calendar', calKind, dateKey });
     } else {
         openView({ kind: 'calendar', calKind, dateKey });
     }
@@ -171,6 +192,11 @@ export function openMentionView(mention: string, split = false): void {
         currentView.value = { kind: 'mention', mention };
     }
 
+    pushUrl();
+}
+
+export function openGraphView(noteId: string): void {
+    splitView.value = { kind: 'graph', noteId };
     pushUrl();
 }
 

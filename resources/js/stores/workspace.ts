@@ -69,10 +69,15 @@ export async function initWorkspace(cfg: WorkspaceConfig): Promise<void> {
     config.value = cfg;
     db = openWorkspaceDb(cfg.teamSlug, cfg.userId);
 
-    const [storedNotes, folderMeta] = await Promise.all([
+    const [storedNotes, folderMeta, historyMeta] = await Promise.all([
         db.notes.toArray(),
         db.meta.get('folders'),
+        db.meta.get('nav-history'),
     ]);
+
+    navHistory.value = Array.isArray(historyMeta?.value)
+        ? (historyMeta.value as (VisitEntry & { at: number })[])
+        : [];
 
     notes.clear();
 
@@ -834,6 +839,40 @@ async function renameToken(
             content: note.content.replace(pattern, `${sigil}${cleanNew}`),
         });
     }
+}
+
+/* ------------------------------------------------------------------ */
+/* Navigation history (for the quick switcher)                         */
+/* ------------------------------------------------------------------ */
+
+export type VisitEntry =
+    | { kind: 'note'; id: string }
+    | { kind: 'calendar'; calKind: CalendarKind; dateKey: string };
+
+const navHistory = ref<(VisitEntry & { at: number })[]>([]);
+
+/** Recently visited notes and calendar periods, newest first. */
+export const recentVisits = computed(() => navHistory.value);
+
+function visitKey(entry: VisitEntry): string {
+    return entry.kind === 'note'
+        ? `n:${entry.id}`
+        : `c:${entry.calKind}:${entry.dateKey}`;
+}
+
+/** Record a visit for the quick switcher's history list. */
+export function recordVisit(entry: VisitEntry): void {
+    const key = visitKey(entry);
+
+    navHistory.value = [
+        { ...entry, at: Date.now() },
+        ...navHistory.value.filter((visit) => visitKey(visit) !== key),
+    ].slice(0, 30);
+
+    void db?.meta.put({
+        key: 'nav-history',
+        value: navHistory.value.map((visit) => ({ ...visit })),
+    });
 }
 
 /* ------------------------------------------------------------------ */

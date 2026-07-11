@@ -3,6 +3,7 @@ import { Head } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import EventsList from '@/components/notes/EventsList.vue';
+import GraphView from '@/components/notes/GraphView.vue';
 import MiniCalendar from '@/components/notes/MiniCalendar.vue';
 import NotePane from '@/components/notes/NotePane.vue';
 import NotesSidebar from '@/components/notes/NotesSidebar.vue';
@@ -12,13 +13,15 @@ import ShortcutsDialog from '@/components/notes/ShortcutsDialog.vue';
 import TasksView from '@/components/notes/TasksView.vue';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { kindOfKey, todayDailyKey } from '@/core/dates';
+import { kindOfKey, todayDailyKey, todayKey } from '@/core/dates';
+import type { CalendarKind } from '@/core/dates';
 import { startSync, stopSync } from '@/stores/sync';
 import {
     closeSplit,
     currentView,
     initViewFromUrl,
     openCalendar,
+    openGraphView,
     openMentionView,
     openNote,
     openTagView,
@@ -27,7 +30,14 @@ import {
     shortcutsOpen,
     splitView,
 } from '@/stores/ui';
-import { getNote, initWorkspace, workspaceReady } from '@/stores/workspace';
+import {
+    createFolder,
+    createNote,
+    findCalendarNote,
+    getNote,
+    initWorkspace,
+    workspaceReady,
+} from '@/stores/workspace';
 
 const props = defineProps<{
     workspace: {
@@ -61,6 +71,46 @@ const mainNoteExists = computed(() => {
     return view.kind !== 'note' || getNote(view.id) !== undefined;
 });
 
+/** The note backing the main pane, if any. */
+function currentMainNoteId(): string | null {
+    const view = currentView.value;
+
+    if (view.kind === 'note') {
+        return view.id;
+    }
+
+    if (view.kind === 'calendar') {
+        return findCalendarNote(view.calKind, view.dateKey)?.id ?? null;
+    }
+
+    return null;
+}
+
+/** The folder new notes/folders should land in (current note's folder). */
+function currentFolder(): string {
+    const view = currentView.value;
+
+    if (view.kind === 'note') {
+        return getNote(view.id)?.folder ?? '';
+    }
+
+    return '';
+}
+
+async function createNoteHere(): Promise<void> {
+    const note = await createNote({ title: '', folder: currentFolder() });
+    openNote(note.id);
+}
+
+async function createFolderHere(): Promise<void> {
+    const name = prompt('Folder name:')?.trim().replace(/\//g, '-');
+
+    if (name) {
+        const parent = currentFolder();
+        await createFolder(parent === '' ? name : `${parent}/${name}`);
+    }
+}
+
 function onKeydown(event: KeyboardEvent): void {
     // Esc closes the split pane — unless something closer to the user
     // (a dialog, menu, or the editor's autocomplete) already consumed it.
@@ -90,21 +140,53 @@ function onKeydown(event: KeyboardEvent): void {
         return;
     }
 
-    if (event.key.toLowerCase() === 'k') {
+    const key = event.key.toLowerCase();
+    const calendarKinds: CalendarKind[] = [
+        'daily',
+        'weekly',
+        'monthly',
+        'quarterly',
+        'yearly',
+    ];
+
+    if (key === 'k') {
         event.preventDefault();
         searchOpen.value = !searchOpen.value;
-    } else if (event.key.toLowerCase() === 't' && !event.shiftKey) {
+    } else if (key === 't' && !event.shiftKey) {
         event.preventDefault();
         openCalendar('daily', todayDailyKey());
     } else if (event.key === '/') {
         event.preventDefault();
         shortcutsOpen.value = !shortcutsOpen.value;
-    } else if (event.key === '1') {
+    } else if (key === 'n') {
+        event.preventDefault();
+
+        if (event.shiftKey) {
+            void createFolderHere();
+        } else {
+            void createNoteHere();
+        }
+    } else if (key === 'g' && event.shiftKey) {
+        event.preventDefault();
+        const noteId = currentMainNoteId();
+
+        if (noteId !== null) {
+            openGraphView(noteId);
+        }
+    } else if (event.altKey && event.key === 'ArrowLeft') {
         event.preventDefault();
         mainPane.value?.focusEditor();
-    } else if (event.key === '2' && splitView.value !== null) {
+    } else if (event.altKey && event.key === 'ArrowRight') {
         event.preventDefault();
         splitPane.value?.focusEditor();
+    } else if (
+        !event.shiftKey &&
+        !event.altKey &&
+        ['1', '2', '3', '4', '5'].includes(event.key)
+    ) {
+        event.preventDefault();
+        const kind = calendarKinds[Number(event.key) - 1];
+        openCalendar(kind, todayKey(kind));
     }
 }
 
@@ -195,8 +277,19 @@ onBeforeUnmount(() => {
                         v-if="splitView"
                         class="flex min-h-0 min-w-0 flex-1 basis-1/2 flex-col border-border/40 lg:border-r"
                     >
+                        <GraphView
+                            v-if="splitView.kind === 'graph'"
+                            :key="`graph:${splitView.noteId}`"
+                            :note-id="splitView.noteId"
+                            @open-note="(id) => handleOpenNote(id)"
+                            @open-tag="(tag) => openTagView(tag)"
+                            @open-mention="
+                                (mention) => openMentionView(mention)
+                            "
+                            @close="closeSplit"
+                        />
                         <TasksView
-                            v-if="splitView.kind === 'tag'"
+                            v-else-if="splitView.kind === 'tag'"
                             :key="`split-tag:${splitView.tag}`"
                             :filter-tag="splitView.tag"
                             is-split
@@ -250,7 +343,10 @@ onBeforeUnmount(() => {
                     <EventsList :google-connected="googleConnected" />
                 </aside>
 
-                <SearchDialog @open-note="(id) => handleOpenNote(id)" />
+                <SearchDialog
+                    @open-note="(id) => handleOpenNote(id)"
+                    @open-calendar="(key) => handleOpenCalendar(key)"
+                />
                 <ShortcutsDialog />
                 <ReminderHost
                     @open-note="(id, line) => handleOpenNote(id, false, line)"

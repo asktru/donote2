@@ -4,12 +4,15 @@ import { EditorView, placeholder as placeholderExt } from '@codemirror/view';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 import { donoteMarkdown } from '@/components/editor/markdownExtensions';
+import { recallCursor, rememberCursor } from '@/lib/cursorMemory';
 import { liveNotes, tagCounts, mentionCounts } from '@/stores/workspace';
 
 const props = defineProps<{
     modelValue: string;
     placeholder?: string;
     autofocus?: boolean;
+    /** Identity used to remember/restore the cursor position (note id). */
+    stateKey?: string;
 }>();
 
 const emit = defineEmits<{
@@ -30,10 +33,19 @@ function createView(): void {
         return;
     }
 
+    const remembered = props.stateKey
+        ? recallCursor(props.stateKey)
+        : undefined;
+    const initialCursor = Math.min(
+        remembered ?? props.modelValue.length,
+        props.modelValue.length,
+    );
+
     view = new EditorView({
         parent: host.value,
         state: EditorState.create({
             doc: props.modelValue,
+            selection: { anchor: initialCursor },
             extensions: [
                 donoteMarkdown({
                     onOpenLink: (target, split) =>
@@ -59,6 +71,16 @@ function createView(): void {
                         lastEmitted = update.state.doc.toString();
                         emit('update:modelValue', lastEmitted);
                     }
+
+                    if (
+                        (update.selectionSet || update.docChanged) &&
+                        props.stateKey
+                    ) {
+                        rememberCursor(
+                            props.stateKey,
+                            update.state.selection.main.head,
+                        );
+                    }
                 }),
             ],
         }),
@@ -67,6 +89,11 @@ function createView(): void {
     if (props.autofocus) {
         view.focus();
     }
+
+    // Bring the restored cursor position into view.
+    view.dispatch({
+        effects: EditorView.scrollIntoView(initialCursor, { y: 'center' }),
+    });
 }
 
 watch(

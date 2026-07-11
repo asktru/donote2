@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { Search } from '@lucide/vue';
+import { computed, ref, watch } from 'vue';
+
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { shortcutsOpen } from '@/stores/ui';
 
@@ -11,11 +14,15 @@ const groups: ShortcutGroup[] = [
     {
         title: 'Navigation',
         shortcuts: [
-            ['⌘K', 'Search notes / quick open'],
+            ['⌘K', 'Search notes / recent history'],
             ['⌘T', "Go to today's daily note"],
-            ['⌘1', 'Focus main pane'],
-            ['⌘2', 'Focus split pane'],
+            [
+                '⌘1 … ⌘5',
+                "Today's daily / weekly / monthly / quarterly / yearly note",
+            ],
+            ['⌘⌥← / ⌘⌥→', 'Focus main / split pane'],
             ['Esc', 'Close split pane'],
+            ['⌘⇧G', 'Connections graph for the current note (split)'],
             [
                 'Click tag / date / [[link]]',
                 'Open it (when not editing that line)',
@@ -23,6 +30,14 @@ const groups: ShortcutGroup[] = [
             ['⌥-click token', 'Open in split pane'],
             ['⌘⏎ / ⌘⌥⏎', 'Open token under cursor (main / split)'],
             ['⌘/', 'Show this cheatsheet'],
+        ],
+    },
+    {
+        title: 'Notes & folders',
+        shortcuts: [
+            ['⌘N', 'New note (in the current folder)'],
+            ['⌘⇧N', 'New folder (in the current folder)'],
+            ['⌘⇧Y', 'Make synced line + copy (paste it anywhere)'],
         ],
     },
     {
@@ -36,7 +51,6 @@ const groups: ShortcutGroup[] = [
             ['⌘⇧S', 'Schedule task (>date, date selected)'],
             ['⌘⇧D', 'Set due date (@due(date), date selected)'],
             ['Tab / ⇧Tab', 'Indent / outdent line'],
-            ['⌘⇧Y', 'Make synced line + copy (paste it anywhere)'],
             ['⌘⌥[ / ⌘⌥]', 'Collapse / expand section at cursor'],
             ['⌃⌥[ / ⌃⌥]', 'Collapse / expand everything'],
         ],
@@ -80,15 +94,55 @@ const groups: ShortcutGroup[] = [
         ],
     },
 ];
+
+const query = ref('');
+
+watch(shortcutsOpen, (open) => {
+    if (open) {
+        query.value = '';
+    }
+});
+
+const filteredGroups = computed<ShortcutGroup[]>(() => {
+    const needle = query.value.trim().toLowerCase();
+
+    if (needle === '') {
+        return groups;
+    }
+
+    return groups
+        .map((group) => ({
+            title: group.title,
+            shortcuts: group.shortcuts.filter(
+                ([keys, description]) =>
+                    keys.toLowerCase().includes(needle) ||
+                    description.toLowerCase().includes(needle) ||
+                    group.title.toLowerCase().includes(needle),
+            ),
+        }))
+        .filter((group) => group.shortcuts.length > 0);
+});
 </script>
 
 <template>
     <Dialog v-model:open="shortcutsOpen">
-        <DialogContent class="max-h-[80vh] max-w-2xl overflow-y-auto">
-            <DialogTitle>Keyboard shortcuts</DialogTitle>
+        <DialogContent class="flex max-h-[80vh] max-w-lg flex-col gap-0 p-0">
+            <DialogTitle class="px-4 pt-4 pb-2">Keyboard shortcuts</DialogTitle>
 
-            <div class="grid gap-6 sm:grid-cols-2">
-                <section v-for="group in groups" :key="group.title">
+            <div
+                class="mx-4 mb-2 flex items-center gap-2 rounded-lg border border-border/70 bg-muted/30 px-2.5"
+            >
+                <Search class="size-4 shrink-0 text-muted-foreground" />
+                <input
+                    v-model="query"
+                    class="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                    placeholder="Search shortcuts… (e.g. “split”, “priority”)"
+                    autofocus
+                />
+            </div>
+
+            <div class="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-4">
+                <section v-for="group in filteredGroups" :key="group.title">
                     <h3
                         class="mb-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
                     >
@@ -113,11 +167,19 @@ const groups: ShortcutGroup[] = [
                         </div>
                     </dl>
                 </section>
-            </div>
 
-            <p class="text-xs text-muted-foreground">
-                On Windows/Linux use Ctrl instead of ⌘.
-            </p>
+                <p
+                    v-if="filteredGroups.length === 0"
+                    class="py-6 text-center text-sm text-muted-foreground"
+                >
+                    No shortcuts match “{{ query }}”.
+                </p>
+
+                <p class="text-xs text-muted-foreground">
+                    On Windows/Linux use Ctrl instead of ⌘. ⌘N may be reserved
+                    by your browser — it always works in the desktop app.
+                </p>
+            </div>
         </DialogContent>
     </Dialog>
 </template>

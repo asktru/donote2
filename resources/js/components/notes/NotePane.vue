@@ -9,6 +9,7 @@ import {
     PinOff,
     Target,
     Trash2,
+    Waypoints,
     X,
 } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
@@ -23,7 +24,7 @@ import type { NoteKind } from '@/core/frontmatter';
 import { cn } from '@/lib/utils';
 import type { LocalNote } from '@/stores/db';
 import type { PaneView } from '@/stores/ui';
-import { pendingScrollLine } from '@/stores/ui';
+import { openGraphView, pendingScrollLine } from '@/stores/ui';
 import {
     deleteNote,
     findCalendarNote,
@@ -238,6 +239,17 @@ defineExpose({ focusEditor });
                 </span>
                 <div class="ml-auto flex items-center gap-0.5">
                     <Button
+                        v-if="note && !isSplit"
+                        variant="ghost"
+                        size="icon"
+                        class="size-7"
+                        aria-label="Connections graph"
+                        title="Connections graph (⌘⇧G)"
+                        @click="openGraphView(note.id)"
+                    >
+                        <Waypoints class="size-4" />
+                    </Button>
+                    <Button
                         variant="ghost"
                         size="icon"
                         class="size-7"
@@ -332,6 +344,17 @@ defineExpose({ focusEditor });
                         {{ note.folder }}
                     </span>
                     <Button
+                        v-if="note && !isSplit"
+                        variant="ghost"
+                        size="icon"
+                        class="size-7"
+                        aria-label="Connections graph"
+                        title="Connections graph (⌘⇧G)"
+                        @click="openGraphView(note.id)"
+                    >
+                        <Waypoints class="size-4" />
+                    </Button>
+                    <Button
                         variant="ghost"
                         size="icon"
                         class="size-7"
@@ -372,6 +395,7 @@ defineExpose({ focusEditor });
                 ref="editor"
                 :key="note.id"
                 :model-value="note.content"
+                :state-key="note.id"
                 :placeholder="'Type markdown, add a task (- [ ]), a checklist (+ [ ]), or link a note with [['"
                 @update:model-value="onContentUpdate"
                 @open-link="onOpenLink"
