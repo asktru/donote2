@@ -11,6 +11,7 @@ import { attachmentHandlers } from '@/lib/attachments';
 import { recallCursor, rememberCursor } from '@/lib/cursorMemory';
 import {
     blurEditor,
+    focusEditor,
     registerEditor,
     unregisterEditor,
 } from '@/stores/editorRegistry';
@@ -84,7 +85,7 @@ function createView(): void {
                 attachmentHandlers(() => props.stateKey),
                 EditorView.domEventHandlers({
                     focus: (_event, focusedView) =>
-                        registerEditor(focusedView, props.stateKey),
+                        focusEditor(focusedView, props.stateKey),
                     blur: (_event, blurredView) => blurEditor(blurredView),
                 }),
                 EditorView.updateListener.of((update) => {
@@ -165,7 +166,7 @@ onMounted(() => {
     createView();
 
     if (view) {
-        registerEditor(view);
+        registerEditor(view, props.stateKey);
     }
 });
 

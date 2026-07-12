@@ -80,9 +80,7 @@ function dismiss(): void {
                 type="button"
                 class="flex size-9 shrink-0 items-center justify-center rounded-md text-foreground/80 active:bg-muted"
                 :aria-label="btn.label"
-                @mousedown.prevent
-                @touchstart.prevent
-                @click="run(btn.action)"
+                @pointerdown.prevent="run(btn.action)"
             >
                 <component :is="btn.icon" class="size-5" />
             </button>
@@ -93,9 +91,7 @@ function dismiss(): void {
             type="button"
             class="flex size-9 shrink-0 items-center justify-center rounded-md text-foreground/80 active:bg-muted"
             aria-label="Move to note"
-            @mousedown.prevent
-            @touchstart.prevent
-            @click="startMoveToNote()"
+            @pointerdown.prevent="startMoveToNote()"
         >
             <FileOutput class="size-5" />
         </button>
@@ -104,9 +100,7 @@ function dismiss(): void {
             type="button"
             class="ml-auto flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground active:bg-muted"
             aria-label="Dismiss keyboard"
-            @mousedown.prevent
-            @touchstart.prevent
-            @click="dismiss"
+            @pointerdown.prevent="dismiss"
         >
             <ChevronDown class="size-5" />
         </button>

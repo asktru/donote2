@@ -14,13 +14,22 @@ export const activeEditorNoteId = shallowRef<string | null>(null);
 /** Whether an editor currently holds focus (drives the mobile toolbar). */
 export const editorFocused = ref(false);
 
+/**
+ * Mark an editor as the active one (for selection-reading features) without
+ * implying it holds focus. Called when an editor mounts.
+ */
 export function registerEditor(view: EditorView, noteId?: string): void {
     activeEditor.value = view;
-    editorFocused.value = true;
 
     if (noteId !== undefined) {
         activeEditorNoteId.value = noteId;
     }
+}
+
+/** An editor actually gained focus (drives the mobile toolbar's visibility). */
+export function focusEditor(view: EditorView, noteId?: string): void {
+    registerEditor(view, noteId);
+    editorFocused.value = true;
 }
 
 /** An editor lost focus (blur) — but keep it as the active one. */
