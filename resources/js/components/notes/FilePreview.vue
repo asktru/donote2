@@ -2,6 +2,8 @@
 import { Download, X } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 
+import { isMacDesktopShell } from '@/lib/platform';
+import { cn } from '@/lib/utils';
 import { filePreview } from '@/stores/ui';
 
 function close(): void {
@@ -103,7 +105,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, true));
             @click.self="close"
         >
             <div
-                class="flex shrink-0 items-center gap-3 px-5 py-3 text-white"
+                :class="
+                    cn(
+                        'flex shrink-0 items-center gap-3 px-5 py-3 text-white',
+                        isMacDesktopShell && 'app-region-drag pl-20',
+                    )
+                "
             >
                 <p class="min-w-0 flex-1 truncate text-sm font-medium">
                     {{ filePreview.name }}
