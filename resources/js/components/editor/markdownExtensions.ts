@@ -50,7 +50,7 @@ import { COMMENT_RE, parseLine } from '@/core/parser';
 import type { ParsedLine, Priority, TaskState } from '@/core/parser';
 import { buildNextOccurrenceLine } from '@/core/repeat';
 import { generateSyncId } from '@/core/syncedLines';
-import { filePreview, lightboxImage } from '@/stores/ui';
+import { filePreview, lightboxImage, syncedLinePanel } from '@/stores/ui';
 
 export interface EditorCallbacks {
     /** Open a wiki link target ([[Title]] or [[2026-07-11]]). */
@@ -256,21 +256,36 @@ async function openMarkdownUrl(url: string): Promise<void> {
 
     // Extension beats mime: small text-like files get sniffed as
     // text/plain at upload regardless of what they really are.
+    const TEXT_EXT_RE =
+        /\.(json|xml|ya?ml|toml|ini|log|md|txt|sql|sh|zsh|py|rb|php|js|jsx|ts|tsx|vue|css|scss|env|conf|srt|vtt)$/i;
     const previewKind =
         mime === 'text/html' || /\.html?$/i.test(filename)
             ? 'html'
             : mime === 'text/csv' || /\.csv$/i.test(filename)
               ? 'csv'
-              : mime.startsWith('text/') || mime === 'application/json'
+              : mime.startsWith('text/') ||
+                  mime === 'application/json' ||
+                  mime === 'application/xml' ||
+                  TEXT_EXT_RE.test(filename)
                 ? 'text'
                 : null;
 
     if (previewKind !== null) {
+        let content = await response.text();
+
+        if (/\.json$/i.test(filename) || mime === 'application/json') {
+            try {
+                content = JSON.stringify(JSON.parse(content), null, 2);
+            } catch {
+                // Not valid JSON after all — show it as-is.
+            }
+        }
+
         filePreview.value = {
             kind: previewKind,
             name: filename,
             url,
-            content: await response.text(),
+            content,
         };
 
         return;
@@ -298,9 +313,23 @@ class SyncGlyphWidget extends WidgetType {
         const glyph = document.createElement('span');
         glyph.className = 'cm-sync-glyph';
         glyph.textContent = '⟲';
-        glyph.title = `Synced line ^${this.id} — editing updates every copy`;
+        glyph.title = `Synced line ^${this.id} — click to see every location`;
+
+        const id = this.id;
+        glyph.onclick = (event) => {
+            event.preventDefault();
+            syncedLinePanel.value = {
+                syncId: id,
+                x: event.clientX,
+                y: event.clientY,
+            };
+        };
 
         return glyph;
+    }
+
+    override ignoreEvent(): boolean {
+        return true;
     }
 }
 

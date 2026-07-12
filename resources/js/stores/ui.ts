@@ -31,8 +31,56 @@ export const searchOpen = ref(false);
 export const shortcutsOpen = ref(false);
 /** Off-canvas sidebar state on small screens. */
 export const mobileSidebarOpen = ref(false);
+/**
+ * Expanded sidebar folders. Empty on every app open — the sidebar
+ * starts fully collapsed by design.
+ */
+export const expandedFolders = ref<Set<string>>(new Set());
+
+export function toggleFolder(path: string): void {
+    const next = new Set(expandedFolders.value);
+
+    if (next.has(path)) {
+        next.delete(path);
+    } else {
+        next.add(path);
+    }
+
+    expandedFolders.value = next;
+}
+
+export function expandFolder(path: string): void {
+    if (path !== '' && !expandedFolders.value.has(path)) {
+        expandedFolders.value = new Set(expandedFolders.value).add(path);
+    }
+}
+
+/** Expand a folder together with all its ancestors. */
+export function expandFolderPath(path: string): void {
+    const next = new Set(expandedFolders.value);
+    const segments = path.split('/');
+
+    for (let i = 1; i <= segments.length; i++) {
+        next.add(segments.slice(0, i).join('/'));
+    }
+
+    next.delete('');
+    expandedFolders.value = next;
+}
+
+export function collapseAllFolders(): void {
+    expandedFolders.value = new Set();
+}
+
 /** Fullscreen image viewer (clicked inline previews). */
 export const lightboxImage = ref<{ url: string; alt: string } | null>(null);
+/** Clicked ⟲ glyph: which synced line, and where to anchor the panel. */
+export const syncedLinePanel = ref<{
+    syncId: string;
+    x: number;
+    y: number;
+} | null>(null);
+
 /** Fullscreen file viewer for text/html/csv attachments. */
 export const filePreview = ref<{
     kind: 'text' | 'html' | 'csv';

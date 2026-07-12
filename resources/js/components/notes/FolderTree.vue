@@ -37,6 +37,7 @@ import type { NoteKind, NoteMeta } from '@/core/frontmatter';
 import { acceptTreeDrop, TREE_DND_MIME } from '@/lib/treeDnd';
 import { cn } from '@/lib/utils';
 import type { LocalNote } from '@/stores/db';
+import { expandedFolders, expandFolder, toggleFolder } from '@/stores/ui';
 import {
     createFolder,
     createNote,
@@ -65,7 +66,7 @@ const emit = defineEmits<{
     'open-note': [id: string, split: boolean];
 }>();
 
-const expanded = ref(props.depth === 0);
+const expanded = computed(() => expandedFolders.value.has(props.path));
 const dropTarget = ref(false);
 
 const label = computed(() => props.path.split('/').pop() ?? props.path);
@@ -156,7 +157,7 @@ async function newSubfolder(): Promise<void> {
 
     if (name) {
         await createFolder(props.path === '' ? name : `${props.path}/${name}`);
-        expanded.value = true;
+        expandFolder(props.path);
     }
 }
 
@@ -234,7 +235,7 @@ async function onDrop(event: DragEvent): Promise<void> {
     if (payload) {
         event.stopPropagation();
         await acceptTreeDrop(payload, props.path);
-        expanded.value = true;
+        expandFolder(props.path);
     }
 }
 </script>
@@ -254,7 +255,7 @@ async function onDrop(event: DragEvent): Promise<void> {
                         )
                     "
                     :style="{ paddingLeft: `${depth * 14 + 8}px` }"
-                    @click="expanded = !expanded"
+                    @click="toggleFolder(path)"
                     @dragstart="onFolderDragStart"
                     @dragover.prevent="dropTarget = true"
                     @dragleave="dropTarget = false"
@@ -309,6 +310,7 @@ async function onDrop(event: DragEvent): Promise<void> {
                     <button
                         type="button"
                         draggable="true"
+                        :data-note-id="note.id"
                         :class="
                             cn(
                                 'flex w-full items-center gap-1.5 rounded-md py-1 pr-2 text-sm hover:bg-muted/70',

@@ -96,6 +96,25 @@
         -webkit-app-region: no-drag;
     }
 
+    /* ⌃S "reveal in sidebar" pulses the located note row. */
+    .sidebar-reveal-flash {
+        animation: sidebar-reveal 1.2s ease;
+    }
+
+    @keyframes sidebar-reveal {
+        0%,
+        60% {
+            background-color: color-mix(
+                in oklab,
+                var(--primary) 18%,
+                transparent
+            );
+        }
+        100% {
+            background-color: transparent;
+        }
+    }
+
     /* iOS zooms into any focused editable below 16px — keep the editor
        at 16px on touch devices so focusing a note never triggers it. */
     @media (pointer: coarse) {

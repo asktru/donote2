@@ -41,6 +41,8 @@ const groups: ShortcutGroup[] = [
             ['⌘⇧R', 'Start / stop voice recording (desktop app)'],
             ['⌃⌥R', 'Start / stop voice recording (browser)'],
             ['⌘J', 'AI prompt on selection / note'],
+            ['⌘⌥/', 'Collapse all sidebar folders'],
+            ['⌃S', 'Reveal current note in the sidebar'],
         ],
     },
     {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import AiPromptDialog from '@/components/notes/AiPromptDialog.vue';
 import DueTasksSection from '@/components/notes/DueTasksSection.vue';
@@ -16,6 +16,7 @@ import ReminderHost from '@/components/notes/ReminderHost.vue';
 import RemindersView from '@/components/notes/RemindersView.vue';
 import SearchDialog from '@/components/notes/SearchDialog.vue';
 import ShortcutsDialog from '@/components/notes/ShortcutsDialog.vue';
+import SyncedLineLocations from '@/components/notes/SyncedLineLocations.vue';
 import TasksView from '@/components/notes/TasksView.vue';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Toaster } from '@/components/ui/sonner';
@@ -32,7 +33,9 @@ import {
 import { startSync, stopSync } from '@/stores/sync';
 import {
     closeSplit,
+    collapseAllFolders,
     currentView,
+    expandFolderPath,
     initViewFromUrl,
     mobileSidebarOpen,
     openCalendar,
@@ -126,6 +129,43 @@ async function createFolderHere(): Promise<void> {
     }
 }
 
+/** Expand the current note's ancestors and flash it in the sidebar. */
+async function revealCurrentNote(): Promise<void> {
+    const noteId = currentMainNoteId();
+    const note = noteId !== null ? getNote(noteId) : undefined;
+
+    if (!note || note.type !== 'note') {
+        return;
+    }
+
+    if (window.innerWidth < 768) {
+        mobileSidebarOpen.value = true;
+    }
+
+    if (note.folder !== '') {
+        expandFolderPath(note.folder);
+    }
+
+    await nextTick();
+    setTimeout(() => {
+        const candidates = [
+            ...document.querySelectorAll<HTMLElement>(
+                `[data-note-id="${note.id}"]`,
+            ),
+        ];
+        const visible = candidates.find((el) => el.offsetParent !== null);
+
+        if (visible) {
+            visible.scrollIntoView({ block: 'center' });
+            visible.classList.add('sidebar-reveal-flash');
+            setTimeout(
+                () => visible.classList.remove('sidebar-reveal-flash'),
+                1200,
+            );
+        }
+    }, 80);
+}
+
 function onKeydown(event: KeyboardEvent): void {
     // Esc closes the split pane — unless something closer to the user
     // (a dialog, menu, or the editor's autocomplete) already consumed it.
@@ -162,6 +202,19 @@ function onKeydown(event: KeyboardEvent): void {
         return;
     }
 
+    // ⌃S (NotePlan parity): reveal the current note in the sidebar.
+    if (
+        event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        event.code === 'KeyS'
+    ) {
+        event.preventDefault();
+        void revealCurrentNote();
+
+        return;
+    }
+
     const modifier = event.metaKey || event.ctrlKey;
 
     if (!modifier) {
@@ -186,6 +239,10 @@ function onKeydown(event: KeyboardEvent): void {
     } else if (key === 't' && !event.shiftKey) {
         event.preventDefault();
         openCalendar('daily', todayDailyKey());
+    } else if (event.altKey && event.code === 'Slash') {
+        // ⌘⌥/ (NotePlan parity): collapse every sidebar folder.
+        event.preventDefault();
+        collapseAllFolders();
     } else if (event.key === '/') {
         event.preventDefault();
         shortcutsOpen.value = !shortcutsOpen.value;
@@ -408,6 +465,7 @@ onBeforeUnmount(() => {
                 <AiPromptDialog />
                 <ImageLightbox />
                 <FilePreview />
+                <SyncedLineLocations />
                 <ReminderHost
                     @open-note="(id, line) => handleOpenNote(id, false, line)"
                 />
