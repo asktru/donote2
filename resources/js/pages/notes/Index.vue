@@ -403,6 +403,7 @@ onBeforeUnmount(() => {
                             ref="mainPane"
                             :view="currentView"
                             is-main
+                            :google-connected="googleConnected"
                             @navigate="(view) => openView(view)"
                             @open-note="
                                 (id, split) => handleOpenNote(id, split)

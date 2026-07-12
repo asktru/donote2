@@ -17,6 +17,8 @@ import { computed, ref, watch } from 'vue';
 
 import MarkdownEditor from '@/components/editor/MarkdownEditor.vue';
 import BacklinksSection from '@/components/notes/BacklinksSection.vue';
+import DueTasksSection from '@/components/notes/DueTasksSection.vue';
+import EventsList from '@/components/notes/EventsList.vue';
 import MobileSidebarButton from '@/components/notes/MobileSidebarButton.vue';
 import PieProgress from '@/components/notes/PieProgress.vue';
 import { Button } from '@/components/ui/button';
@@ -54,6 +56,7 @@ const props = defineProps<{
     view: PaneView;
     isSplit?: boolean;
     isMain?: boolean;
+    googleConnected?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -425,6 +428,19 @@ defineExpose({ focusEditor });
                     @open-mention="
                         (mention, split) => emit('open-mention', mention, split)
                     "
+                />
+            </div>
+
+            <!-- Calendar events + due tasks live in the right sidebar on wide
+                 screens; below xl (phones/tablets) that sidebar is gone, so
+                 surface them under the note content instead. -->
+            <div
+                v-if="isCalendar && isMain"
+                class="mt-8 space-y-5 border-t border-border/60 bg-muted/10 px-4 py-4 xl:hidden"
+            >
+                <EventsList :google-connected="googleConnected ?? false" />
+                <DueTasksSection
+                    @open-note="(id, line) => emit('open-note-line', id, line)"
                 />
             </div>
 
