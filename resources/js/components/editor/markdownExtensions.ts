@@ -156,6 +156,94 @@ class BulletDotWidget extends WidgetType {
     }
 }
 
+/** `![alt](url)` rendered as the actual image while the cursor is away. */
+class ImagePreviewWidget extends WidgetType {
+    constructor(
+        readonly url: string,
+        readonly alt: string,
+    ) {
+        super();
+    }
+
+    override eq(other: ImagePreviewWidget): boolean {
+        return other.url === this.url && other.alt === this.alt;
+    }
+
+    override get estimatedHeight(): number {
+        return 220;
+    }
+
+    toDOM(): HTMLElement {
+        const wrap = document.createElement('span');
+        wrap.className = 'cm-image-preview';
+
+        const img = document.createElement('img');
+        img.src = this.url;
+        img.alt = this.alt;
+        img.loading = 'lazy';
+        img.draggable = false;
+        img.onerror = () => {
+            wrap.textContent = `🖼 ${this.alt || 'image'} (failed to load)`;
+            wrap.classList.add('cm-image-preview-broken');
+        };
+
+        wrap.appendChild(img);
+
+        return wrap;
+    }
+
+    override ignoreEvent(): boolean {
+        return true;
+    }
+}
+
+const IMAGE_TOKEN_RE = /!\[([^\]\n]*)\]\(([^)\s]+)\)/g;
+const LINK_URL_RE = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
+
+/** URL of the markdown link containing `offset` in `text`, if any. */
+function mdLinkUrlAt(text: string, offset: number): string | null {
+    for (const match of text.matchAll(LINK_URL_RE)) {
+        if (
+            match.index <= offset &&
+            offset <= match.index + match[0].length
+        ) {
+            return match[2];
+        }
+    }
+
+    return null;
+}
+
+/** Open external URLs in a new tab; download attachments with session. */
+async function openMarkdownUrl(url: string): Promise<void> {
+    const sameOrigin =
+        url.startsWith('/') || url.startsWith(window.location.origin);
+
+    if (!sameOrigin || !/\/attachments\//.test(url)) {
+        window.open(url, '_blank', 'noopener');
+
+        return;
+    }
+
+    const response = await fetch(url, { credentials: 'same-origin' });
+
+    if (!response.ok) {
+        return;
+    }
+
+    const disposition = response.headers.get('Content-Disposition') ?? '';
+    const filename =
+        /filename\*?=(?:UTF-8'')?"?([^";]+)/.exec(disposition)?.[1] ??
+        'attachment';
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = decodeURIComponent(filename);
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+}
+
 class SyncGlyphWidget extends WidgetType {
     constructor(private id: string) {
         super();
@@ -474,6 +562,28 @@ function buildDecorations(state: EditorState): DecorationSet {
         const insideWiki = (from: number, to: number): boolean =>
             wikiSpans.some(([start, end]) => from >= start && to <= end);
 
+        // Image tokens become inline previews while the cursor is away;
+        // their span replaces syntax marks the parser would hide within.
+        const imageSpans: [number, number][] = [];
+
+        if (!revealed) {
+            for (const match of line.text.matchAll(IMAGE_TOKEN_RE)) {
+                const from = line.from + match.index;
+                const to = from + match[0].length;
+                imageSpans.push([from, to]);
+                tokens.push({
+                    from,
+                    to,
+                    decoration: Decoration.replace({
+                        widget: new ImagePreviewWidget(match[2], match[1]),
+                    }),
+                });
+            }
+        }
+
+        const insideImage = (from: number, to: number): boolean =>
+            imageSpans.some(([start, end]) => from >= start && to <= end);
+
         if (parsed.kind === 'task' || parsed.kind === 'checklist') {
             const marker = line.text.match(MARKER_RE);
 
@@ -547,7 +657,10 @@ function buildDecorations(state: EditorState): DecorationSet {
 
         if (!revealed) {
             for (const mark of syntaxMarks.get(lineNumber) ?? []) {
-                if (insideWiki(mark.from, mark.to)) {
+                if (
+                    insideWiki(mark.from, mark.to) ||
+                    insideImage(mark.from, mark.to)
+                ) {
                     continue;
                 }
 
@@ -1482,6 +1595,29 @@ function clickHandlers(callbacks: EditorCallbacks): Extension {
                 return true;
             }
 
+            // Markdown links: open externally, or download attachments
+            // through the authenticated session (an external browser opened
+            // from the desktop shell would have no session cookie).
+            const mdLink = target.closest<HTMLElement>(
+                '.cm-md-link, .cm-md-url',
+            );
+
+            if (mdLink) {
+                const pos = view.posAtDOM(mdLink);
+                const line = view.state.doc.lineAt(pos);
+
+                if (!selectionTouches(view.state, line.from, line.to)) {
+                    const url = mdLinkUrlAt(line.text, pos - line.from);
+
+                    if (url !== null) {
+                        event.preventDefault();
+                        void openMarkdownUrl(url);
+
+                        return true;
+                    }
+                }
+            }
+
             const tokenEl = target.closest<HTMLElement>(
                 '.cm-wikilink, .cm-date-link, .cm-hashtag, .cm-mention',
             );
@@ -1674,6 +1810,24 @@ const editorTheme = EditorView.theme({
         textUnderlineOffset: '2px',
     },
     '.cm-md-url': { color: 'var(--muted-foreground)' },
+    '.cm-md-link, .cm-md-url': { cursor: 'pointer' },
+    '.cm-image-preview': {
+        display: 'inline-block',
+        maxWidth: '100%',
+        verticalAlign: 'top',
+        padding: '2px 0',
+    },
+    '.cm-image-preview img': {
+        display: 'block',
+        maxWidth: 'min(480px, 100%)',
+        maxHeight: '360px',
+        borderRadius: '8px',
+        border: '1px solid var(--border)',
+    },
+    '.cm-image-preview-broken': {
+        color: 'var(--muted-foreground)',
+        fontSize: '0.85em',
+    },
 
     '.cm-gutters': {
         backgroundColor: 'transparent',
