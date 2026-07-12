@@ -50,7 +50,7 @@ import { COMMENT_RE, parseLine } from '@/core/parser';
 import type { ParsedLine, Priority, TaskState } from '@/core/parser';
 import { buildNextOccurrenceLine } from '@/core/repeat';
 import { generateSyncId } from '@/core/syncedLines';
-import { lightboxImage } from '@/stores/ui';
+import { filePreview, lightboxImage } from '@/stores/ui';
 
 export interface EditorCallbacks {
     /** Open a wiki link target ([[Title]] or [[2026-07-11]]). */
@@ -220,7 +220,11 @@ function mdLinkUrlAt(text: string, offset: number): string | null {
     return null;
 }
 
-/** Open external URLs in a new tab; download attachments with session. */
+/**
+ * Open external URLs in a new tab. Attachments route by content type:
+ * images to the lightbox, text/html/csv into the fullscreen file
+ * viewer, everything else downloads through the session.
+ */
 async function openMarkdownUrl(url: string): Promise<void> {
     const sameOrigin =
         url.startsWith('/') || url.startsWith(window.location.origin);
@@ -238,14 +242,45 @@ async function openMarkdownUrl(url: string): Promise<void> {
     }
 
     const disposition = response.headers.get('Content-Disposition') ?? '';
-    const filename =
+    const filename = decodeURIComponent(
         /filename\*?=(?:UTF-8'')?"?([^";]+)/.exec(disposition)?.[1] ??
-        'attachment';
+            'attachment',
+    );
+    const mime = (response.headers.get('Content-Type') ?? '').split(';')[0];
+
+    if (mime.startsWith('image/')) {
+        lightboxImage.value = { url, alt: filename };
+
+        return;
+    }
+
+    // Extension beats mime: small text-like files get sniffed as
+    // text/plain at upload regardless of what they really are.
+    const previewKind =
+        mime === 'text/html' || /\.html?$/i.test(filename)
+            ? 'html'
+            : mime === 'text/csv' || /\.csv$/i.test(filename)
+              ? 'csv'
+              : mime.startsWith('text/') || mime === 'application/json'
+                ? 'text'
+                : null;
+
+    if (previewKind !== null) {
+        filePreview.value = {
+            kind: previewKind,
+            name: filename,
+            url,
+            content: await response.text(),
+        };
+
+        return;
+    }
+
     const blob = await response.blob();
     const objectUrl = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = objectUrl;
-    anchor.download = decodeURIComponent(filename);
+    anchor.download = filename;
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
 }

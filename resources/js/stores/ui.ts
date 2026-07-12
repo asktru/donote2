@@ -33,6 +33,13 @@ export const shortcutsOpen = ref(false);
 export const mobileSidebarOpen = ref(false);
 /** Fullscreen image viewer (clicked inline previews). */
 export const lightboxImage = ref<{ url: string; alt: string } | null>(null);
+/** Fullscreen file viewer for text/html/csv attachments. */
+export const filePreview = ref<{
+    kind: 'text' | 'html' | 'csv';
+    name: string;
+    url: string;
+    content: string;
+} | null>(null);
 /** Line index the main editor should scroll to after opening a note. */
 export const pendingScrollLine = ref<number | null>(null);
 
