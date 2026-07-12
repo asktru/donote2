@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { computed } from 'vue';
 
 import { humanizeKey, keyRange, keyStartDate, todayDailyKey } from '@/core/dates';
+import { priorityColor } from '@/core/priority';
 import { cn } from '@/lib/utils';
 import { currentView } from '@/stores/ui';
 import { taskDayKey, toggleTaskLine, workspaceTasks } from '@/stores/workspace';
@@ -72,7 +73,6 @@ function dueBadge(task: WorkspaceTask): string | null {
     return `due ${format(keyStartDate(task.line.due), 'MMM d')}`;
 }
 
-const PRIORITY_COLORS = ['', '#246fe0', '#eb8909', '#dc4c3e'];
 </script>
 
 <template>
@@ -99,11 +99,12 @@ const PRIORITY_COLORS = ['', '#246fe0', '#eb8909', '#dc4c3e'];
                         )
                     "
                     :style="
-                        task.line.priority > 0
+                        priorityColor(task.line.priority)
                             ? {
-                                  borderColor:
-                                      PRIORITY_COLORS[task.line.priority],
-                                  color: PRIORITY_COLORS[task.line.priority],
+                                  borderColor: priorityColor(
+                                      task.line.priority,
+                                  )!,
+                                  color: priorityColor(task.line.priority)!,
                               }
                             : {}
                     "

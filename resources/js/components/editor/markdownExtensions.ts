@@ -50,6 +50,7 @@ import { tags } from '@lezer/highlight';
 import { todayDailyKey } from '@/core/dates';
 import { COMMENT_RE, parseLine } from '@/core/parser';
 import type { ParsedLine, Priority, TaskState } from '@/core/parser';
+import { PRIORITY_COLORS } from '@/core/priority';
 import { buildNextOccurrenceLine } from '@/core/repeat';
 import { generateSyncId } from '@/core/syncedLines';
 import { filePreview, lightboxImage, syncedLinePanel } from '@/stores/ui';
@@ -2037,12 +2038,6 @@ const highlightStyle = HighlightStyle.define([
 ]);
 
 /** Todoist-inspired priority palette (P1 red, P2 orange, P3 blue). */
-const PRIORITY_COLORS = {
-    3: '#dc4c3e',
-    2: '#eb8909',
-    1: '#246fe0',
-} as const;
-
 const editorTheme = EditorView.theme({
     '&': {
         height: '100%',

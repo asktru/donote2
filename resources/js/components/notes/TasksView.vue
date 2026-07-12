@@ -11,9 +11,35 @@ import {
     todayDailyKey,
     todayKey,
 } from '@/core/dates';
+import { priorityColor } from '@/core/priority';
 import { cn } from '@/lib/utils';
 import { toggleTaskLine, workspaceTasks, taskDayKey } from '@/stores/workspace';
 import type { WorkspaceTask } from '@/stores/workspace';
+
+/**
+ * Inline style for a task's checkbox, matching the editor: an open task
+ * takes its priority colour on the border with a faint tint; a done task
+ * fills with that colour (or the theme primary when it has no priority).
+ * Returns {} so the base Tailwind classes apply unchanged.
+ */
+function checkboxStyle(task: WorkspaceTask): Record<string, string> {
+    const color = priorityColor(task.line.priority);
+
+    if (task.line.state === 'done') {
+        return color
+            ? { backgroundColor: color, borderColor: color, color: '#fff' }
+            : {};
+    }
+
+    if (task.line.state === 'open' && color) {
+        return {
+            borderColor: color,
+            backgroundColor: `color-mix(in oklab, ${color} 12%, transparent)`,
+        };
+    }
+
+    return {};
+}
 
 const props = defineProps<{
     filterTag?: string;
@@ -282,6 +308,7 @@ function dueLabel(task: WorkspaceTask): string | null {
                                     : 'border-primary/60 text-transparent',
                             )
                         "
+                        :style="checkboxStyle(task)"
                         :aria-label="
                             task.line.state === 'done' ? 'Reopen' : 'Complete'
                         "
@@ -306,7 +333,10 @@ function dueLabel(task: WorkspaceTask): string | null {
                         >
                             <span
                                 v-if="task.line.priority > 0"
-                                class="mr-1 font-bold text-destructive"
+                                class="mr-1 font-bold"
+                                :style="{
+                                    color: priorityColor(task.line.priority)!,
+                                }"
                                 >{{ '!'.repeat(task.line.priority) }}</span
                             >
                             {{ task.line.title }}
