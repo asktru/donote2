@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
     FilePlus2,
+    ListChecks,
     Mic,
     Paperclip,
     Plus,
@@ -9,6 +10,7 @@ import {
     Square,
 } from '@lucide/vue';
 import { computed, ref } from 'vue';
+import { toast } from 'vue-sonner';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -19,6 +21,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { parseAgendaConfig } from '@/lib/agenda';
 import { insertAttachments } from '@/lib/attachments';
 import { cn } from '@/lib/utils';
 import { aiDialogOpen } from '@/stores/aiPrompts';
@@ -34,8 +37,8 @@ import {
     stopRecording,
 } from '@/stores/memos';
 import { promptText } from '@/stores/prompt';
-import { openNote, searchOpen } from '@/stores/ui';
-import { createNote } from '@/stores/workspace';
+import { currentView, openNote, searchOpen } from '@/stores/ui';
+import { createNote, fetchAgenda, getNote } from '@/stores/workspace';
 
 const expanded = ref(false);
 const starting = ref(false);
@@ -49,6 +52,33 @@ function pickFiles(): void {
 function openAiPrompt(): void {
     expanded.value = false;
     aiDialogOpen.value = true;
+}
+
+/** The open note when it's an agenda note (has `agenda` front matter). */
+const agendaNoteId = computed<string | null>(() => {
+    if (currentView.value.kind !== 'note') {
+        return null;
+    }
+
+    const note = getNote(currentView.value.id);
+
+    return note && parseAgendaConfig(note.content) !== null ? note.id : null;
+});
+
+async function runFetchAgenda(): Promise<void> {
+    expanded.value = false;
+    const id = agendaNoteId.value;
+
+    if (id === null) {
+        return;
+    }
+
+    const count = await fetchAgenda(id);
+    toast(
+        count === 0
+            ? 'No new meetings to pull in.'
+            : `Pulled action items from ${count} meeting${count === 1 ? '' : 's'}.`,
+    );
 }
 
 /** Insert picked files at the focused editor's cursor. */
@@ -163,6 +193,14 @@ function dismissDestination(open: boolean): void {
                     @click="openAiPrompt"
                 >
                     <Sparkles class="size-4" /> AI prompt
+                </button>
+                <button
+                    v-if="agendaNoteId"
+                    type="button"
+                    class="flex items-center gap-2 rounded-full border border-border/60 bg-background px-3.5 py-2 text-sm font-medium shadow-lg hover:bg-muted/60"
+                    @click="runFetchAgenda"
+                >
+                    <ListChecks class="size-4" /> Fetch agenda
                 </button>
             </template>
 

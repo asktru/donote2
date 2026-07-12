@@ -15,6 +15,7 @@ import type { NoteKind, NoteMeta, NoteProgress } from '@/core/frontmatter';
 import { parseNote } from '@/core/parser';
 import type { ParsedLine } from '@/core/parser';
 import { applySyncedLine, changedSyncedLines } from '@/core/syncedLines';
+import { buildAgendaAppendix } from '@/lib/agenda';
 import { openWorkspaceDb } from '@/stores/db';
 import type { LocalNote, WorkspaceDb } from '@/stores/db';
 
@@ -357,6 +358,43 @@ export async function deleteNote(id: string): Promise<void> {
 /** Bring a trashed note back (its folder reappears implicitly). */
 export async function restoreNote(id: string): Promise<void> {
     await mutate(id, { deleted: 0 });
+}
+
+/**
+ * Bubble action items from recent meeting notes into an agenda note, driven
+ * by its front matter (agenda/me/others/range). Returns how many meetings
+ * were pulled in (0 if none matched or the note isn't an agenda note).
+ */
+export async function fetchAgenda(noteId: string): Promise<number> {
+    const note = notes.get(noteId);
+
+    if (!note) {
+        return 0;
+    }
+
+    const meetings = liveNotes.value
+        .filter((candidate) => candidate.type === 'note')
+        .map((candidate) => ({
+            title: candidate.title,
+            folder: candidate.folder,
+            content: candidate.content,
+            updatedAt: candidate.updatedAt,
+        }));
+
+    const { appendix, count } = buildAgendaAppendix(
+        note.content,
+        meetings,
+        todayDailyKey(),
+    );
+
+    if (count === 0) {
+        return 0;
+    }
+
+    const base = note.content.replace(/\s+$/, '');
+    await updateNoteContent(noteId, `${base}\n\n${appendix}\n`);
+
+    return count;
 }
 
 export async function createFolder(path: string): Promise<void> {
