@@ -109,10 +109,17 @@ const progress = computed(() =>
 );
 
 const showsProgress = computed(
-    () =>
-        (meta.value?.type === 'project' || meta.value?.type === 'list') &&
-        (progress.value?.total ?? 0) > 0,
+    () => meta.value?.type === 'project' && (progress.value?.total ?? 0) > 0,
 );
+
+/** Incomplete items in a list note (lists show a count, not a pie). */
+const listRemaining = computed<number | null>(() => {
+    if (meta.value?.type !== 'list' || (progress.value?.total ?? 0) === 0) {
+        return null;
+    }
+
+    return progress.value!.total - progress.value!.done;
+});
 
 const dueBadge = computed<{ label: string; tone: string } | null>(() => {
     if (meta.value?.type !== 'project' || meta.value.due === null) {
@@ -309,6 +316,12 @@ defineExpose({ focusEditor });
                         class="text-xs text-muted-foreground tabular-nums"
                     >
                         {{ progress.done }}/{{ progress.total }}
+                    </span>
+                    <span
+                        v-else-if="listRemaining !== null"
+                        class="text-xs text-muted-foreground tabular-nums"
+                    >
+                        {{ listRemaining }} left
                     </span>
                     <span
                         v-if="dueBadge"

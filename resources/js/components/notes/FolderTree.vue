@@ -110,8 +110,20 @@ function iconFor(meta: NoteMeta): typeof FileText {
     return meta.type !== null ? NOTE_ICONS[meta.type] : FileText;
 }
 
+/** Projects show a progress pie; lists show a plain incomplete count. */
 function showsProgress(meta: NoteMeta): boolean {
-    return meta.type === 'project' || meta.type === 'list';
+    return meta.type === 'project';
+}
+
+/** Incomplete items in a list note, or null when it isn't a list / is empty. */
+function listRemaining(meta: NoteMeta, id: string): number | null {
+    if (meta.type !== 'list') {
+        return null;
+    }
+
+    const { total, done } = noteProgressFor(id);
+
+    return total > 0 ? total - done : null;
 }
 
 /** Compact Things-style due badge for the sidebar (14d / today / -3d). */
@@ -404,6 +416,15 @@ async function onDrop(event: DragEvent): Promise<void> {
                                 :total="noteProgressFor(note.id).total"
                                 :size="14"
                             />
+                            <span
+                                v-else-if="
+                                    listRemaining(noteMetaFor(note.id), note.id) !==
+                                    null
+                                "
+                                class="text-[11px] tabular-nums text-muted-foreground"
+                            >
+                                {{ listRemaining(noteMetaFor(note.id), note.id) }}
+                            </span>
                             <Pin
                                 v-if="note.pinned === 1"
                                 class="size-3 text-muted-foreground/60"
