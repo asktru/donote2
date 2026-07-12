@@ -6,3 +6,16 @@ export const isMacDesktopShell =
     typeof navigator !== 'undefined' &&
     navigator.userAgent.includes('Electron') &&
     navigator.platform.startsWith('Mac');
+
+/** True on touch-capable devices (phones, tablets) — gates swipe gestures. */
+export const isTouchDevice =
+    typeof window !== 'undefined' &&
+    ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
+/** True when the viewport is phone-sized (below Tailwind's md breakpoint). */
+export function isNarrowViewport(): boolean {
+    return (
+        typeof window !== 'undefined' &&
+        window.matchMedia('(max-width: 767px)').matches
+    );
+}

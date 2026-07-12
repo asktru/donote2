@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { FilePlus2, Mic, Paperclip, Plus, Sparkles, Square } from '@lucide/vue';
+import {
+    FilePlus2,
+    Mic,
+    Paperclip,
+    Plus,
+    Search,
+    Sparkles,
+    Square,
+} from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 import { Button } from '@/components/ui/button';
@@ -26,7 +34,7 @@ import {
     stopRecording,
 } from '@/stores/memos';
 import { promptText } from '@/stores/prompt';
-import { openNote } from '@/stores/ui';
+import { openNote, searchOpen } from '@/stores/ui';
 import { createNote } from '@/stores/workspace';
 
 const expanded = ref(false);
@@ -191,8 +199,19 @@ function dismissDestination(open: boolean): void {
                 <Square class="size-3.5 fill-current" />
             </button>
 
+            <!-- Search: quick reach on phones, where there's no ⌘K. -->
             <button
-                v-else
+                v-if="!isRecording && !expanded"
+                type="button"
+                class="flex size-11 items-center justify-center rounded-full border border-border/60 bg-background text-foreground shadow-lg transition-transform hover:scale-105 md:hidden"
+                aria-label="Search"
+                @click="searchOpen = true"
+            >
+                <Search class="size-5" />
+            </button>
+
+            <button
+                v-if="!isRecording"
                 type="button"
                 :class="
                     cn(

@@ -23,9 +23,11 @@ import TrashView from '@/components/notes/TrashView.vue';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useSwipe } from '@/composables/useSwipe';
 import { kindOfKey, todayDailyKey, todayKey } from '@/core/dates';
 import type { CalendarKind } from '@/core/dates';
-import { isMacDesktopShell } from '@/lib/platform';
+import { isMacDesktopShell, isNarrowViewport } from '@/lib/platform';
+import { resolveSwipeAction } from '@/lib/swipeActions';
 import { aiDialogOpen } from '@/stores/aiPrompts';
 import {
     startMemoUploader,
@@ -50,6 +52,7 @@ import {
     searchOpen,
     shortcutsOpen,
     splitView,
+    stepCalendar,
 } from '@/stores/ui';
 import {
     createFolder,
@@ -286,6 +289,31 @@ function onKeydown(event: KeyboardEvent): void {
     }
 }
 
+// Touch gestures (phones): edge-swipe opens the menu, a swipe over a
+// calendar note steps to the next/previous period.
+useSwipe((swipe) => {
+    const target = swipe.target;
+    const action = resolveSwipeAction(swipe, {
+        menuOpen: mobileSidebarOpen.value,
+        hasSplit: splitView.value !== null,
+        isCalendar: currentView.value.kind === 'calendar',
+        narrow: isNarrowViewport(),
+        startedInPane:
+            target instanceof Element &&
+            target.closest('[data-swipe-pane]') != null,
+    });
+
+    if (action === 'open-menu') {
+        mobileSidebarOpen.value = true;
+    } else if (action === 'close-menu') {
+        mobileSidebarOpen.value = false;
+    } else if (action === 'calendar-next') {
+        stepCalendar(1);
+    } else if (action === 'calendar-prev') {
+        stepCalendar(-1);
+    }
+});
+
 onMounted(async () => {
     await initWorkspace({
         teamSlug: props.workspace.teamSlug,
@@ -329,6 +357,7 @@ onBeforeUnmount(() => {
                 >
                     <QuickCaptureFab />
                     <div
+                        data-swipe-pane
                         class="flex min-h-0 min-w-0 flex-1 basis-1/2 flex-col border-b border-border/40 lg:border-r lg:border-b-0"
                     >
                         <TasksView

@@ -1,6 +1,6 @@
 import { ref } from 'vue';
 
-import { todayDailyKey, todayKey } from '@/core/dates';
+import { addPeriods, todayDailyKey, todayKey } from '@/core/dates';
 import type { CalendarKind } from '@/core/dates';
 import { getNote, recordVisit } from '@/stores/workspace';
 
@@ -286,6 +286,23 @@ export function openNote(
     }
 
     pushUrl();
+}
+
+/**
+ * Move the main calendar view to an adjacent period (the next/previous day,
+ * week, month, …). No-op unless a calendar note is the current main view.
+ * Returns whether it stepped, so gesture handlers know it was consumed.
+ */
+export function stepCalendar(delta: number): boolean {
+    const view = currentView.value;
+
+    if (view.kind !== 'calendar') {
+        return false;
+    }
+
+    openCalendar(view.calKind, addPeriods(view.dateKey, delta));
+
+    return true;
 }
 
 export function openCalendar(
