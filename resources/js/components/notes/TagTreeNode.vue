@@ -9,6 +9,7 @@ import {
     ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { cn } from '@/lib/utils';
+import { promptText } from '@/stores/prompt';
 import { renameMention, renameTag } from '@/stores/workspace';
 
 export interface TagNode {
@@ -31,12 +32,14 @@ const emit = defineEmits<{
 const expanded = ref(false);
 
 async function renamePrompt(): Promise<void> {
-    const next = prompt(
-        `Rename ${props.sigil}${props.node.full} (nested ones are renamed too):`,
-        props.node.full,
-    )
-        ?.trim()
-        .replace(/\s+/g, '-');
+    const next = (
+        await promptText({
+            title: `Rename ${props.sigil}${props.node.full}`,
+            label: 'Nested tags are renamed too.',
+            initialValue: props.node.full,
+            confirmLabel: 'Rename',
+        })
+    )?.replace(/\s+/g, '-');
 
     if (!next || next === props.node.full) {
         return;

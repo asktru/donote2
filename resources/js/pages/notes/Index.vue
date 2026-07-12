@@ -11,6 +11,7 @@ import ImageLightbox from '@/components/notes/ImageLightbox.vue';
 import MiniCalendar from '@/components/notes/MiniCalendar.vue';
 import NotePane from '@/components/notes/NotePane.vue';
 import NotesSidebar from '@/components/notes/NotesSidebar.vue';
+import PromptDialog from '@/components/notes/PromptDialog.vue';
 import QuickCaptureFab from '@/components/notes/QuickCaptureFab.vue';
 import ReminderHost from '@/components/notes/ReminderHost.vue';
 import RemindersView from '@/components/notes/RemindersView.vue';
@@ -31,6 +32,7 @@ import {
     stopMemoUploader,
     toggleRecording,
 } from '@/stores/memos';
+import { promptText } from '@/stores/prompt';
 import { startSync, stopSync } from '@/stores/sync';
 import {
     closeSplit,
@@ -122,7 +124,12 @@ async function createNoteHere(): Promise<void> {
 }
 
 async function createFolderHere(): Promise<void> {
-    const name = prompt('Folder name:')?.trim().replace(/\//g, '-');
+    const name = (
+        await promptText({
+            title: 'New folder',
+            placeholder: 'Folder name',
+        })
+    )?.replace(/\//g, '-');
 
     if (name) {
         const parent = currentFolder();
@@ -471,6 +478,7 @@ onBeforeUnmount(() => {
                 <ImageLightbox />
                 <FilePreview />
                 <SyncedLineLocations />
+                <PromptDialog />
                 <ReminderHost
                     @open-note="(id, line) => handleOpenNote(id, false, line)"
                 />

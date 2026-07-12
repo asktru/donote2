@@ -37,6 +37,7 @@ import type { NoteKind, NoteMeta } from '@/core/frontmatter';
 import { acceptTreeDrop, TREE_DND_MIME } from '@/lib/treeDnd';
 import { cn } from '@/lib/utils';
 import type { LocalNote } from '@/stores/db';
+import { promptText } from '@/stores/prompt';
 import { expandedFolders, expandFolder, toggleFolder } from '@/stores/ui';
 import {
     createFolder,
@@ -155,7 +156,9 @@ async function newNoteHere(): Promise<void> {
 }
 
 async function newSubfolder(): Promise<void> {
-    const name = prompt('Folder name:')?.trim().replace(/\//g, '-');
+    const name = (
+        await promptText({ title: 'New folder', placeholder: 'Folder name' })
+    )?.replace(/\//g, '-');
 
     if (name) {
         await createFolder(props.path === '' ? name : `${props.path}/${name}`);
@@ -164,9 +167,13 @@ async function newSubfolder(): Promise<void> {
 }
 
 async function renameThisFolder(): Promise<void> {
-    const name = prompt('Rename folder:', label.value)
-        ?.trim()
-        .replace(/\//g, '-');
+    const name = (
+        await promptText({
+            title: 'Rename folder',
+            initialValue: label.value,
+            confirmLabel: 'Rename',
+        })
+    )?.replace(/\//g, '-');
 
     if (!name || name === label.value) {
         return;
@@ -203,9 +210,13 @@ async function deleteThisFolderWithNotes(): Promise<void> {
 }
 
 async function renameNotePrompt(note: LocalNote): Promise<void> {
-    const title = prompt('Rename note:', note.title || 'Untitled')?.trim();
+    const title = await promptText({
+        title: 'Rename note',
+        initialValue: note.title || 'Untitled',
+        confirmLabel: 'Rename',
+    });
 
-    if (title !== undefined && title !== null) {
+    if (title !== null) {
         await renameNote(note.id, title);
     }
 }

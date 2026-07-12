@@ -48,6 +48,7 @@ import type { NoteKind } from '@/core/frontmatter';
 import { isMacDesktopShell } from '@/lib/platform';
 import { acceptTreeDrop, TREE_DND_MIME } from '@/lib/treeDnd';
 import { cn } from '@/lib/utils';
+import { promptText } from '@/stores/prompt';
 import { syncStatus, pendingChanges } from '@/stores/sync';
 import {
     currentView,
@@ -122,7 +123,11 @@ async function newNote(): Promise<void> {
 }
 
 async function newFolder(): Promise<void> {
-    const name = prompt('Folder name (use / for nesting):')?.trim();
+    const name = await promptText({
+        title: 'New folder',
+        label: 'Use / for nesting, e.g. Areas/Health.',
+        placeholder: 'Folder name',
+    });
 
     if (name) {
         await createFolder(name.replace(/^\/+|\/+$/g, ''));

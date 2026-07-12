@@ -25,6 +25,7 @@ import {
     startRecording,
     stopRecording,
 } from '@/stores/memos';
+import { promptText } from '@/stores/prompt';
 import { openNote } from '@/stores/ui';
 import { createNote } from '@/stores/workspace';
 
@@ -66,7 +67,10 @@ const timeLabel = computed(() => {
 
 async function newNote(): Promise<void> {
     expanded.value = false;
-    const title = prompt('Note title:')?.trim();
+    const title = await promptText({
+        title: 'New note',
+        placeholder: 'Note title',
+    });
 
     if (!title) {
         return;
