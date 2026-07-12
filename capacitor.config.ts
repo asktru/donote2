@@ -1,5 +1,4 @@
 import type { CapacitorConfig } from '@capacitor/cli';
-import { KeyboardResize } from '@capacitor/keyboard';
 
 /**
  * The iOS shell wraps the Donote web app, defaulting to the production
@@ -21,14 +20,6 @@ const config: CapacitorConfig = {
         // with viewport-fit=cover. Letting the native web view ALSO inset
         // ('always') double-pads the top/bottom, so keep it out of the way.
         contentInset: 'never',
-    },
-    plugins: {
-        Keyboard: {
-            // Keep the web view full-height when the keyboard opens (rather
-            // than the default 'native' resize) so visualViewport reports the
-            // keyboard inset and our editor toolbar can sit just above it.
-            resize: KeyboardResize.None,
-        },
     },
 };
 

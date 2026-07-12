@@ -15,20 +15,16 @@ import {
 import { computed } from 'vue';
 
 import { editorLineActions } from '@/components/editor/markdownExtensions';
-import { useKeyboardInset } from '@/composables/useKeyboardInset';
 import { isTouchDevice } from '@/lib/platform';
 import { activeEditor, editorFocused } from '@/stores/editorRegistry';
 import { startMoveToNote } from '@/stores/move';
 
-const keyboardHeight = useKeyboardInset();
-
-// Only over a focused editor with the keyboard actually up (phones/tablets).
+// Show whenever an editor is focused on a touch device. With the default
+// Capacitor 'native' keyboard resize the web view shrinks to sit above the
+// keyboard, so a bottom-pinned bar lands right on top of it — no need to
+// measure the keyboard height (which is unreliable inside WKWebView).
 const visible = computed(
-    () =>
-        isTouchDevice &&
-        editorFocused.value &&
-        activeEditor.value !== null &&
-        keyboardHeight.value > 0,
+    () => isTouchDevice && editorFocused.value && activeEditor.value !== null,
 );
 
 type Action = keyof typeof editorLineActions;
@@ -71,8 +67,7 @@ function dismiss(): void {
          tapping a button never steals focus from (and dismisses) the editor. -->
     <div
         v-show="visible"
-        class="fixed inset-x-0 z-50 flex items-center gap-1 overflow-x-auto border-t border-border/60 bg-background/95 px-2 py-1.5 backdrop-blur"
-        :style="{ bottom: `${keyboardHeight}px` }"
+        class="fixed inset-x-0 bottom-0 z-50 flex items-center gap-1 overflow-x-auto border-t border-border/60 bg-background/95 px-2 py-1.5 backdrop-blur"
     >
         <template v-for="(group, index) in groups" :key="index">
             <div
