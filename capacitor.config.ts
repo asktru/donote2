@@ -1,14 +1,12 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 /**
- * The iOS shell wraps the Donote web app. In development it points at the
- * Herd site; for production builds set DONOTE_MOBILE_URL to the deployed
- * HTTPS URL before running `npx cap sync ios`.
- *
- * The simulator resolves *.test through the Mac's resolver; a physical
- * device cannot — use `herd share` or a real deployment for on-device runs.
+ * The iOS shell wraps the Donote web app, defaulting to the production
+ * deployment. Point DONOTE_MOBILE_URL elsewhere before `npx cap sync ios`
+ * for other targets (the simulator can resolve https://donote.test
+ * through the Mac's resolver; a physical device cannot).
  */
-const appUrl = process.env.DONOTE_MOBILE_URL || 'https://donote.test';
+const appUrl = process.env.DONOTE_MOBILE_URL || 'https://donote.on-forge.com';
 
 const config: CapacitorConfig = {
     appId: 'io.air.donote',

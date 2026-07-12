@@ -10,11 +10,11 @@ const {
 } = require('electron');
 
 /**
- * The Donote web app this shell wraps. Point it at your Herd URL in
- * development or your deployment in production:
- *   DONOTE_URL=https://notes.example.com npm start
+ * The Donote web app this shell wraps — the production deployment by
+ * default. `npm start` (dev) overrides it back to the local Herd site
+ * via DONOTE_URL.
  */
-const APP_URL = process.env.DONOTE_URL || 'https://donote.test';
+const APP_URL = process.env.DONOTE_URL || 'https://donote.on-forge.com';
 
 let mainWindow = null;
 

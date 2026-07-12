@@ -8,7 +8,7 @@
     "scripts": {
         "build:eventkit": "swiftc -O eventkit/donote-eventkit.swift -o eventkit/donote-eventkit",
         "prestart": "npm run build:eventkit",
-        "start": "electron .",
+        "start": "DONOTE_URL=https://donote.test electron .",
         "prepack": "npm run build:eventkit",
         "pack": "electron-builder --mac --dir",
         "predist": "npm run build:eventkit",
