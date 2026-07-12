@@ -2,7 +2,7 @@ import { ref } from 'vue';
 
 import { todayDailyKey, todayKey } from '@/core/dates';
 import type { CalendarKind } from '@/core/dates';
-import { recordVisit } from '@/stores/workspace';
+import { getNote, recordVisit } from '@/stores/workspace';
 
 export type PaneView =
     | { kind: 'calendar'; calKind: CalendarKind; dateKey: string }
@@ -251,6 +251,21 @@ export function openNote(
     id: string,
     options: { split?: boolean; line?: number } = {},
 ): void {
+    // Calendar notes opened by id (tag rows, backlinks, synced-line
+    // jumps…) get their real calendar view — date header, prev/next —
+    // instead of rendering as an "Untitled" regular note.
+    const note = getNote(id);
+
+    if (note && note.type !== 'note' && note.dateKey !== null) {
+        if (options.line !== undefined && !options.split) {
+            pendingScrollLine.value = options.line;
+        }
+
+        openCalendar(note.type, note.dateKey, { split: options.split });
+
+        return;
+    }
+
     if (options.split) {
         splitView.value = { kind: 'note', id };
         recordVisit({ kind: 'note', id });
