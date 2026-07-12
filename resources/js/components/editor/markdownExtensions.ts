@@ -1381,6 +1381,23 @@ export function setTaskState(
         { from: bracketPos, to: bracketPos + 1, insert: stateChar },
     ];
 
+    // Priority is meaningless once a task is finished — strip !/!!/!!! (and
+    // the space after it) when completing or cancelling. The range sits
+    // after the checkbox, so it never overlaps the state change above.
+    const priority =
+        nextState === 'done' || nextState === 'cancelled'
+            ? line.text.match(PRIORITY_TOKEN_RE)
+            : null;
+
+    if (priority && priority[2].length > 0) {
+        const priorityFrom = line.from + priority[1].length;
+        changes.push({
+            from: priorityFrom,
+            to: priorityFrom + priority[2].length + 1,
+            insert: '',
+        });
+    }
+
     if (
         nextState === 'done' &&
         parsed.repeat !== null &&
