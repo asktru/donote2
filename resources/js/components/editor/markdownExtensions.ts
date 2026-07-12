@@ -205,8 +205,13 @@ class ImagePreviewWidget extends WidgetType {
 
 const IMAGE_TOKEN_RE = /!\[([^\]\n]*)\]\(([^)\s]+)\)/g;
 const LINK_URL_RE = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
+const BARE_URL_RE = /https?:\/\/[^\s)]+/g;
 
-/** URL of the markdown link containing `offset` in `text`, if any. */
+/**
+ * URL of the link at `offset`: the target of a `[title](url)` link, or a
+ * bare URL (GFM autolink) sitting there directly. Markdown links win so a
+ * `](url)` tail is never mistaken for a bare URL.
+ */
 function mdLinkUrlAt(text: string, offset: number): string | null {
     for (const match of text.matchAll(LINK_URL_RE)) {
         if (
@@ -214,6 +219,15 @@ function mdLinkUrlAt(text: string, offset: number): string | null {
             offset <= match.index + match[0].length
         ) {
             return match[2];
+        }
+    }
+
+    for (const match of text.matchAll(BARE_URL_RE)) {
+        if (
+            match.index <= offset &&
+            offset <= match.index + match[0].length
+        ) {
+            return match[0];
         }
     }
 
@@ -539,6 +553,15 @@ function collectSyntaxMarks(
     syntaxTree(state).iterate({
         enter: (node) => {
             if (!HIDDEN_MARK_NODES.has(node.name)) {
+                return;
+            }
+
+            // A URL node is punctuation only inside a real [title](url)
+            // link, where the visible title stays. A bare URL is parsed
+            // (via GFM autolink) as a standalone URL node with no Link
+            // parent — hiding that would leave the line blank until the
+            // cursor lands on it. Keep those visible.
+            if (node.name === 'URL' && node.node.parent?.name !== 'Link') {
                 return;
             }
 
