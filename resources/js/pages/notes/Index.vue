@@ -6,6 +6,7 @@ import AiPromptDialog from '@/components/notes/AiPromptDialog.vue';
 import DueTasksSection from '@/components/notes/DueTasksSection.vue';
 import EventsList from '@/components/notes/EventsList.vue';
 import GraphView from '@/components/notes/GraphView.vue';
+import ImageLightbox from '@/components/notes/ImageLightbox.vue';
 import MiniCalendar from '@/components/notes/MiniCalendar.vue';
 import NotePane from '@/components/notes/NotePane.vue';
 import NotesSidebar from '@/components/notes/NotesSidebar.vue';
@@ -404,6 +405,7 @@ onBeforeUnmount(() => {
                 />
                 <ShortcutsDialog />
                 <AiPromptDialog />
+                <ImageLightbox />
                 <ReminderHost
                     @open-note="(id, line) => handleOpenNote(id, false, line)"
                 />

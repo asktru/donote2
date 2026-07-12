@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FilePlus2, Mic, Paperclip, Plus, Square } from '@lucide/vue';
+import { FilePlus2, Mic, Paperclip, Plus, Sparkles, Square } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { insertAttachments } from '@/lib/attachments';
 import { cn } from '@/lib/utils';
+import { aiDialogOpen } from '@/stores/aiPrompts';
 import { activeEditor } from '@/stores/editorRegistry';
 import {
     appendLinkToTodayNote,
@@ -34,6 +35,11 @@ const filePicker = ref<HTMLInputElement | null>(null);
 function pickFiles(): void {
     expanded.value = false;
     filePicker.value?.click();
+}
+
+function openAiPrompt(): void {
+    expanded.value = false;
+    aiDialogOpen.value = true;
 }
 
 /** Insert picked files at the focused editor's cursor. */
@@ -137,6 +143,14 @@ function dismissDestination(open: boolean): void {
                     @click="pickFiles"
                 >
                     <Paperclip class="size-4" /> Attach file
+                </button>
+                <button
+                    v-if="activeEditor !== null"
+                    type="button"
+                    class="flex items-center gap-2 rounded-full border border-border/60 bg-background px-3.5 py-2 text-sm font-medium shadow-lg hover:bg-muted/60"
+                    @click="openAiPrompt"
+                >
+                    <Sparkles class="size-4" /> AI prompt
                 </button>
             </template>
 

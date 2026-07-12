@@ -50,6 +50,7 @@ import { COMMENT_RE, parseLine } from '@/core/parser';
 import type { ParsedLine, Priority, TaskState } from '@/core/parser';
 import { buildNextOccurrenceLine } from '@/core/repeat';
 import { generateSyncId } from '@/core/syncedLines';
+import { lightboxImage } from '@/stores/ui';
 
 export interface EditorCallbacks {
     /** Open a wiki link target ([[Title]] or [[2026-07-11]]). */
@@ -182,9 +183,14 @@ class ImagePreviewWidget extends WidgetType {
         img.alt = this.alt;
         img.loading = 'lazy';
         img.draggable = false;
+        img.title = 'Click to view full size';
         img.onerror = () => {
             wrap.textContent = `🖼 ${this.alt || 'image'} (failed to load)`;
             wrap.classList.add('cm-image-preview-broken');
+        };
+        img.onclick = (event) => {
+            event.preventDefault();
+            lightboxImage.value = { url: this.url, alt: this.alt };
         };
 
         wrap.appendChild(img);
@@ -1823,6 +1829,7 @@ const editorTheme = EditorView.theme({
         maxHeight: '360px',
         borderRadius: '8px',
         border: '1px solid var(--border)',
+        cursor: 'zoom-in',
     },
     '.cm-image-preview-broken': {
         color: 'var(--muted-foreground)',

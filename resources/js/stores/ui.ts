@@ -31,6 +31,8 @@ export const searchOpen = ref(false);
 export const shortcutsOpen = ref(false);
 /** Off-canvas sidebar state on small screens. */
 export const mobileSidebarOpen = ref(false);
+/** Fullscreen image viewer (clicked inline previews). */
+export const lightboxImage = ref<{ url: string; alt: string } | null>(null);
 /** Line index the main editor should scroll to after opening a note. */
 export const pendingScrollLine = ref<number | null>(null);
 
