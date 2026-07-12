@@ -68,6 +68,7 @@ const groups: ShortcutGroup[] = [
             ['⌘I', 'Italic'],
             ['⌘E', 'Inline code'],
             ['⌘⇧X', 'Strikethrough'],
+            ['⌘⇧H', 'Highlight (==text==)'],
             ['[[', 'Link a note (autocompletes)'],
             ['# / @', 'Tag or mention (autocompletes)'],
             ['// comment', 'Muted end-of-line comment'],

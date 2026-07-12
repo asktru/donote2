@@ -382,6 +382,9 @@ const REMINDER_TOKEN_RE = /@\d{1,2}(?::\d{2})?(?:am|pm)?(?![\w(])/gi;
 const TAG_TOKEN_RE = /(^|[^\w#&])(#[A-Za-z][\w/-]*)/g;
 const MENTION_TOKEN_RE = /(^|[^\w@.])(@[A-Za-z][\w/.-]*)/g;
 const WIKI_TOKEN_RE = /\[\[([^\]|\n]+?)(?:\s*\|\s*([^\]\n]*?))?\]\]/g;
+// ==highlight==: no `=` or whitespace hugging the delimiters, so "a == b"
+// and "====" never match.
+const HIGHLIGHT_TOKEN_RE = /==(?!\s)([^\n=]+?)(?<!\s)==/g;
 const PRIORITY_TOKEN_RE = /^(\s*[-*+]\s\[[ xX>-]\]\s)(!{1,3})(?=\s)/;
 const SYNC_TOKEN_RE = /\s(\^[a-z0-9]{4,12})\s*$/;
 
@@ -928,6 +931,34 @@ function buildDecorations(state: EditorState): DecorationSet {
                         title: 'Click to open · ⌥-click for split · ⌘⏎',
                     },
                 }),
+            });
+        }
+
+        for (const match of line.text.matchAll(HIGHLIGHT_TOKEN_RE)) {
+            const from = line.from + match.index;
+            const to = from + match[0].length;
+            const innerFrom = from + 2;
+            const innerTo = to - 2;
+            const markClass = revealed ? 'cm-md-mark' : undefined;
+
+            tokens.push({
+                from,
+                to: innerFrom,
+                decoration: markClass
+                    ? Decoration.mark({ class: markClass })
+                    : hideDecoration,
+            });
+            tokens.push({
+                from: innerFrom,
+                to: innerTo,
+                decoration: Decoration.mark({ class: 'cm-highlight' }),
+            });
+            tokens.push({
+                from: innerTo,
+                to,
+                decoration: markClass
+                    ? Decoration.mark({ class: markClass })
+                    : hideDecoration,
             });
         }
 
@@ -2034,6 +2065,13 @@ const editorTheme = EditorView.theme({
         verticalAlign: 'middle',
         borderTop: '1px solid var(--border)',
     },
+    '.cm-highlight': {
+        backgroundColor: 'var(--highlight)',
+        borderRadius: '3px',
+        padding: '0.05em 0.15em',
+        WebkitBoxDecorationBreak: 'clone',
+        boxDecorationBreak: 'clone',
+    },
     '&.cm-focused': { outline: 'none' },
     '.cm-cursor': { borderLeftColor: 'var(--foreground)' },
     '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
@@ -2619,6 +2657,7 @@ export function donoteMarkdown(callbacks: EditorCallbacks): Extension {
             { key: 'Mod-i', run: (view) => toggleInlineMark(view, '*') },
             { key: 'Mod-e', run: (view) => toggleInlineMark(view, '`') },
             { key: 'Mod-Shift-x', run: (view) => toggleInlineMark(view, '~~') },
+            { key: 'Mod-Shift-h', run: (view) => toggleInlineMark(view, '==') },
             { key: 'Mod-Shift-s', run: scheduleTaskCommand },
             { key: 'Mod-Shift-d', run: dueTaskCommand },
             { key: 'Mod-Shift-y', run: makeSyncedLineCommand },
