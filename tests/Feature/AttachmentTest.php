@@ -23,6 +23,10 @@ test('users can upload an attachment and download it back', function () {
 
     Storage::assertExists($attachment->path);
 
+    // Relative so notes syncing across differently-hosted devices
+    // (donote.test, the Expose tunnel) resolve it on their own origin.
+    expect($response->json('url'))->toStartWith('/api/');
+
     $this->actingAs($user)
         ->get($response->json('url'))
         ->assertSuccessful();

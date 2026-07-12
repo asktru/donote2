@@ -50,7 +50,11 @@ class AttachmentController extends Controller
             'name' => $attachment->name,
             'mime' => $attachment->mime,
             'size' => $attachment->size,
-            'url' => route('attachments.show', ['current_team' => $current_team, 'attachment' => $attachment]),
+            // Relative on purpose: notes sync across devices that reach the
+            // server through different hosts (donote.test, the Expose
+            // tunnel, a future deployment). An absolute URL would carry one
+            // device's host into every other device's session-less origin.
+            'url' => route('attachments.show', ['current_team' => $current_team, 'attachment' => $attachment], absolute: false),
         ], 201);
     }
 
