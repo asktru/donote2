@@ -15,8 +15,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { keyRange, kindOfKey } from '@/core/dates';
 import { apiFetch } from '@/lib/api';
-import { donoteDesktop } from '@/lib/desktop';
-import type { AppleCalendar, AppleCalendarStatus } from '@/lib/desktop';
+import { appleCalendar } from '@/lib/appleCalendar';
+import type { AppleCalendar, AppleCalendarStatus } from '@/lib/appleCalendar';
+import { isMacDesktopShell } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import {
     disabledCalendars,
@@ -84,7 +85,14 @@ const range = computed(() => {
 const rangeLabel = computed(() => format(range.value.start, 'EEE, MMM d'));
 
 const appleConnected = computed(() => appleStatus.value === 'authorized');
-const appleAvailable = computed(() => donoteDesktop !== null);
+const appleAvailable = computed(() => appleCalendar !== null);
+
+/** Where to re-enable calendar access differs between macOS and iOS. */
+const deniedHint = computed(() =>
+    isMacDesktopShell
+        ? 'Calendar access is off — enable Donote in System Settings → Privacy & Security → Calendars.'
+        : 'Calendar access is off — enable Donote in Settings → Privacy & Security → Calendars.',
+);
 const anySourceConnected = computed(
     () => props.googleConnected || appleConnected.value,
 );
@@ -124,7 +132,7 @@ async function loadGoogle(): Promise<void> {
 }
 
 async function loadApple(): Promise<void> {
-    if (donoteDesktop === null || !appleConnected.value) {
+    if (appleCalendar === null || !appleConnected.value) {
         appleEvents.value = [];
 
         return;
@@ -134,7 +142,7 @@ async function loadApple(): Promise<void> {
         appleCalendars.value.map((calendar) => [calendar.id, calendar.color]),
     );
 
-    const rawEvents = await donoteDesktop.appleCalendar.events(
+    const rawEvents = await appleCalendar.events(
         range.value.start.toISOString(),
         range.value.end.toISOString(),
     );
@@ -193,17 +201,16 @@ async function load(): Promise<void> {
 }
 
 async function refreshAppleStatus(): Promise<void> {
-    if (donoteDesktop === null) {
+    if (appleCalendar === null) {
         return;
     }
 
     try {
-        const { status } = await donoteDesktop.appleCalendar.status();
+        const { status } = await appleCalendar.status();
         appleStatus.value = status;
 
         if (status === 'authorized') {
-            appleCalendars.value =
-                await donoteDesktop.appleCalendar.calendars();
+            appleCalendars.value = await appleCalendar.calendars();
         }
     } catch {
         appleStatus.value = 'unknown';
@@ -211,12 +218,12 @@ async function refreshAppleStatus(): Promise<void> {
 }
 
 async function connectApple(): Promise<void> {
-    if (donoteDesktop === null) {
+    if (appleCalendar === null) {
         return;
     }
 
     try {
-        await donoteDesktop.appleCalendar.requestAccess();
+        await appleCalendar.requestAccess();
     } finally {
         await refreshAppleStatus();
         await load();
@@ -330,8 +337,7 @@ watch(() => range.value.start.getTime(), load);
                     v-else-if="appleAvailable && appleStatus === 'denied'"
                     class="text-[11px] text-muted-foreground"
                 >
-                    Calendar access is off — enable Donote in System Settings →
-                    Privacy & Security → Calendars.
+                    {{ deniedHint }}
                 </p>
                 <Link
                     v-if="!googleConnected"
