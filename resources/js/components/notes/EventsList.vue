@@ -17,6 +17,7 @@ import { keyRange, kindOfKey } from '@/core/dates';
 import { apiFetch } from '@/lib/api';
 import { appleCalendar } from '@/lib/appleCalendar';
 import type { AppleCalendar, AppleCalendarStatus } from '@/lib/appleCalendar';
+import { dedupeEvents } from '@/lib/dedupeEvents';
 import { isMacDesktopShell } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import {
@@ -58,6 +59,7 @@ interface UnifiedEvent {
     color: string | null;
     allDay: boolean;
     start: string | null;
+    end: string | null;
     htmlLink: string | null;
     calendarTitle: string;
     calendarId: string | null;
@@ -125,6 +127,7 @@ async function loadGoogle(): Promise<void> {
         color: event.color,
         allDay: event.all_day,
         start: event.start,
+        end: event.end,
         htmlLink: event.html_link,
         calendarTitle: event.calendar_name,
         calendarId: null,
@@ -156,6 +159,7 @@ async function loadApple(): Promise<void> {
         color: colorByCalendar.get(event.calendarId) ?? null,
         allDay: event.allDay,
         start: event.start,
+        end: event.end,
         htmlLink: null,
         calendarTitle: event.calendarTitle,
         calendarId: event.calendarId,
@@ -163,14 +167,14 @@ async function loadApple(): Promise<void> {
 }
 
 const events = computed<UnifiedEvent[]>(() => {
-    const merged = [
+    const merged = dedupeEvents([
         ...googleEvents.value,
         ...appleEvents.value.filter(
             (event) =>
                 event.calendarId === null ||
                 !disabledCalendars.value.has(event.calendarId),
         ),
-    ];
+    ]);
 
     return merged.sort((a, b) => {
         if (a.allDay !== b.allDay) {
