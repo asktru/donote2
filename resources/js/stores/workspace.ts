@@ -172,6 +172,13 @@ export const regularNotes = computed<LocalNote[]>(() =>
     liveNotes.value.filter((note) => note.type === 'note'),
 );
 
+/** Soft-deleted notes, most recently trashed first. */
+export const trashedNotes = computed<LocalNote[]>(() =>
+    [...notes.values()]
+        .filter((note) => note.deleted === 1)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+);
+
 export const pinnedNotes = computed<LocalNote[]>(() =>
     regularNotes.value.filter((note) => note.pinned === 1),
 );
@@ -345,6 +352,11 @@ export async function setNotePinned(
 
 export async function deleteNote(id: string): Promise<void> {
     await mutate(id, { deleted: 1 });
+}
+
+/** Bring a trashed note back (its folder reappears implicitly). */
+export async function restoreNote(id: string): Promise<void> {
+    await mutate(id, { deleted: 0 });
 }
 
 export async function createFolder(path: string): Promise<void> {

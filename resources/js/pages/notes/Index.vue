@@ -18,6 +18,7 @@ import SearchDialog from '@/components/notes/SearchDialog.vue';
 import ShortcutsDialog from '@/components/notes/ShortcutsDialog.vue';
 import SyncedLineLocations from '@/components/notes/SyncedLineLocations.vue';
 import TasksView from '@/components/notes/TasksView.vue';
+import TrashView from '@/components/notes/TrashView.vue';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -334,6 +335,10 @@ onBeforeUnmount(() => {
                             @open-note="
                                 (id, line) => handleOpenNote(id, false, line)
                             "
+                        />
+                        <TrashView
+                            v-else-if="currentView.kind === 'trash'"
+                            @open-note="(id) => handleOpenNote(id)"
                         />
                         <TasksView
                             v-else-if="currentView.kind === 'tag'"

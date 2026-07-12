@@ -20,6 +20,7 @@ import {
     Sun,
     Sparkles,
     Target,
+    Trash2,
 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
@@ -69,6 +70,7 @@ import {
     regularNotes,
     reviewQueue,
     tagCounts,
+    trashedNotes,
 } from '@/stores/workspace';
 
 const REVIEW_ICONS: Record<NoteKind, typeof Target> = {
@@ -381,6 +383,25 @@ const syncLabel = computed(() => {
                     :active-note-id="activeNoteId"
                     @open-note="(id, split) => openNote(id, { split })"
                 />
+                <button
+                    v-if="trashedNotes.length > 0"
+                    type="button"
+                    :class="
+                        cn(
+                            'mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted/70',
+                            isActive('trash')
+                                ? 'bg-muted font-medium text-primary'
+                                : 'text-muted-foreground',
+                        )
+                    "
+                    @click="openView({ kind: 'trash' })"
+                >
+                    <Trash2 class="size-4 shrink-0" />
+                    Trash
+                    <span class="ml-auto text-xs">
+                        {{ trashedNotes.length }}
+                    </span>
+                </button>
             </section>
 
             <section v-if="topTags.length > 0">
