@@ -748,6 +748,35 @@ export async function renameFolder(
 }
 
 /** Delete a folder, moving its notes and subfolders up to its parent. */
+/** Notes living in a folder or any of its subfolders. */
+export function notesInFolderTree(path: string): LocalNote[] {
+    return [...notes.values()].filter(
+        (note) =>
+            note.deleted === 0 &&
+            (note.folder === path || note.folder.startsWith(`${path}/`)),
+    );
+}
+
+/**
+ * Delete a folder together with its notes: every note in the subtree is
+ * soft-deleted (trash — recoverable, syncs as a deletion), and the
+ * folder entries disappear.
+ */
+export async function deleteFolderWithNotes(path: string): Promise<void> {
+    for (const note of notesInFolderTree(path)) {
+        await mutate(note.id, { deleted: 1 });
+    }
+
+    extraFolders.value = extraFolders.value.filter(
+        (folder) => folder !== path && !folder.startsWith(`${path}/`),
+    );
+    await requireDb().meta.put({
+        key: 'folders',
+        value: [...extraFolders.value],
+    });
+    emitMutation();
+}
+
 export async function deleteFolder(path: string): Promise<void> {
     const parent = path.includes('/')
         ? path.slice(0, path.lastIndexOf('/'))

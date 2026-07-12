@@ -42,6 +42,8 @@ import {
     createFolder,
     createNote,
     deleteFolder,
+    deleteFolderWithNotes,
+    notesInFolderTree,
     deleteNote,
     duplicateNote,
     markReviewed,
@@ -184,6 +186,22 @@ async function deleteThisFolder(): Promise<void> {
     }
 }
 
+async function deleteThisFolderWithNotes(): Promise<void> {
+    const count = notesInFolderTree(props.path).length;
+    const contents =
+        count === 0
+            ? 'It contains no notes.'
+            : `Its ${count} note${count === 1 ? '' : 's'} move to trash.`;
+
+    if (
+        confirm(
+            `Delete folder “${label.value}” and everything in it? ${contents}`,
+        )
+    ) {
+        await deleteFolderWithNotes(props.path);
+    }
+}
+
 async function renameNotePrompt(note: LocalNote): Promise<void> {
     const title = prompt('Rename note:', note.title || 'Untitled')?.trim();
 
@@ -288,7 +306,13 @@ async function onDrop(event: DragEvent): Promise<void> {
                     variant="destructive"
                     @select="deleteThisFolder"
                 >
-                    <Trash2 /> Delete folder
+                    <Trash2 /> Delete folder (keep notes)
+                </ContextMenuItem>
+                <ContextMenuItem
+                    variant="destructive"
+                    @select="deleteThisFolderWithNotes"
+                >
+                    <Trash2 /> Delete folder and notes…
                 </ContextMenuItem>
             </ContextMenuContent>
         </ContextMenu>
