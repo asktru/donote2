@@ -1,3 +1,4 @@
+import type { PluginListenerHandle } from '@capacitor/core';
 import { Keyboard } from '@capacitor/keyboard';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
@@ -26,13 +27,36 @@ function measure(): void {
 
 /** Track the keyboard height while the calling component is mounted. */
 export function useKeyboardInset(): typeof keyboardHeight {
+    let showHandle: PluginListenerHandle | null = null;
+    let hideHandle: PluginListenerHandle | null = null;
+
     onMounted(() => {
+        // On native iOS the Keyboard plugin reports the exact height and
+        // fires reliably; visualViewport can't see the keyboard when the web
+        // view is resized natively. Elsewhere (mobile web) fall back to it.
+        if (isNativeIos()) {
+            void Keyboard.addListener('keyboardWillShow', (info) => {
+                keyboardHeight.value = info.keyboardHeight;
+            }).then((handle) => {
+                showHandle = handle;
+            });
+            void Keyboard.addListener('keyboardWillHide', () => {
+                keyboardHeight.value = 0;
+            }).then((handle) => {
+                hideHandle = handle;
+            });
+
+            return;
+        }
+
         window.visualViewport?.addEventListener('resize', measure);
         window.visualViewport?.addEventListener('scroll', measure);
         measure();
     });
 
     onBeforeUnmount(() => {
+        void showHandle?.remove();
+        void hideHandle?.remove();
         window.visualViewport?.removeEventListener('resize', measure);
         window.visualViewport?.removeEventListener('scroll', measure);
     });
