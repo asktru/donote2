@@ -4,7 +4,13 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import MobileSidebarButton from '@/components/notes/MobileSidebarButton.vue';
 
 import { Button } from '@/components/ui/button';
-import { humanizeKey } from '@/core/dates';
+import {
+    humanizeKey,
+    keyRange,
+    keyStartDate,
+    todayDailyKey,
+    todayKey,
+} from '@/core/dates';
 import { reminderCandidates } from '@/core/reminders';
 import type { ReminderCandidate } from '@/core/reminders';
 import { cn } from '@/lib/utils';
@@ -44,6 +50,49 @@ const rows = computed<ReminderCandidate[]>(() => {
     }
 
     return candidates.sort((a, b) => a.at.getTime() - b.at.getTime());
+});
+
+interface ReminderGroup {
+    label: string;
+    items: ReminderCandidate[];
+}
+
+/** Reminders bucketed by date, mirroring the Tasks view's groups. */
+const groups = computed<ReminderGroup[]>(() => {
+    const todayStart = keyStartDate(todayDailyKey()).getTime();
+    const thisWeekEnd = keyRange(todayKey('weekly')).end.getTime();
+    const dayMs = 24 * 60 * 60 * 1000;
+
+    const overdue: ReminderCandidate[] = [];
+    const today: ReminderCandidate[] = [];
+    const week: ReminderCandidate[] = [];
+    const later: ReminderCandidate[] = [];
+
+    for (const candidate of rows.value) {
+        const at = candidate.at;
+        const dayStart = new Date(
+            at.getFullYear(),
+            at.getMonth(),
+            at.getDate(),
+        ).getTime();
+
+        if (dayStart + dayMs <= todayStart) {
+            overdue.push(candidate);
+        } else if (dayStart <= todayStart) {
+            today.push(candidate);
+        } else if (dayStart < thisWeekEnd) {
+            week.push(candidate);
+        } else {
+            later.push(candidate);
+        }
+    }
+
+    return [
+        { label: 'Overdue', items: overdue },
+        { label: 'Today', items: today },
+        { label: 'This week', items: week },
+        { label: 'Later', items: later },
+    ].filter((group) => group.items.length > 0);
 });
 
 type RowStatus =
@@ -158,11 +207,28 @@ onBeforeUnmount(() => {
                 </p>
             </div>
 
-            <div
-                v-for="candidate in rows"
-                :key="candidate.key"
-                class="group flex items-start gap-2.5 rounded-lg px-2 py-1.5 hover:bg-muted/50"
-            >
+            <section v-for="group in groups" :key="group.label" class="mb-5">
+                <h2
+                    :class="
+                        cn(
+                            'mb-1.5 text-[11px] font-semibold tracking-wide uppercase',
+                            group.label === 'Overdue'
+                                ? 'text-destructive'
+                                : 'text-muted-foreground',
+                        )
+                    "
+                >
+                    {{ group.label }}
+                    <span class="font-normal opacity-60"
+                        >· {{ group.items.length }}</span
+                    >
+                </h2>
+
+                <div
+                    v-for="candidate in group.items"
+                    :key="candidate.key"
+                    class="group flex items-start gap-2.5 rounded-lg px-2 py-1.5 hover:bg-muted/50"
+                >
                 <span
                     :class="
                         cn(
@@ -240,7 +306,8 @@ onBeforeUnmount(() => {
                         <Check class="size-3.5" /> Done
                     </Button>
                 </div>
-            </div>
+                </div>
+            </section>
         </div>
     </div>
 </template>
