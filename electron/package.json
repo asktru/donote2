@@ -21,6 +21,12 @@
     "build": {
         "appId": "io.air.donote",
         "productName": "Donote",
+        "protocols": [
+            {
+                "name": "Donote",
+                "schemes": ["donote"]
+            }
+        ],
         "directories": {
             "output": "dist"
         },

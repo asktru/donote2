@@ -180,6 +180,45 @@ ipcMain.handle('apple-calendar:events', (_event, from, to) => {
     return runEventKit(['events', from, to]);
 });
 
+// donote://note/<id> deep links (KnowTabs "open in Donote", shared links).
+// They resolve through the server's /n/<id> redirect, which picks the
+// right team and view. A link arriving before the window exists is held
+// until ready.
+let pendingDeepLink = null;
+
+function webUrlForDeepLink(rawUrl) {
+    const match = /^donote:\/\/note\/([A-Za-z0-9-]+)/.exec(rawUrl);
+
+    return match ? `${APP_URL}/n/${match[1]}` : null;
+}
+
+function openDeepLink(rawUrl) {
+    const target = webUrlForDeepLink(rawUrl);
+
+    if (!target) {
+        return;
+    }
+
+    if (mainWindow) {
+        mainWindow.loadURL(target);
+
+        if (mainWindow.isMinimized()) {
+            mainWindow.restore();
+        }
+
+        mainWindow.focus();
+    } else {
+        pendingDeepLink = target;
+    }
+}
+
+app.setAsDefaultProtocolClient('donote');
+
+app.on('open-url', (event, url) => {
+    event.preventDefault();
+    openDeepLink(url);
+});
+
 const hasLock = app.requestSingleInstanceLock();
 
 if (!hasLock) {
@@ -198,6 +237,11 @@ if (!hasLock) {
     app.whenReady().then(() => {
         buildMenu();
         createWindow();
+
+        if (pendingDeepLink && mainWindow) {
+            mainWindow.loadURL(pendingDeepLink);
+            pendingDeepLink = null;
+        }
 
         app.on('activate', () => {
             if (BrowserWindow.getAllWindows().length === 0) {

@@ -2,12 +2,10 @@
 
 namespace App\Mcp\Tools\Concerns;
 
-use App\Actions\Notes\ApplyNoteChange;
-use App\Actions\Notes\PropagateSyncedLines;
+use App\Actions\Notes\WriteNote;
 use App\Models\Note;
 use App\Models\Team;
 use App\Models\User;
-use Illuminate\Support\Str;
 use Laravel\Mcp\Request;
 
 trait InteractsWithWorkspace
@@ -102,52 +100,7 @@ trait InteractsWithWorkspace
      */
     protected function writeNote(Team $team, User $user, ?Note $existing, array $attributes): Note
     {
-        $applyNoteChange = app(ApplyNoteChange::class);
-
-        $defaults = $existing !== null
-            ? [
-                'id' => $existing->id,
-                'type' => $existing->type->value,
-                'date_key' => $existing->date_key,
-                'title' => $existing->title,
-                'folder' => $existing->folder,
-                'pinned' => $existing->pinned,
-                'base_version' => $existing->version,
-                'old_content' => $existing->content,
-            ]
-            : [
-                'id' => (string) Str::uuid(),
-                'type' => 'note',
-                'date_key' => null,
-                'title' => '',
-                'folder' => '',
-                'pinned' => false,
-                'base_version' => 0,
-                'old_content' => '',
-            ];
-
-        $result = $applyNoteChange->execute($team, $user, [
-            'id' => $attributes['id'] ?? $defaults['id'],
-            'type' => $attributes['type'] ?? $defaults['type'],
-            'date_key' => $attributes['date_key'] ?? $defaults['date_key'],
-            'title' => $attributes['title'] ?? $defaults['title'],
-            'content' => $attributes['content'],
-            'folder' => $attributes['folder'] ?? $defaults['folder'],
-            'pinned' => $defaults['pinned'],
-            'base_version' => $defaults['base_version'],
-            'deleted' => false,
-            'client_updated_at' => now()->toISOString(),
-        ]);
-
-        app(PropagateSyncedLines::class)->execute(
-            $team,
-            $user,
-            $defaults['old_content'],
-            $attributes['content'],
-            $result['note']->id,
-        );
-
-        return $result['note'];
+        return app(WriteNote::class)->execute($team, $user, $existing, $attributes);
     }
 
     /**

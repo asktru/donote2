@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Attachments\StoreAttachment;
 use App\Models\Attachment;
-use App\Models\Note;
 use App\Models\Team;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,28 +22,12 @@ class AttachmentController extends Controller
             'note_id' => ['nullable', 'uuid'],
         ]);
 
-        $user = $request->user();
-        $file = $validated['file'];
-
-        $noteId = null;
-        if (! empty($validated['note_id'])) {
-            $noteId = Note::withTrashed()
-                ->forWorkspace($current_team, $user)
-                ->whereKey($validated['note_id'])
-                ->value('id');
-        }
-
-        $path = $file->store("attachments/{$current_team->id}");
-
-        $attachment = Attachment::create([
-            'team_id' => $current_team->id,
-            'user_id' => $user->id,
-            'note_id' => $noteId,
-            'name' => $file->getClientOriginalName(),
-            'path' => $path,
-            'mime' => $file->getMimeType() ?? 'application/octet-stream',
-            'size' => $file->getSize(),
-        ]);
+        $attachment = app(StoreAttachment::class)->execute(
+            $current_team,
+            $request->user(),
+            $validated['file'],
+            $validated['note_id'] ?? null,
+        );
 
         return response()->json([
             'id' => $attachment->id,

@@ -8,6 +8,7 @@ use App\Http\Controllers\MemoTranscriptionController;
 use App\Http\Controllers\NotesAppController;
 use App\Http\Controllers\NoteSearchController;
 use App\Http\Controllers\NoteSyncController;
+use App\Http\Controllers\OpenNoteController;
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamMembership;
 use Illuminate\Http\Request;
@@ -27,6 +28,13 @@ Route::get('/', function (Request $request) {
 
     return Inertia::render('Welcome');
 })->name('home');
+
+// Stable per-note deep link: donote://note/<id> and shared web URLs both
+// resolve through here into the owning team's notes app. Registered before
+// the {current_team} wildcard so "n" is never taken for a team slug.
+Route::get('n/{note}', OpenNoteController::class)
+    ->middleware(['auth', 'verified'])
+    ->name('notes.open');
 
 Route::prefix('{current_team}')
     ->middleware(['auth', 'verified', EnsureTeamMembership::class])
