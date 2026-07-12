@@ -4,12 +4,12 @@ import {
     ArrowDown,
     ArrowUp,
     ChevronDown,
+    CircleCheckBig,
     FileOutput,
     Heading,
     IndentDecrease,
     IndentIncrease,
     List,
-    ListChecks,
     SquareCheckBig,
 } from '@lucide/vue';
 import { computed } from 'vue';
@@ -32,8 +32,9 @@ type Action = keyof typeof editorLineActions;
 const groups: { action: Action; icon: typeof Heading; label: string }[][] = [
     [
         { action: 'heading', icon: Heading, label: 'Heading' },
-        { action: 'task', icon: SquareCheckBig, label: 'Task' },
-        { action: 'checklist', icon: ListChecks, label: 'Checklist' },
+        // Task = circle, checklist = square, matching how they render in notes.
+        { action: 'task', icon: CircleCheckBig, label: 'Task' },
+        { action: 'checklist', icon: SquareCheckBig, label: 'Checklist' },
         { action: 'bullet', icon: List, label: 'Bullet' },
     ],
     [

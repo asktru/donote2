@@ -23,9 +23,10 @@ import {
 } from '@/components/ui/dialog';
 import { parseAgendaConfig } from '@/lib/agenda';
 import { insertAttachments } from '@/lib/attachments';
+import { isTouchDevice } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import { aiDialogOpen } from '@/stores/aiPrompts';
-import { activeEditor } from '@/stores/editorRegistry';
+import { activeEditor, editorFocused } from '@/stores/editorRegistry';
 import {
     appendLinkToTodayNote,
     chooseDestination,
@@ -43,6 +44,10 @@ import { createNote, fetchAgenda, getNote } from '@/stores/workspace';
 const expanded = ref(false);
 const starting = ref(false);
 const filePicker = ref<HTMLInputElement | null>(null);
+
+// On phones the editor toolbar sits above the keyboard where the FAB would
+// be; hide the FAB while typing so the two don't overlap.
+const hidden = computed(() => isTouchDevice && editorFocused.value);
 
 function pickFiles(): void {
     expanded.value = false;
@@ -161,7 +166,10 @@ function dismissDestination(open: boolean): void {
 </script>
 
 <template>
-    <div class="pointer-events-none absolute right-5 bottom-5 z-40">
+    <div
+        v-show="!hidden"
+        class="pointer-events-none absolute right-5 bottom-5 z-40"
+    >
         <div class="pointer-events-auto flex flex-col items-end gap-2">
             <template v-if="expanded && !isRecording">
                 <button
