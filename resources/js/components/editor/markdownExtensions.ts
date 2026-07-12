@@ -159,6 +159,25 @@ class BulletDotWidget extends WidgetType {
     }
 }
 
+/** A `---` thematic break rendered as a horizontal separator. */
+class HorizontalRuleWidget extends WidgetType {
+    override eq(): boolean {
+        return true;
+    }
+
+    toDOM(): HTMLElement {
+        const rule = document.createElement('span');
+        rule.className = 'cm-hr';
+        rule.setAttribute('aria-hidden', 'true');
+
+        return rule;
+    }
+
+    override ignoreEvent(): boolean {
+        return false;
+    }
+}
+
 /** `![alt](url)` rendered as the actual image while the cursor is away. */
 class ImagePreviewWidget extends WidgetType {
     constructor(
@@ -581,10 +600,30 @@ function collectSyntaxMarks(
     return byLine;
 }
 
+/**
+ * Line numbers holding a `---`/`***`/`___` thematic break. Taken from the
+ * markdown tree (node `HorizontalRule`) so front matter fences, Setext
+ * heading underlines, and dashes inside code never qualify.
+ */
+function collectHorizontalRules(state: EditorState): Set<number> {
+    const lines = new Set<number>();
+
+    syntaxTree(state).iterate({
+        enter: (node) => {
+            if (node.name === 'HorizontalRule') {
+                lines.add(state.doc.lineAt(node.from).number);
+            }
+        },
+    });
+
+    return lines;
+}
+
 function buildDecorations(state: EditorState): DecorationSet {
     const builder = new RangeSetBuilder<Decoration>();
     const doc = state.doc;
     const syntaxMarks = collectSyntaxMarks(state);
+    const horizontalRules = collectHorizontalRules(state);
     const fmEnd = frontMatterEnd(state);
     const guideLevels = computeGuideLevels(state, fmEnd);
 
@@ -599,6 +638,19 @@ function buildDecorations(state: EditorState): DecorationSet {
 
         const parsed = parseLine(line.text);
         const revealed = selectionTouches(state, line.from, line.to);
+
+        // A --- / *** / ___ thematic break renders as a separator, unless
+        // the cursor is on the line (then it stays editable). Front matter
+        // fences are already skipped above, so they're never touched.
+        if (horizontalRules.has(lineNumber) && !revealed) {
+            builder.add(
+                line.from,
+                line.to,
+                Decoration.replace({ widget: new HorizontalRuleWidget() }),
+            );
+            continue;
+        }
+
         const tokens: TokenDecoration[] = [];
 
         // Indentation guides: one widened segment per ancestor level. The
@@ -1975,6 +2027,13 @@ const editorTheme = EditorView.theme({
         maxWidth: '46rem',
     },
     '.cm-line': { padding: '0 4px' },
+    '.cm-hr': {
+        display: 'inline-block',
+        width: '100%',
+        height: '0',
+        verticalAlign: 'middle',
+        borderTop: '1px solid var(--border)',
+    },
     '&.cm-focused': { outline: 'none' },
     '.cm-cursor': { borderLeftColor: 'var(--foreground)' },
     '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
