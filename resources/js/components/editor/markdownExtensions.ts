@@ -382,6 +382,7 @@ const META_TOKEN_RE = /@(?:due|repeat)\([^)]*\)/g;
 const REMINDER_TOKEN_RE = /@\d{1,2}(?::\d{2})?(?:am|pm)?(?![\w(])/gi;
 const TAG_TOKEN_RE = /(^|[^\w#&])(#[A-Za-z][\w/-]*)/g;
 const MENTION_TOKEN_RE = /(^|[^\w@.])(@[A-Za-z][\w/.-]*)/g;
+const URL_TOKEN_RE = /https?:\/\/[^\s)]+/g;
 const WIKI_TOKEN_RE = /\[\[([^\]|\n]+?)(?:\s*\|\s*([^\]\n]*?))?\]\]/g;
 // ==highlight==: no `=` or whitespace hugging the delimiters, so "a == b"
 // and "====" never match.
@@ -713,6 +714,20 @@ function buildDecorations(state: EditorState): DecorationSet {
         const insideWiki = (from: number, to: number): boolean =>
             wikiSpans.some(([start, end]) => from >= start && to <= end);
 
+        // Spans covering bare/linked URLs — a "#fragment" or "@handle" in
+        // one is part of the address, not a tag or mention.
+        const urlSpans: [number, number][] = [];
+
+        for (const match of line.text.matchAll(URL_TOKEN_RE)) {
+            urlSpans.push([
+                line.from + match.index,
+                line.from + match.index + match[0].length,
+            ]);
+        }
+
+        const insideUrl = (from: number, to: number): boolean =>
+            urlSpans.some(([start, end]) => from >= start && to <= end);
+
         // Image tokens become inline previews while the cursor is away;
         // their span replaces syntax marks the parser would hide within.
         const imageSpans: [number, number][] = [];
@@ -898,6 +913,11 @@ function buildDecorations(state: EditorState): DecorationSet {
 
         for (const match of line.text.matchAll(TAG_TOKEN_RE)) {
             const start = line.from + match.index + match[1].length;
+
+            if (insideUrl(start, start + match[2].length)) {
+                continue;
+            }
+
             tokens.push({
                 from: start,
                 to: start + match[2].length,
@@ -922,6 +942,11 @@ function buildDecorations(state: EditorState): DecorationSet {
             }
 
             const start = line.from + match.index + match[1].length;
+
+            if (insideUrl(start, start + match[2].length)) {
+                continue;
+            }
+
             tokens.push({
                 from: start,
                 to: start + match[2].length,

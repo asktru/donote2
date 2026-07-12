@@ -9,6 +9,42 @@ import {
     tasksOf,
 } from './parser';
 
+describe('parseLine — URLs and inline markdown in titles', () => {
+    it('does not treat a #fragment inside a URL as a tag', () => {
+        const line = parseLine(
+            '- [ ] [Email](https://mail.google.com/mail/u/0/#inbox/19eb72dfea2aff75) #real',
+        );
+
+        expect(line.tags).toEqual(['real']);
+    });
+
+    it('does not treat an @handle inside a URL as a mention', () => {
+        const line = parseLine('- [ ] Ping https://x.com/@someone about it @Bob');
+
+        expect(line.mentions).toEqual(['Bob']);
+    });
+
+    it('renders a markdown link in the title as its label', () => {
+        const line = parseLine(
+            '- [ ] [AIR ID transfer failed](https://mail.google.com/#inbox/abc)',
+        );
+
+        expect(line.title).toBe('AIR ID transfer failed');
+    });
+
+    it('unwraps emphasis, code, and highlight in the title', () => {
+        expect(parseLine('- [ ] **Pay** the `vendor` ==now==').title).toBe(
+            'Pay the vendor now',
+        );
+    });
+
+    it('leaves intraword underscores alone (no false emphasis)', () => {
+        expect(parseLine('- [ ] deploy AIR_ID_service today').title).toBe(
+            'deploy AIR_ID_service today',
+        );
+    });
+});
+
 describe('parseLine — kinds and states', () => {
     it('parses open tasks with - and * markers', () => {
         expect(parseLine('- [ ] Write report').kind).toBe('task');

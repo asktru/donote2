@@ -212,10 +212,21 @@ export function extractWikiLinks(text: string): WikiLink[] {
     return links;
 }
 
+const URL_RE = /https?:\/\/[^\s)]+/g;
+
+/**
+ * Blank out URLs (with equal-length spaces so offsets stay valid) before
+ * scanning for tags/mentions — a "#fragment" or "@handle" living inside a
+ * link like https://mail.google.com/…#inbox/abc is not a tag or mention.
+ */
+function maskUrls(text: string): string {
+    return text.replace(URL_RE, (url) => ' '.repeat(url.length));
+}
+
 function extractTags(text: string): string[] {
     const tags = new Set<string>();
 
-    for (const match of text.matchAll(TAG_RE)) {
+    for (const match of maskUrls(text).matchAll(TAG_RE)) {
         tags.add(match[2]);
     }
 
@@ -224,11 +235,12 @@ function extractTags(text: string): string[] {
 
 function extractMentions(text: string): string[] {
     const mentions = new Set<string>();
+    const masked = maskUrls(text);
 
-    for (const match of text.matchAll(MENTION_RE)) {
+    for (const match of masked.matchAll(MENTION_RE)) {
         const name = match[2];
         const offset = match.index + match[1].length;
-        const after = text[offset + name.length + 1];
+        const after = masked[offset + name.length + 1];
 
         if (RESERVED_MENTIONS.has(name.toLowerCase()) && after === '(') {
             continue;
@@ -240,14 +252,34 @@ function extractMentions(text: string): string[] {
     return [...mentions];
 }
 
+/**
+ * Reduce inline markdown to its readable text for display in task lists:
+ * `[label](url)`/`![alt](url)` → the label, and emphasis/code/strike/
+ * highlight markers drop while their content stays. The emphasis patterns
+ * are guarded against intraword underscores/asterisks (snake_case, a * b)
+ * so only real emphasis is unwrapped.
+ */
+function stripInlineMarkdown(text: string): string {
+    return text
+        .replace(/!?\[([^\]\n]+)\]\([^)\s]*\)/g, '$1')
+        .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+        .replace(/(?<![\w*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?![\w*])/g, '$1')
+        .replace(/__([^_\n]+)__/g, '$1')
+        .replace(/(?<![\w_])_(?!\s)([^_\n]+?)(?<!\s)_(?![\w_])/g, '$1')
+        .replace(/~~([^~\n]+)~~/g, '$1')
+        .replace(/==([^=\n]+)==/g, '$1')
+        .replace(/`([^`\n]+)`/g, '$1');
+}
+
 /** Strip metadata tokens (schedule, due, repeat, reminder) from a task title. */
 function cleanTitle(text: string): string {
-    return text
-        .replace(
+    return stripInlineMarkdown(
+        text.replace(
             WIKI_LINK_RE,
             (_match, target: string, display?: string) =>
                 (display ?? '').trim() || target.trim(),
-        )
+        ),
+    )
         .replace(SCHEDULE_RE, '')
         .replace(DUE_RE, '')
         .replace(REPEAT_RE, '')
