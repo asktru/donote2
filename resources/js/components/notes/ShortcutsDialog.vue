@@ -53,6 +53,7 @@ const groups: ShortcutGroup[] = [
             ['⌘⏎', 'Complete / reopen task (link under cursor wins)'],
             ['⌘⇧⏎', 'Cancel / restore task'],
             ['⌘⇧1', 'Cycle priority (! → !! → !!! → none)'],
+            ['⌘⌃↑ / ⌘⌃↓', 'Move line(s) up / down'],
             ['⌘⇧S', 'Schedule task (>date, date selected)'],
             ['⌘⇧D', 'Set due date (@due(date), date selected)'],
             ['Tab / ⇧Tab', 'Indent / outdent line'],

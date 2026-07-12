@@ -8,6 +8,8 @@ import {
     history,
     historyKeymap,
     indentWithTab,
+    moveLineDown,
+    moveLineUp,
 } from '@codemirror/commands';
 import {
     markdown,
@@ -2545,6 +2547,20 @@ export function donoteMarkdown(callbacks: EditorCallbacks): Extension {
             { key: 'Mod-Shift-d', run: dueTaskCommand },
             { key: 'Mod-Shift-y', run: makeSyncedLineCommand },
             { key: 'Mod-Shift-1', run: cyclePriorityCommand },
+            // Reorder tasks: move the current line (or every line the
+            // selection spans) up or down, keeping the selection on it.
+            {
+                mac: 'Cmd-Ctrl-ArrowUp',
+                win: 'Ctrl-Alt-ArrowUp',
+                linux: 'Ctrl-Alt-ArrowUp',
+                run: moveLineUp,
+            },
+            {
+                mac: 'Cmd-Ctrl-ArrowDown',
+                win: 'Ctrl-Alt-ArrowDown',
+                linux: 'Ctrl-Alt-ArrowDown',
+                run: moveLineDown,
+            },
             // Consume Mod-/ so CodeMirror's comment toggle never fires; the
             // app-level handler opens the shortcuts cheatsheet instead.
             { key: 'Mod-/', run: () => true },
