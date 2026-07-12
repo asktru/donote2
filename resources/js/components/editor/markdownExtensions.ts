@@ -7,6 +7,8 @@ import {
     defaultKeymap,
     history,
     historyKeymap,
+    indentLess,
+    indentMore,
     indentWithTab,
     moveLineDown,
     moveLineUp,
@@ -1738,7 +1740,9 @@ function rewriteLineMarker(view: EditorView, marker: string): boolean {
         ? line.text.slice(taskMatch[0].length)
         : bulletMatch
           ? bulletMatch[3]
-          : line.text.trimStart();
+          : // Plain or heading line: drop a leading heading marker so
+            // converting a heading to a task/bullet doesn't keep the `#`.
+            line.text.trimStart().replace(/^#{1,6}\s+/, '');
 
     view.dispatch({
         changes: {
@@ -1764,6 +1768,47 @@ const makeChecklistCommand = (view: EditorView): boolean => {
 
     return rewriteLineMarker(view, parsed.kind === 'checklist' ? '' : '+ [ ] ');
 };
+
+/** Toggle the current line between a plain bullet and plain text. */
+const makeBulletCommand = (view: EditorView): boolean => {
+    const { parsed } = parsedAt(view.state, view.state.selection.main.head);
+
+    return rewriteLineMarker(view, parsed.kind === 'bullet' ? '' : '- ');
+};
+
+/** Cycle the current line's heading level: none → # → ## → ### → none. */
+const cycleHeadingCommand = (view: EditorView): boolean => {
+    const line = view.state.doc.lineAt(view.state.selection.main.head);
+    const indent = line.text.match(/^\s*/)?.[0] ?? '';
+    const rest = line.text.slice(indent.length);
+    const level = rest.match(/^(#{1,6})\s/)?.[1].length ?? 0;
+    const body = rest
+        .replace(/^#{1,6}\s+/, '')
+        .replace(/^[-*+]\s\[[ xX>-]\]\s/, '')
+        .replace(/^[-*+]\s/, '');
+    const prefix = level === 0 ? '# ' : level === 1 ? '## ' : level === 2 ? '### ' : '';
+
+    view.dispatch({
+        changes: { from: line.from, to: line.to, insert: `${indent}${prefix}${body}` },
+    });
+
+    return true;
+};
+
+/**
+ * Line-level editing actions for a toolbar (the iOS keyboard bar). Each
+ * takes the focused view and applies to the current line/selection.
+ */
+export const editorLineActions = {
+    task: makeTaskCommand,
+    checklist: makeChecklistCommand,
+    bullet: makeBulletCommand,
+    heading: cycleHeadingCommand,
+    moveUp: moveLineUp,
+    moveDown: moveLineDown,
+    indent: indentMore,
+    outdent: indentLess,
+} as const;
 
 /**
  * ⌘⇧1 — cycle the task's priority: none → ! → !! → !!! → none.

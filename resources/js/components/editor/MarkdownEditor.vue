@@ -9,7 +9,11 @@ import {
 } from '@/components/editor/markdownExtensions';
 import { attachmentHandlers } from '@/lib/attachments';
 import { recallCursor, rememberCursor } from '@/lib/cursorMemory';
-import { registerEditor, unregisterEditor } from '@/stores/editorRegistry';
+import {
+    blurEditor,
+    registerEditor,
+    unregisterEditor,
+} from '@/stores/editorRegistry';
 import { liveNotes, tagCounts, mentionCounts } from '@/stores/workspace';
 
 const props = defineProps<{
@@ -81,6 +85,7 @@ function createView(): void {
                 EditorView.domEventHandlers({
                     focus: (_event, focusedView) =>
                         registerEditor(focusedView),
+                    blur: (_event, blurredView) => blurEditor(blurredView),
                 }),
                 EditorView.updateListener.of((update) => {
                     if (update.docChanged) {

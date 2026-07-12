@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import AiPromptDialog from '@/components/notes/AiPromptDialog.vue';
 import DueTasksSection from '@/components/notes/DueTasksSection.vue';
+import EditorToolbar from '@/components/notes/EditorToolbar.vue';
 import EventsList from '@/components/notes/EventsList.vue';
 import FilePreview from '@/components/notes/FilePreview.vue';
 import GraphView from '@/components/notes/GraphView.vue';
@@ -23,6 +24,7 @@ import TrashView from '@/components/notes/TrashView.vue';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { hideNativeAccessoryBar } from '@/composables/useKeyboardInset';
 import { useSwipe } from '@/composables/useSwipe';
 import { kindOfKey, todayDailyKey, todayKey } from '@/core/dates';
 import type { CalendarKind } from '@/core/dates';
@@ -322,6 +324,7 @@ onMounted(async () => {
     initViewFromUrl();
     booted.value = true;
     window.addEventListener('keydown', onKeydown);
+    void hideNativeAccessoryBar();
     startMemoUploader();
     await startSync();
 });
@@ -508,6 +511,7 @@ onBeforeUnmount(() => {
                 <FilePreview />
                 <SyncedLineLocations />
                 <PromptDialog />
+                <EditorToolbar />
                 <ReminderHost
                     @open-note="(id, line) => handleOpenNote(id, false, line)"
                 />

@@ -19,3 +19,15 @@ export function isNarrowViewport(): boolean {
         window.matchMedia('(max-width: 767px)').matches
     );
 }
+
+interface CapacitorGlobal {
+    isNativePlatform?: () => boolean;
+    getPlatform?: () => string;
+}
+
+/** True inside the native iOS (Capacitor) shell. */
+export function isNativeIos(): boolean {
+    const cap = (window as unknown as { Capacitor?: CapacitorGlobal }).Capacitor;
+
+    return cap?.isNativePlatform?.() === true && cap.getPlatform?.() === 'ios';
+}
