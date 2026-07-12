@@ -36,6 +36,7 @@ import {
     stopMemoUploader,
     toggleRecording,
 } from '@/stores/memos';
+import { startMoveToNote } from '@/stores/move';
 import { promptText } from '@/stores/prompt';
 import { startSync, stopSync } from '@/stores/sync';
 import {
@@ -273,6 +274,12 @@ function onKeydown(event: KeyboardEvent): void {
 
         if (noteId !== null) {
             openGraphView(noteId);
+        }
+    } else if (key === 'm' && event.shiftKey) {
+        // ⌘⇧M: move the selection (or current line + its children) into
+        // another note, picked through the search dialog.
+        if (startMoveToNote()) {
+            event.preventDefault();
         }
     } else if (event.altKey && event.key === 'ArrowLeft') {
         event.preventDefault();

@@ -8,12 +8,19 @@ import { ref, shallowRef } from 'vue';
  */
 export const activeEditor = shallowRef<EditorView | null>(null);
 
+/** The note id backing the active editor (its state key), for move/etc. */
+export const activeEditorNoteId = shallowRef<string | null>(null);
+
 /** Whether an editor currently holds focus (drives the mobile toolbar). */
 export const editorFocused = ref(false);
 
-export function registerEditor(view: EditorView): void {
+export function registerEditor(view: EditorView, noteId?: string): void {
     activeEditor.value = view;
     editorFocused.value = true;
+
+    if (noteId !== undefined) {
+        activeEditorNoteId.value = noteId;
+    }
 }
 
 /** An editor lost focus (blur) — but keep it as the active one. */

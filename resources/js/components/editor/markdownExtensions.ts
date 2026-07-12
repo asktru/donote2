@@ -1627,6 +1627,31 @@ function endOfChildrenBlock(
     return end;
 }
 
+/**
+ * The block of text a "move" acts on: the full lines the selection spans,
+ * or — with an empty selection — the current line together with its nested
+ * (more-indented) children. Returns doc offsets and the extracted text.
+ */
+export function selectionBlock(state: EditorState): {
+    from: number;
+    to: number;
+    text: string;
+} {
+    const sel = state.selection.main;
+
+    if (!sel.empty) {
+        const from = state.doc.lineAt(sel.from).from;
+        const to = state.doc.lineAt(sel.to).to;
+
+        return { from, to, text: state.sliceDoc(from, to) };
+    }
+
+    const line = state.doc.lineAt(sel.head);
+    const to = endOfChildrenBlock(state, line.number, parseLine(line.text).indent);
+
+    return { from: line.from, to, text: state.sliceDoc(line.from, to) };
+}
+
 /** Replace the state char of a task marker and handle @repeat insertion. */
 export function setTaskState(
     view: EditorView,

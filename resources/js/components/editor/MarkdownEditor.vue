@@ -84,7 +84,7 @@ function createView(): void {
                 attachmentHandlers(() => props.stateKey),
                 EditorView.domEventHandlers({
                     focus: (_event, focusedView) =>
-                        registerEditor(focusedView),
+                        registerEditor(focusedView, props.stateKey),
                     blur: (_event, blurredView) => blurEditor(blurredView),
                 }),
                 EditorView.updateListener.of((update) => {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FilePlus, FileText, History, Search } from '@lucide/vue';
+import { FileOutput, FilePlus, FileText, History, Search } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -7,6 +7,7 @@ import { humanizeKey } from '@/core/dates';
 import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { LocalNote } from '@/stores/db';
+import { cancelMove, completeMoveToNote, pendingMove } from '@/stores/move';
 import { searchOpen } from '@/stores/ui';
 import {
     createNote,
@@ -118,6 +119,9 @@ watch(searchOpen, (open) => {
         query.value = '';
         rows.value = [];
         highlighted.value = 0;
+    } else if (pendingMove.value) {
+        // Dismissed (Esc / overlay) while picking a move destination.
+        cancelMove();
     }
 });
 
@@ -173,6 +177,14 @@ const displayRows = computed<ResultRow[]>(() =>
 const showCreate = computed(() => query.value.trim() !== '');
 
 function pick(row: ResultRow): void {
+    // Picker mode: land the pending move in the chosen note instead of
+    // navigating to it.
+    if (pendingMove.value) {
+        void completeMoveToNote(row.id);
+
+        return;
+    }
+
     if (row.type !== 'note' && row.dateKey !== null) {
         emit('open-calendar', row.dateKey);
     } else {
@@ -184,6 +196,13 @@ function pick(row: ResultRow): void {
 
 async function createFromQuery(): Promise<void> {
     const note = await createNote({ title: query.value.trim() });
+
+    if (pendingMove.value) {
+        void completeMoveToNote(note.id);
+
+        return;
+    }
+
     emit('open-note', note.id);
     searchOpen.value = false;
 }
@@ -221,12 +240,27 @@ function onKeydown(event: KeyboardEvent): void {
         >
             <DialogTitle class="sr-only">Search notes</DialogTitle>
 
+            <div
+                v-if="pendingMove"
+                class="flex items-center gap-2 border-b border-border/60 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary"
+            >
+                <FileOutput class="size-3.5 shrink-0" />
+                Move {{ pendingMove.lineCount }} line{{
+                    pendingMove.lineCount === 1 ? '' : 's'
+                }}
+                to…
+            </div>
+
             <div class="flex items-center gap-2 border-b border-border/60 px-3">
                 <Search class="size-4 shrink-0 text-muted-foreground" />
                 <input
                     v-model="query"
                     class="h-11 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                    placeholder="Search notes, or type a title to create one…"
+                    :placeholder="
+                        pendingMove
+                            ? 'Pick or create a note to move into…'
+                            : 'Search notes, or type a title to create one…'
+                    "
                     autofocus
                     @keydown="onKeydown"
                 />

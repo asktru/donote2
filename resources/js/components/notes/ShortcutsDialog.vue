@@ -54,6 +54,7 @@ const groups: ShortcutGroup[] = [
             ['⌘⇧⏎', 'Cancel / restore task'],
             ['⌘⇧1', 'Cycle priority (! → !! → !!! → none)'],
             ['⌘⌃↑ / ⌘⌃↓', 'Move line(s) up / down'],
+            ['⌘⇧M', 'Move selection / line + children to another note'],
             ['⌘⇧S', 'Schedule task (>date, date selected)'],
             ['⌘⇧D', 'Set due date (@due(date), date selected)'],
             ['Tab / ⇧Tab', 'Indent / outdent line'],

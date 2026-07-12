@@ -4,6 +4,7 @@ import {
     ArrowDown,
     ArrowUp,
     ChevronDown,
+    FileOutput,
     Heading,
     IndentDecrease,
     IndentIncrease,
@@ -17,6 +18,7 @@ import { editorLineActions } from '@/components/editor/markdownExtensions';
 import { useKeyboardInset } from '@/composables/useKeyboardInset';
 import { isTouchDevice } from '@/lib/platform';
 import { activeEditor, editorFocused } from '@/stores/editorRegistry';
+import { startMoveToNote } from '@/stores/move';
 
 const keyboardHeight = useKeyboardInset();
 
@@ -90,6 +92,18 @@ function dismiss(): void {
                 <component :is="btn.icon" class="size-5" />
             </button>
         </template>
+
+        <div class="mx-0.5 h-6 w-px shrink-0 bg-border/70" />
+        <button
+            type="button"
+            class="flex size-9 shrink-0 items-center justify-center rounded-md text-foreground/80 active:bg-muted"
+            aria-label="Move to note"
+            @mousedown.prevent
+            @touchstart.prevent
+            @click="startMoveToNote()"
+        >
+            <FileOutput class="size-5" />
+        </button>
 
         <button
             type="button"
