@@ -1970,7 +1970,7 @@ const editorTheme = EditorView.theme({
     '.cm-content': {
         fontFamily: 'inherit',
         caretColor: 'var(--foreground)',
-        padding: '12px 0 45vh',
+        padding: '12px 0 2rem',
         lineHeight: '1.65',
         maxWidth: '46rem',
     },

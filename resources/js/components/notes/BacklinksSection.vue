@@ -112,7 +112,7 @@ function displayText(line: ParsedLine): string {
 <template>
     <section
         v-if="total > 0"
-        class="max-h-[45%] shrink-0 overflow-y-auto border-t border-border/60 bg-muted/10"
+        class="mt-8 border-t border-border/60 bg-muted/10"
     >
         <button
             type="button"

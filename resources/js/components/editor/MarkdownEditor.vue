@@ -18,6 +18,12 @@ const props = defineProps<{
     autofocus?: boolean;
     /** Identity used to remember/restore the cursor position (note id). */
     stateKey?: string;
+    /**
+     * Grow to the content's full height instead of scrolling internally, so
+     * an outer container can scroll the editor and whatever follows it (the
+     * references section) as one region.
+     */
+    grow?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -171,7 +177,10 @@ onBeforeUnmount(() => {
 <template>
     <div
         ref="host"
-        class="donote-editor h-full min-h-0 w-full cursor-text"
+        :class="[
+            'donote-editor w-full cursor-text',
+            grow ? 'is-grow' : 'h-full min-h-0',
+        ]"
     ></div>
 </template>
 
@@ -182,5 +191,13 @@ onBeforeUnmount(() => {
 .donote-editor :deep(.cm-scroller) {
     overflow-y: auto;
     font-family: inherit;
+}
+/* Grow mode: the editor sizes to its content and an outer container owns
+   the scroll, so the note and the references below it move as one. */
+.donote-editor.is-grow :deep(.cm-editor) {
+    height: auto;
+}
+.donote-editor.is-grow :deep(.cm-scroller) {
+    overflow: visible;
 }
 </style>

@@ -408,27 +408,30 @@ defineExpose({ focusEditor });
             </Button>
         </header>
 
-        <div class="min-h-0 flex-1 overflow-hidden px-4">
-            <MarkdownEditor
-                v-if="note"
-                ref="editor"
-                :key="note.id"
-                :model-value="note.content"
-                :state-key="note.id"
-                :placeholder="'Type markdown, add a task (- [ ]), a checklist (+ [ ]), or link a note with [['"
-                @update:model-value="onContentUpdate"
-                @open-link="onOpenLink"
-                @open-date="(key, split) => emit('open-calendar', key, split)"
-                @open-tag="(tag, split) => emit('open-tag', tag, split)"
-                @open-mention="
-                    (mention, split) => emit('open-mention', mention, split)
-                "
+        <div class="min-h-0 flex-1 overflow-y-auto">
+            <div class="px-4">
+                <MarkdownEditor
+                    v-if="note"
+                    ref="editor"
+                    :key="note.id"
+                    grow
+                    :model-value="note.content"
+                    :state-key="note.id"
+                    :placeholder="'Type markdown, add a task (- [ ]), a checklist (+ [ ]), or link a note with [['"
+                    @update:model-value="onContentUpdate"
+                    @open-link="onOpenLink"
+                    @open-date="(key, split) => emit('open-calendar', key, split)"
+                    @open-tag="(tag, split) => emit('open-tag', tag, split)"
+                    @open-mention="
+                        (mention, split) => emit('open-mention', mention, split)
+                    "
+                />
+            </div>
+
+            <BacklinksSection
+                :note-id="note?.id ?? null"
+                @open-note="(id, line) => emit('open-note-line', id, line)"
             />
         </div>
-
-        <BacklinksSection
-            :note-id="note?.id ?? null"
-            @open-note="(id, line) => emit('open-note-line', id, line)"
-        />
     </div>
 </template>
