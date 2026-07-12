@@ -1003,7 +1003,16 @@ const codeBlockPlugin = ViewPlugin.fromClass(
 const decorationsField = StateField.define<DecorationSet>({
     create: buildDecorations,
     update(value, transaction) {
-        if (transaction.docChanged || transaction.selection) {
+        if (
+            transaction.docChanged ||
+            transaction.selection ||
+            // The markdown parse is async: deep sections of long notes
+            // gain their Link/Emphasis nodes after later parse batches,
+            // each landing as a transaction. Without this, syntax marks
+            // far from the top render raw until the first edit.
+            syntaxTree(transaction.state) !==
+                syntaxTree(transaction.startState)
+        ) {
             return buildDecorations(transaction.state);
         }
 
@@ -1657,7 +1666,14 @@ const editorTheme = EditorView.theme({
         borderRadius: '4px',
         padding: '1px 4px',
     },
-    '.cm-md-link, .cm-md-url': { color: 'var(--primary)' },
+    '.cm-md-link': {
+        color: 'var(--token-link)',
+        textDecoration: 'underline',
+        textDecorationColor:
+            'color-mix(in oklab, var(--token-link) 40%, transparent)',
+        textUnderlineOffset: '2px',
+    },
+    '.cm-md-url': { color: 'var(--muted-foreground)' },
 
     '.cm-gutters': {
         backgroundColor: 'transparent',
