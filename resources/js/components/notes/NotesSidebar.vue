@@ -351,6 +351,7 @@ const syncLabel = computed(() => {
                 "
                 @dragover.prevent="rootDropTarget = true"
                 @dragleave="rootDropTarget = false"
+                @dragend="rootDropTarget = false"
                 @drop.prevent="onRootDrop"
             >
                 <div class="flex items-center px-2 pb-1">
