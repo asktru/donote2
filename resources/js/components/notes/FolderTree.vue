@@ -257,6 +257,16 @@ function onFolderDragStart(event: DragEvent): void {
     event.stopPropagation();
 }
 
+/**
+ * A mouse drag leaves its source button focused, and a focused row matches
+ * :focus-visible — so the browser's focus outline lingers after the drop.
+ * The drag was a pointer gesture, not keyboard navigation, so drop the
+ * focus once it ends.
+ */
+function onDragEnd(event: DragEvent): void {
+    (event.currentTarget as HTMLElement | null)?.blur();
+}
+
 async function onDrop(event: DragEvent): Promise<void> {
     dropTarget.value = false;
     const payload = event.dataTransfer?.getData(TREE_DND_MIME);
@@ -288,6 +298,7 @@ async function onDrop(event: DragEvent): Promise<void> {
                     @dragstart="onFolderDragStart"
                     @dragover.prevent="dropTarget = true"
                     @dragleave="dropTarget = false"
+                    @dragend="onDragEnd"
                     @drop.prevent="onDrop"
                 >
                     <ChevronRight
@@ -361,6 +372,7 @@ async function onDrop(event: DragEvent): Promise<void> {
                         }"
                         @click="emit('open-note', note.id, false)"
                         @dragstart="(event) => onNoteDragStart(event, note)"
+                        @dragend="onDragEnd"
                     >
                         <component
                             :is="iconFor(noteMetaFor(note.id))"
