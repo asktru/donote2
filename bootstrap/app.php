@@ -21,6 +21,12 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::middleware('api')
                 ->prefix('v1')
                 ->group(base_path('routes/api-v1.php'));
+
+            // Inbound webhooks (Bluedot meeting summaries, …). Stateless;
+            // each request carries its own token.
+            Route::middleware('api')
+                ->prefix('webhooks')
+                ->group(base_path('routes/webhooks.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
@@ -39,6 +45,6 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*') || $request->is('v1/*') || $request->expectsJson(),
+            fn (Request $request) => $request->is('api/*') || $request->is('v1/*') || $request->is('webhooks/*') || $request->expectsJson(),
         );
     })->create();

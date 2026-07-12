@@ -29,7 +29,7 @@ class AppServiceProvider extends ServiceProvider
         // The {current_team} wildcard sits at the URL root, so reserve the
         // segments other top-level surfaces own (the v1 API, /n deep
         // links) from ever matching as a team slug.
-        Route::pattern('current_team', '(?!(?:v1|n|api|mcp)(?:/|$))[^/]+');
+        Route::pattern('current_team', '(?!(?:v1|n|api|mcp|webhooks)(?:/|$))[^/]+');
     }
 
     /**
