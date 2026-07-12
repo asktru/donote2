@@ -3,7 +3,11 @@ import { EditorState } from '@codemirror/state';
 import { EditorView, placeholder as placeholderExt } from '@codemirror/view';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
-import { donoteMarkdown } from '@/components/editor/markdownExtensions';
+import {
+    applyPersistedFolds,
+    donoteMarkdown,
+} from '@/components/editor/markdownExtensions';
+import { attachmentHandlers } from '@/lib/attachments';
 import { recallCursor, rememberCursor } from '@/lib/cursorMemory';
 import { registerEditor, unregisterEditor } from '@/stores/editorRegistry';
 import { liveNotes, tagCounts, mentionCounts } from '@/stores/workspace';
@@ -67,6 +71,7 @@ function createView(): void {
                     getMentions: () => [...mentionCounts.value.keys()],
                 }),
                 placeholderExt(props.placeholder ?? 'Type something…'),
+                attachmentHandlers(() => props.stateKey),
                 EditorView.domEventHandlers({
                     focus: (_event, focusedView) =>
                         registerEditor(focusedView),
@@ -99,6 +104,9 @@ function createView(): void {
     view.dispatch({
         effects: EditorView.scrollIntoView(initialCursor, { y: 'center' }),
     });
+
+    // Collapse sections whose lines carry the persisted " …" marker.
+    applyPersistedFolds(view);
 }
 
 watch(
@@ -115,6 +123,8 @@ watch(
         view.dispatch({
             changes: { from: 0, to: view.state.doc.length, insert: value },
         });
+        // External replaces (sync pulls) reset folds; restore persisted ones.
+        applyPersistedFolds(view);
     },
 );
 

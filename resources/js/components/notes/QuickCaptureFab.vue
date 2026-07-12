@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FilePlus2, Mic, Plus, Square } from '@lucide/vue';
+import { FilePlus2, Mic, Paperclip, Plus, Square } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,9 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { insertAttachments } from '@/lib/attachments';
 import { cn } from '@/lib/utils';
+import { activeEditor } from '@/stores/editorRegistry';
 import {
     appendLinkToTodayNote,
     chooseDestination,
@@ -27,6 +29,27 @@ import { createNote } from '@/stores/workspace';
 
 const expanded = ref(false);
 const starting = ref(false);
+const filePicker = ref<HTMLInputElement | null>(null);
+
+function pickFiles(): void {
+    expanded.value = false;
+    filePicker.value?.click();
+}
+
+/** Insert picked files at the focused editor's cursor. */
+async function onFilesPicked(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const files = [...(input.files ?? [])];
+    input.value = '';
+
+    const view = activeEditor.value;
+
+    if (!view || files.length === 0) {
+        return;
+    }
+
+    await insertAttachments(view, files);
+}
 
 const timeLabel = computed(() => {
     const minutes = Math.floor(recordingSeconds.value / 60);
@@ -107,7 +130,23 @@ function dismissDestination(open: boolean): void {
                 >
                     <Mic class="size-4" /> New recording
                 </button>
+                <button
+                    v-if="activeEditor !== null"
+                    type="button"
+                    class="flex items-center gap-2 rounded-full border border-border/60 bg-background px-3.5 py-2 text-sm font-medium shadow-lg hover:bg-muted/60"
+                    @click="pickFiles"
+                >
+                    <Paperclip class="size-4" /> Attach file
+                </button>
             </template>
+
+            <input
+                ref="filePicker"
+                type="file"
+                multiple
+                class="hidden"
+                @change="onFilesPicked"
+            />
 
             <button
                 v-if="isRecording"

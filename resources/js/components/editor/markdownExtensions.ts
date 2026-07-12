@@ -16,12 +16,15 @@ import {
 } from '@codemirror/lang-markdown';
 import {
     codeFolding,
+    foldable,
+    foldEffect,
     foldGutter,
     foldKeymap,
     foldService,
     indentUnit,
     syntaxHighlighting,
     syntaxTree,
+    unfoldEffect,
     HighlightStyle,
 } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
@@ -615,6 +618,20 @@ function buildDecorations(state: EditorState): DecorationSet {
             }
         }
 
+        // Persisted-fold marker: invisible normally, muted when editing
+        // the line so it can be removed by hand if ever needed.
+        const foldMarker = line.text.match(FOLD_MARKER_RE);
+
+        if (foldMarker && foldMarker.index !== undefined) {
+            tokens.push({
+                from: line.from + foldMarker.index,
+                to: line.from + line.text.length,
+                decoration: revealed
+                    ? Decoration.mark({ class: 'cm-md-mark' })
+                    : hideDecoration,
+            });
+        }
+
         for (const match of line.text.matchAll(TAG_TOKEN_RE)) {
             const start = line.from + match.index + match[1].length;
             tokens.push({
@@ -884,6 +901,77 @@ function buildCodeBlocks(view: EditorView): DecorationSet {
     }
 
     return builder.finish();
+}
+
+/* ------------------------------------------------------------------ */
+/* Fold persistence (NotePlan-compatible trailing ellipsis)            */
+/* ------------------------------------------------------------------ */
+
+/** NotePlan marks collapsed lines with a trailing " …". */
+export const FOLD_MARKER_RE = /[ \t]…[ \t]*$/;
+
+/**
+ * Mirror fold state into the note text: folding appends " …" to the
+ * header line, unfolding removes it. The marker syncs with the note,
+ * so collapsed sections survive reloads and travel across devices —
+ * and folds from migrated NotePlan notes restore for free.
+ */
+const foldPersistence = EditorView.updateListener.of((update) => {
+    const changes: { from: number; to: number; insert: string }[] = [];
+
+    for (const transaction of update.transactions) {
+        for (const effect of transaction.effects) {
+            if (effect.is(foldEffect)) {
+                const line = update.state.doc.lineAt(effect.value.from);
+
+                if (!FOLD_MARKER_RE.test(line.text)) {
+                    changes.push({
+                        from: line.to,
+                        to: line.to,
+                        insert: ' …',
+                    });
+                }
+            } else if (effect.is(unfoldEffect)) {
+                const line = update.state.doc.lineAt(effect.value.from);
+                const match = line.text.match(FOLD_MARKER_RE);
+
+                if (match && match.index !== undefined) {
+                    changes.push({
+                        from: line.from + match.index,
+                        to: line.to,
+                        insert: '',
+                    });
+                }
+            }
+        }
+    }
+
+    if (changes.length > 0) {
+        // A dispatch is illegal inside an update cycle.
+        queueMicrotask(() => update.view.dispatch({ changes }));
+    }
+});
+
+/** Re-fold every line carrying the persisted marker (on note open). */
+export function applyPersistedFolds(view: EditorView): void {
+    const effects = [];
+    const doc = view.state.doc;
+
+    for (let n = 1; n <= doc.lines; n++) {
+        const line = doc.line(n);
+
+        if (FOLD_MARKER_RE.test(line.text)) {
+            const range = foldable(view.state, line.from, line.to);
+
+            if (range) {
+                effects.push(foldEffect.of(range));
+            }
+        }
+    }
+
+    if (effects.length > 0) {
+        view.dispatch({ effects });
+    }
 }
 
 /**
@@ -2053,6 +2141,7 @@ export function donoteMarkdown(callbacks: EditorCallbacks): Extension {
         decorationsField,
         strikeField,
         codeBlockPlugin,
+        foldPersistence,
         codeFolding(),
         donoteFoldService,
         foldGutter({
