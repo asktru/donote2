@@ -1116,11 +1116,45 @@ function buildCodeBlocks(view: EditorView): DecorationSet {
 /** NotePlan marks collapsed lines with a trailing " …". */
 export const FOLD_MARKER_RE = /[ \t]…[ \t]*$/;
 
+const FRONT_MATTER_FOLD_KEY = 'donote:frontmatter-collapsed';
+
+/**
+ * Front matter fold state is a single global preference, not per-note:
+ * collapse it once and it stays collapsed everywhere. It can't ride in
+ * the text like other folds — a trailing " …" on the opening `---` breaks
+ * the block — so it lives in localStorage instead.
+ */
+function frontMatterCollapsed(): boolean {
+    try {
+        return localStorage.getItem(FRONT_MATTER_FOLD_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+function setFrontMatterCollapsed(collapsed: boolean): void {
+    try {
+        localStorage.setItem(FRONT_MATTER_FOLD_KEY, collapsed ? '1' : '0');
+    } catch {
+        // Best-effort — folding still works this session without it.
+    }
+}
+
+/** Is `from` the fold range of a front matter block (opens on line 1)? */
+function isFrontMatterFold(state: EditorState, from: number): boolean {
+    return (
+        state.doc.lineAt(from).number === 1 && frontMatterEnd(state) > 1
+    );
+}
+
 /**
  * Mirror fold state into the note text: folding appends " …" to the
  * header line, unfolding removes it. The marker syncs with the note,
  * so collapsed sections survive reloads and travel across devices —
  * and folds from migrated NotePlan notes restore for free.
+ *
+ * Front matter is the exception: its state goes to the global preference,
+ * never the text, so the `---` block stays intact.
  */
 const foldPersistence = EditorView.updateListener.of((update) => {
     const changes: { from: number; to: number; insert: string }[] = [];
@@ -1128,6 +1162,11 @@ const foldPersistence = EditorView.updateListener.of((update) => {
     for (const transaction of update.transactions) {
         for (const effect of transaction.effects) {
             if (effect.is(foldEffect)) {
+                if (isFrontMatterFold(update.state, effect.value.from)) {
+                    setFrontMatterCollapsed(true);
+                    continue;
+                }
+
                 const line = update.state.doc.lineAt(effect.value.from);
 
                 if (!FOLD_MARKER_RE.test(line.text)) {
@@ -1138,6 +1177,11 @@ const foldPersistence = EditorView.updateListener.of((update) => {
                     });
                 }
             } else if (effect.is(unfoldEffect)) {
+                if (isFrontMatterFold(update.state, effect.value.from)) {
+                    setFrontMatterCollapsed(false);
+                    continue;
+                }
+
                 const line = update.state.doc.lineAt(effect.value.from);
                 const match = line.text.match(FOLD_MARKER_RE);
 
@@ -1158,10 +1202,45 @@ const foldPersistence = EditorView.updateListener.of((update) => {
     }
 });
 
-/** Re-fold every line carrying the persisted marker (on note open). */
+/**
+ * Re-fold on note open: every line carrying the persisted " …" marker,
+ * plus the front matter block when the global preference says collapsed.
+ */
 export function applyPersistedFolds(view: EditorView): void {
+    // Heal front matter corrupted by an earlier build that stamped the
+    // fold marker onto the opening `---` (which stops it from parsing as
+    // front matter at all). Strip that stray marker before anything reads
+    // the block; the repaired text syncs back out.
+    const first = view.state.doc.line(1);
+
+    if (
+        FOLD_MARKER_RE.test(first.text) &&
+        first.text.replace(FOLD_MARKER_RE, '').trim() === '---'
+    ) {
+        const marker = first.text.match(FOLD_MARKER_RE);
+
+        if (marker && marker.index !== undefined) {
+            view.dispatch({
+                changes: {
+                    from: first.from + marker.index,
+                    to: first.to,
+                    insert: '',
+                },
+            });
+        }
+    }
+
     const effects = [];
     const doc = view.state.doc;
+
+    if (frontMatterCollapsed() && frontMatterEnd(view.state) > 1) {
+        const line = doc.line(1);
+        const range = foldable(view.state, line.from, line.to);
+
+        if (range) {
+            effects.push(foldEffect.of(range));
+        }
+    }
 
     for (let n = 1; n <= doc.lines; n++) {
         const line = doc.line(n);
