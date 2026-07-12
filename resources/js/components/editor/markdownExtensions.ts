@@ -24,6 +24,7 @@ import {
     syntaxTree,
     HighlightStyle,
 } from '@codemirror/language';
+import { languages } from '@codemirror/language-data';
 import {
     EditorSelection,
     RangeSetBuilder,
@@ -762,6 +763,155 @@ const strikeField = StateField.define<DecorationSet>({
     provide: (field) => EditorView.decorations.from(field),
 });
 
+/** Hover-revealed copy button inside fenced code blocks. */
+class CopyWidget extends WidgetType {
+    constructor(
+        readonly text: string,
+        readonly kind: 'block' | 'line',
+    ) {
+        super();
+    }
+
+    override eq(other: CopyWidget): boolean {
+        return other.text === this.text && other.kind === this.kind;
+    }
+
+    toDOM(): HTMLElement {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `cm-copy-btn cm-copy-${this.kind}`;
+        button.title = this.kind === 'block' ? 'Copy code block' : 'Copy line';
+        button.setAttribute('aria-label', button.title);
+        button.innerHTML =
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+
+        button.addEventListener('mousedown', (event) =>
+            event.preventDefault(),
+        );
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            void navigator.clipboard.writeText(this.text);
+            button.classList.add('cm-copied');
+            setTimeout(() => button.classList.remove('cm-copied'), 900);
+        });
+
+        return button;
+    }
+
+    override ignoreEvent(): boolean {
+        return true;
+    }
+}
+
+/**
+ * Fenced code blocks: one contiguous rectangle with dimmed ``` fences,
+ * a copy-whole-block button on the opening fence, and per-line copy
+ * buttons — all revealed on hover.
+ */
+function buildCodeBlocks(view: EditorView): DecorationSet {
+    const state = view.state;
+    const builder = new RangeSetBuilder<Decoration>();
+    const seen = new Set<number>();
+
+    for (const range of view.visibleRanges) {
+        syntaxTree(state).iterate({
+            from: range.from,
+            to: range.to,
+            enter(node) {
+                if (node.name !== 'FencedCode' || seen.has(node.from)) {
+                    return;
+                }
+
+                seen.add(node.from);
+                const first = state.doc.lineAt(node.from);
+                const last = state.doc.lineAt(node.to);
+                const codeLines: string[] = [];
+
+                for (let n = first.number + 1; n <= last.number; n++) {
+                    const line = state.doc.line(n);
+
+                    if (!/^\s*(`{3,}|~{3,})/.test(line.text)) {
+                        codeLines.push(line.text);
+                    }
+                }
+
+                for (let n = first.number; n <= last.number; n++) {
+                    const line = state.doc.line(n);
+                    const isFence =
+                        n === first.number ||
+                        (n === last.number &&
+                            /^\s*(`{3,}|~{3,})/.test(line.text));
+                    const classes = [
+                        'cm-codeblock',
+                        n === first.number ? 'cm-codeblock-first' : '',
+                        n === last.number ? 'cm-codeblock-last' : '',
+                        isFence ? 'cm-codeblock-fence' : '',
+                    ]
+                        .filter(Boolean)
+                        .join(' ');
+
+                    builder.add(
+                        line.from,
+                        line.from,
+                        Decoration.line({ class: classes }),
+                    );
+
+                    if (n === first.number && codeLines.length > 0) {
+                        builder.add(
+                            line.to,
+                            line.to,
+                            Decoration.widget({
+                                widget: new CopyWidget(
+                                    codeLines.join('\n'),
+                                    'block',
+                                ),
+                                side: 1,
+                            }),
+                        );
+                    } else if (!isFence && line.text.trim() !== '') {
+                        builder.add(
+                            line.to,
+                            line.to,
+                            Decoration.widget({
+                                widget: new CopyWidget(line.text, 'line'),
+                                side: 1,
+                            }),
+                        );
+                    }
+                }
+            },
+        });
+    }
+
+    return builder.finish();
+}
+
+/**
+ * A ViewPlugin (not a StateField) because the decorations derive from
+ * the syntax tree, which parses asynchronously — a field computed at
+ * create time would see an empty tree and never refresh.
+ */
+const codeBlockPlugin = ViewPlugin.fromClass(
+    class {
+        decorations: DecorationSet;
+
+        constructor(view: EditorView) {
+            this.decorations = buildCodeBlocks(view);
+        }
+
+        update(update: ViewUpdate) {
+            if (
+                update.docChanged ||
+                update.viewportChanged ||
+                syntaxTree(update.state) !== syntaxTree(update.startState)
+            ) {
+                this.decorations = buildCodeBlocks(update.view);
+            }
+        }
+    },
+    { decorations: (plugin) => plugin.decorations },
+);
+
 const decorationsField = StateField.define<DecorationSet>({
     create: buildDecorations,
     update(value, transaction) {
@@ -1368,6 +1518,15 @@ const highlightStyle = HighlightStyle.define([
     { tag: tags.url, class: 'cm-md-url' },
     { tag: tags.quote, class: 'cm-quote' },
     { tag: tags.processingInstruction, class: 'cm-md-mark' },
+    // Code tokens inside fenced blocks (nested language parses).
+    { tag: tags.keyword, color: 'var(--token-mention)' },
+    { tag: [tags.string, tags.special(tags.string)], color: 'var(--token-tag)' },
+    { tag: [tags.number, tags.bool, tags.atom], color: '#eb8909' },
+    { tag: tags.comment, color: 'var(--muted-foreground)', fontStyle: 'italic' },
+    { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: 'var(--token-link)' },
+    { tag: [tags.typeName, tags.className, tags.tagName], color: '#dc4c3e' },
+    { tag: [tags.operator, tags.punctuation], color: 'var(--muted-foreground)' },
+    { tag: tags.propertyName, color: 'var(--token-link)' },
 ]);
 
 /** Todoist-inspired priority palette (P1 red, P2 orange, P3 blue). */
@@ -1512,6 +1671,79 @@ const editorTheme = EditorView.theme({
         textAlign: 'center',
         color: 'var(--muted-foreground)',
     },
+
+    '.cm-codeblock': {
+        position: 'relative',
+        backgroundColor: 'color-mix(in oklab, var(--muted) 55%, transparent)',
+        fontFamily:
+            "ui-monospace, SFMono-Regular, Menlo, Monaco, 'Cascadia Mono', monospace",
+        fontSize: '0.86em',
+        paddingRight: '34px',
+    },
+    '.cm-codeblock-first': {
+        borderRadius: '8px 8px 0 0',
+        marginTop: '2px',
+    },
+    '.cm-codeblock-last': {
+        borderRadius: '0 0 8px 8px',
+        marginBottom: '2px',
+    },
+    '.cm-codeblock-first.cm-codeblock-last': {
+        borderRadius: '8px',
+    },
+    '.cm-codeblock-fence': {
+        color: 'var(--muted-foreground)',
+        opacity: '0.75',
+    },
+    // Inline-code chip styling bleeds into fenced blocks (both carry the
+    // monospace tag) — the block already has its own background.
+    '.cm-codeblock span': {
+        backgroundColor: 'transparent',
+    },
+    '.cm-copy-btn': {
+        position: 'absolute',
+        right: '6px',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '20px',
+        height: '20px',
+        borderRadius: '5px',
+        border: '1px solid transparent',
+        color: 'var(--muted-foreground)',
+        backgroundColor: 'transparent',
+        cursor: 'pointer',
+        opacity: '0',
+        transition: 'opacity 100ms ease',
+    },
+    '.cm-copy-btn svg': {
+        width: '13px',
+        height: '13px',
+        pointerEvents: 'none',
+    },
+    '.cm-line:hover > .cm-copy-btn': {
+        opacity: '1',
+    },
+    '.cm-copy-btn:hover': {
+        color: 'var(--foreground)',
+        borderColor: 'var(--border)',
+        backgroundColor: 'var(--background)',
+    },
+    '.cm-copy-btn.cm-copied': {
+        opacity: '1',
+        color: 'var(--primary)',
+        borderColor: 'var(--primary)',
+    },
+
+    // text-indent (hanging indents) inherits into inline-block widgets,
+    // which establish their own block and would paint their glyph far
+    // left of their box. Neutralize it for every widget in a line.
+    '.cm-line :is(.cm-bullet-dot, .cm-fold-marker, .cm-check, .cm-sync-glyph, .cm-widgetBuffer)':
+        {
+            textIndent: '0',
+        },
 
     '.cm-check': {
         display: 'inline-flex',
@@ -1816,10 +2048,11 @@ export function donoteMarkdown(callbacks: EditorCallbacks): Extension {
     return [
         history(),
         indentUnit.of('    '),
-        markdown({ base: markdownLanguage }),
+        markdown({ base: markdownLanguage, codeLanguages: languages }),
         syntaxHighlighting(highlightStyle),
         decorationsField,
         strikeField,
+        codeBlockPlugin,
         codeFolding(),
         donoteFoldService,
         foldGutter({

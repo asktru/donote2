@@ -3,6 +3,7 @@ import { Head } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import AiPromptDialog from '@/components/notes/AiPromptDialog.vue';
+import DueTasksSection from '@/components/notes/DueTasksSection.vue';
 import EventsList from '@/components/notes/EventsList.vue';
 import GraphView from '@/components/notes/GraphView.vue';
 import MiniCalendar from '@/components/notes/MiniCalendar.vue';
@@ -381,14 +382,20 @@ onBeforeUnmount(() => {
                     </div>
                 </main>
 
+                <!-- Splits reclaim the calendar sidebar's width. -->
                 <aside
+                    v-if="splitView === null"
                     class="hidden h-full w-72 shrink-0 flex-col gap-5 overflow-y-auto border-l border-border/60 bg-muted/20 p-4 xl:flex"
                 >
                     <MiniCalendar
                         @pick-day="(key) => handleOpenCalendar(key)"
                         @pick-week="(key) => handleOpenCalendar(key)"
+                        @pick-period="(key) => handleOpenCalendar(key)"
                     />
                     <EventsList :google-connected="googleConnected" />
+                    <DueTasksSection
+                        @open-note="(id, line) => handleOpenNote(id, false, line)"
+                    />
                 </aside>
 
                 <SearchDialog

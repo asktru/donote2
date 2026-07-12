@@ -22,6 +22,7 @@ import { liveNotes } from '@/stores/workspace';
 const emit = defineEmits<{
     'pick-day': [dateKey: string];
     'pick-week': [dateKey: string];
+    'pick-period': [dateKey: string];
 }>();
 
 const focusedMonth = ref(startOfMonth(new Date()));
@@ -91,8 +92,41 @@ const today = new Date();
 <template>
     <div class="select-none">
         <div class="flex items-center px-1 pb-2">
+            <!-- Month, quarter, and year each open their calendar note. -->
             <p class="text-sm font-semibold">
-                {{ format(focusedMonth, 'MMMM yyyy') }}
+                <button
+                    type="button"
+                    class="hover:text-primary hover:underline"
+                    :title="`Open ${format(focusedMonth, 'MMMM')} monthly note`"
+                    @click="
+                        emit('pick-period', dateKeyFor('monthly', focusedMonth))
+                    "
+                >
+                    {{ format(focusedMonth, 'MMMM') }}</button
+                >,
+                <button
+                    type="button"
+                    class="hover:text-primary hover:underline"
+                    :title="`Open Q${format(focusedMonth, 'Q')} quarterly note`"
+                    @click="
+                        emit(
+                            'pick-period',
+                            dateKeyFor('quarterly', focusedMonth),
+                        )
+                    "
+                >
+                    Q{{ format(focusedMonth, 'Q') }}</button
+                >,
+                <button
+                    type="button"
+                    class="hover:text-primary hover:underline"
+                    :title="`Open ${format(focusedMonth, 'yyyy')} yearly note`"
+                    @click="
+                        emit('pick-period', dateKeyFor('yearly', focusedMonth))
+                    "
+                >
+                    {{ format(focusedMonth, 'yyyy') }}
+                </button>
             </p>
             <div class="ml-auto flex gap-0.5">
                 <Button
