@@ -341,7 +341,7 @@ onBeforeUnmount(() => {
 
     <TooltipProvider :delay-duration="300">
         <div
-            class="flex h-dvh w-full overflow-hidden bg-background text-foreground"
+            class="flex h-dvh w-full overflow-hidden bg-background text-foreground pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
         >
             <template v-if="ready && booted">
                 <div class="hidden h-full shrink-0 md:flex">
@@ -349,7 +349,10 @@ onBeforeUnmount(() => {
                 </div>
 
                 <Sheet v-model:open="mobileSidebarOpen">
-                    <SheetContent side="left" class="w-64 gap-0 p-0">
+                    <SheetContent
+                        side="left"
+                        class="w-64 gap-0 p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+                    >
                         <SheetTitle class="sr-only">Navigation</SheetTitle>
                         <NotesSidebar />
                     </SheetContent>
