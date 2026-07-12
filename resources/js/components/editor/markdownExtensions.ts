@@ -47,9 +47,11 @@ import {
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 
+import type { Mermaid } from 'mermaid';
 import { todayDailyKey } from '@/core/dates';
 import { COMMENT_RE, parseLine } from '@/core/parser';
 import type { ParsedLine, Priority, TaskState } from '@/core/parser';
+
 import { PRIORITY_COLORS } from '@/core/priority';
 import { buildNextOccurrenceLine } from '@/core/repeat';
 import { generateSyncId } from '@/core/syncedLines';
@@ -1137,10 +1139,161 @@ class CopyWidget extends WidgetType {
     }
 }
 
+/** Language of a fenced code block from its opening line, lowercased. */
+function fenceLanguage(text: string): string {
+    return (
+        text
+            .match(/^\s*(?:`{3,}|~{3,})\s*([\w-]+)/)?.[1]
+            ?.toLowerCase() ?? ''
+    );
+}
+
+let mermaidLoader: Promise<Mermaid> | null = null;
+let mermaidRenderSeq = 0;
+
+/** Load mermaid once, lazily — it's ~500 KB, so keep it out of the main bundle. */
+function loadMermaid(): Promise<Mermaid> {
+    if (mermaidLoader === null) {
+        mermaidLoader = import('mermaid').then((module) => {
+            const mermaid = module.default;
+            mermaid.initialize({
+                startOnLoad: false,
+                // Untrusted note content — never let a diagram inject scripts.
+                securityLevel: 'strict',
+                theme: document.documentElement.classList.contains('dark')
+                    ? 'dark'
+                    : 'default',
+                fontFamily: 'inherit',
+            });
+
+            return mermaid;
+        });
+    }
+
+    return mermaidLoader;
+}
+
+/** A ```mermaid block rendered as a diagram while the cursor is away. */
+class MermaidWidget extends WidgetType {
+    constructor(
+        readonly code: string,
+        readonly dark: boolean,
+    ) {
+        super();
+    }
+
+    override eq(other: MermaidWidget): boolean {
+        return other.code === this.code && other.dark === this.dark;
+    }
+
+    override get estimatedHeight(): number {
+        return 120;
+    }
+
+    toDOM(view: EditorView): HTMLElement {
+        const wrap = document.createElement('div');
+        wrap.className = 'cm-mermaid';
+        wrap.title = 'Click to edit the diagram source';
+        wrap.textContent = 'Rendering diagram…';
+
+        // Clicking drops the caret into the block, which reveals the source
+        // (the field stops replacing it once the selection is inside).
+        wrap.addEventListener('mousedown', (event) => {
+            event.preventDefault();
+            const pos = view.posAtDOM(wrap);
+            view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+            view.focus();
+        });
+
+        const code = this.code;
+        void loadMermaid()
+            .then(async (mermaid) => {
+                const id = `donote-mermaid-${(mermaidRenderSeq += 1)}`;
+                const { svg } = await mermaid.render(id, code);
+                wrap.innerHTML = svg;
+            })
+            .catch((error: unknown) => {
+                wrap.classList.add('cm-mermaid-error');
+                wrap.textContent = `Diagram error: ${
+                    error instanceof Error ? error.message : 'could not render'
+                }`;
+            });
+
+        return wrap;
+    }
+
+    override ignoreEvent(): boolean {
+        return false;
+    }
+}
+
+/**
+ * Block-level replace decorations for ```mermaid blocks. Must live in a
+ * state field (CodeMirror forbids block decorations from view plugins),
+ * and rebuilds when the syntax tree finishes its async parse.
+ */
+function buildMermaid(state: EditorState): DecorationSet {
+    const builder = new RangeSetBuilder<Decoration>();
+    const dark = document.documentElement.classList.contains('dark');
+
+    syntaxTree(state).iterate({
+        enter(node) {
+            if (node.name !== 'FencedCode') {
+                return;
+            }
+
+            const first = state.doc.lineAt(node.from);
+            const last = state.doc.lineAt(node.to);
+
+            if (
+                fenceLanguage(first.text) !== 'mermaid' ||
+                last.number <= first.number + 1 ||
+                selectionTouches(state, first.from, last.to)
+            ) {
+                return;
+            }
+
+            const codeLines: string[] = [];
+
+            for (let n = first.number + 1; n < last.number; n++) {
+                codeLines.push(state.doc.line(n).text);
+            }
+
+            builder.add(
+                first.from,
+                last.to,
+                Decoration.replace({
+                    block: true,
+                    widget: new MermaidWidget(codeLines.join('\n'), dark),
+                }),
+            );
+        },
+    });
+
+    return builder.finish();
+}
+
+const mermaidField = StateField.define<DecorationSet>({
+    create: buildMermaid,
+    update(value, transaction) {
+        if (
+            transaction.docChanged ||
+            transaction.selection ||
+            syntaxTree(transaction.state) !== syntaxTree(transaction.startState)
+        ) {
+            return buildMermaid(transaction.state);
+        }
+
+        return value;
+    },
+    provide: (field) => EditorView.decorations.from(field),
+});
+
 /**
  * Fenced code blocks: one contiguous rectangle with dimmed ``` fences,
  * a copy-whole-block button on the opening fence, and per-line copy
- * buttons — all revealed on hover.
+ * buttons — all revealed on hover. A ```mermaid block instead renders as
+ * a diagram unless the cursor is inside it.
  */
 function buildCodeBlocks(view: EditorView): DecorationSet {
     const state = view.state;
@@ -1167,6 +1320,17 @@ function buildCodeBlocks(view: EditorView): DecorationSet {
                     if (!/^\s*(`{3,}|~{3,})/.test(line.text)) {
                         codeLines.push(line.text);
                     }
+                }
+
+                // A mermaid block is replaced by a rendered diagram (via
+                // mermaidField) while the cursor is away; skip the code
+                // styling then, and only dress it as source once revealed.
+                if (
+                    fenceLanguage(first.text) === 'mermaid' &&
+                    codeLines.length > 0 &&
+                    !selectionTouches(state, first.from, last.to)
+                ) {
+                    return;
                 }
 
                 for (let n = first.number; n <= last.number; n++) {
@@ -2239,6 +2403,28 @@ const editorTheme = EditorView.theme({
         color: 'var(--muted-foreground)',
     },
 
+    '.cm-mermaid': {
+        display: 'flex',
+        justifyContent: 'center',
+        padding: '12px',
+        margin: '4px 0',
+        borderRadius: '8px',
+        border: '1px solid var(--border)',
+        backgroundColor: 'color-mix(in oklab, var(--muted) 35%, transparent)',
+        cursor: 'pointer',
+        overflowX: 'auto',
+    },
+    '.cm-mermaid svg': {
+        maxWidth: '100%',
+        height: 'auto',
+    },
+    '.cm-mermaid-error': {
+        justifyContent: 'flex-start',
+        fontFamily:
+            "ui-monospace, SFMono-Regular, Menlo, Monaco, 'Cascadia Mono', monospace",
+        fontSize: '0.82em',
+        color: 'var(--destructive)',
+    },
     '.cm-codeblock': {
         position: 'relative',
         backgroundColor: 'color-mix(in oklab, var(--muted) 55%, transparent)',
@@ -2619,6 +2805,7 @@ export function donoteMarkdown(callbacks: EditorCallbacks): Extension {
         syntaxHighlighting(highlightStyle),
         decorationsField,
         strikeField,
+        mermaidField,
         codeBlockPlugin,
         foldPersistence,
         codeFolding(),
