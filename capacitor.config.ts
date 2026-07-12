@@ -16,7 +16,10 @@ const config: CapacitorConfig = {
         url: appUrl,
     },
     ios: {
-        contentInset: 'always',
+        // The web app owns safe-area spacing via CSS env(safe-area-inset-*)
+        // with viewport-fit=cover. Letting the native web view ALSO inset
+        // ('always') double-pads the top/bottom, so keep it out of the way.
+        contentInset: 'never',
     },
 };
 
