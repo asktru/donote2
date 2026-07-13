@@ -2,6 +2,7 @@ import Dexie from 'dexie';
 import type { EntityTable } from 'dexie';
 
 import type { NoteType } from '@/core/dates';
+import type { NoteAccess } from '@/lib/noteAccess';
 
 export interface LocalNote {
     id: string;
@@ -18,6 +19,10 @@ export interface LocalNote {
     deleted: 0 | 1;
     /** 1 when the note has local changes the server has not seen. */
     dirty: 0 | 1;
+    /** The author's user id (as a string); the current user for own notes. */
+    authorId: string;
+    /** The current viewer's access to this note. */
+    access: NoteAccess;
 }
 
 export interface MetaEntry {
@@ -98,6 +103,18 @@ export function openWorkspaceDb(teamSlug: string, userId: number): WorkspaceDb {
                     memo.transcript = memo.transcript ?? null;
                 }),
         );
+
+    // Existing notes predate sharing: they're all authored by this user and
+    // owned by them.
+    db.version(4).upgrade((transaction) =>
+        transaction
+            .table('notes')
+            .toCollection()
+            .modify((note: Partial<LocalNote>) => {
+                note.authorId = note.authorId ?? String(userId);
+                note.access = note.access ?? 'owner';
+            }),
+    );
 
     return db;
 }

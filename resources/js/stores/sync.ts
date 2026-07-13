@@ -1,12 +1,15 @@
 import { ref } from 'vue';
 
 import { apiFetch } from '@/lib/api';
+import type { NoteAccess } from '@/lib/noteAccess';
+import { notesToPrune } from '@/lib/noteAccess';
 import { openWorkspaceDb } from '@/stores/db';
 import type { WorkspaceDb } from '@/stores/db';
 import {
     applyServerNote,
     dirtyNotes,
     getNote,
+    liveNotes,
     markSynced,
     onWorkspaceMutation,
     pruneCalendarDuplicates,
@@ -31,6 +34,8 @@ interface ServerNote {
     server_seq: number;
     updated_at: string | null;
     deleted: boolean;
+    author_id: number;
+    access: NoteAccess;
 }
 
 interface PullResponse {
@@ -114,7 +119,10 @@ async function pull(): Promise<void> {
 }
 
 async function push(): Promise<void> {
-    const dirty = dirtyNotes().slice(0, 200);
+    // Read-only shared notes must never be pushed back to the server.
+    const dirty = dirtyNotes()
+        .filter((note) => note.access !== 'read')
+        .slice(0, 200);
     pendingChanges.value = dirty.length;
 
     if (dirty.length === 0) {
@@ -165,6 +173,25 @@ async function push(): Promise<void> {
     pendingChanges.value = dirtyNotes().length;
 }
 
+/**
+ * Drop local notes the server no longer shares with this user (a revoked
+ * share, a note flipped back to private, a departed collaborator). Own notes
+ * and dirty notes are always kept.
+ */
+export async function reconcileVisibility(): Promise<void> {
+    const { ids } = await apiFetch<{ ids: string[] }>(
+        `${apiBase()}/notes/visible-ids`,
+    );
+
+    const visible = new Set(ids);
+    const dirty = new Set(dirtyNotes().map((note) => note.id));
+    const localIds = liveNotes.value.map((note) => note.id);
+
+    for (const id of notesToPrune(localIds, visible, dirty)) {
+        await removeLocalNote(id);
+    }
+}
+
 /** Run one full sync cycle (push local changes, then pull remote ones). */
 export async function syncNow(): Promise<void> {
     if (syncing) {
@@ -183,6 +210,7 @@ export async function syncNow(): Promise<void> {
     try {
         await push();
         await pull();
+        await reconcileVisibility();
         syncStatus.value = 'synced';
     } catch (error) {
         syncStatus.value = navigator.onLine ? 'error' : 'offline';

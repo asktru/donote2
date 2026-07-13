@@ -16,6 +16,7 @@ import { parseNote } from '@/core/parser';
 import type { ParsedLine } from '@/core/parser';
 import { applySyncedLine, changedSyncedLines } from '@/core/syncedLines';
 import { buildAgendaAppendix } from '@/lib/agenda';
+import type { NoteAccess } from '@/lib/noteAccess';
 import { openWorkspaceDb } from '@/stores/db';
 import type { LocalNote, WorkspaceDb } from '@/stores/db';
 
@@ -106,6 +107,11 @@ async function persist(note: LocalNote): Promise<void> {
     await requireDb().notes.put({ ...note });
 }
 
+/** The current user's id as a string (LocalNote.authorId form). */
+function currentUserId(): string {
+    return String(config.value?.userId ?? '');
+}
+
 /** Apply an authoritative server copy (does not mark dirty). */
 export async function applyServerNote(server: {
     id: string;
@@ -118,6 +124,8 @@ export async function applyServerNote(server: {
     version: number;
     updated_at: string | null;
     deleted: boolean;
+    author_id: number;
+    access: NoteAccess;
 }): Promise<void> {
     await persist({
         id: server.id,
@@ -131,6 +139,8 @@ export async function applyServerNote(server: {
         updatedAt: server.updated_at ?? new Date().toISOString(),
         deleted: server.deleted ? 1 : 0,
         dirty: 0,
+        authorId: String(server.author_id),
+        access: server.access,
     });
 }
 
@@ -173,6 +183,18 @@ export const regularNotes = computed<LocalNote[]>(() =>
     liveNotes.value.filter((note) => note.type === 'note'),
 );
 
+/** Regular notes the current user authored (drive the folder tree). */
+export const ownNotes = computed<LocalNote[]>(() =>
+    regularNotes.value.filter((note) => note.access === 'owner'),
+);
+
+/** Regular notes shared to the current user by a teammate. */
+export const sharedNotes = computed<LocalNote[]>(() =>
+    regularNotes.value
+        .filter((note) => note.access !== 'owner')
+        .sort((a, b) => a.title.localeCompare(b.title)),
+);
+
 /** Soft-deleted notes, most recently trashed first. */
 export const trashedNotes = computed<LocalNote[]>(() =>
     [...notes.values()]
@@ -188,7 +210,7 @@ export const pinnedNotes = computed<LocalNote[]>(() =>
 export const folders = computed<string[]>(() => {
     const set = new Set<string>(extraFolders.value);
 
-    for (const note of regularNotes.value) {
+    for (const note of ownNotes.value) {
         if (note.folder !== '') {
             const parts = note.folder.split('/');
 
@@ -252,6 +274,8 @@ export async function openCalendarNote(
         updatedAt: new Date().toISOString(),
         deleted: 0,
         dirty: 0,
+        authorId: currentUserId(),
+        access: 'owner',
     };
 
     await persist(note);
@@ -276,6 +300,8 @@ export async function createNote(attrs: {
         updatedAt: new Date().toISOString(),
         deleted: 0,
         dirty: 1,
+        authorId: currentUserId(),
+        access: 'owner',
     };
 
     await persist(note);
