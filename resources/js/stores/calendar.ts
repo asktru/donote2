@@ -1,7 +1,40 @@
 import { addDays, addMonths, addWeeks, endOfWeek, format, startOfDay, startOfWeek } from 'date-fns';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
+
+import { apiFetch } from '@/lib/api';
+import { appleCalendar } from '@/lib/appleCalendar';
 
 export type CalendarViewKind = 'day' | 'week' | 'month';
+
+/** One event on the calendar, normalized across Google and Apple. */
+export interface CalendarEvent {
+    key: string;
+    source: 'google' | 'apple';
+    calendarId: string;
+    calendarName: string;
+    title: string;
+    location: string | null;
+    color: string | null;
+    allDay: boolean;
+    /** ISO start; for all-day events a bare YYYY-MM-DD. */
+    start: string;
+    /** ISO end; for all-day events the exclusive end date. */
+    end: string;
+    htmlLink: string | null;
+}
+
+interface GoogleEventDto {
+    id: string;
+    calendar_id: string;
+    calendar_name: string;
+    summary: string;
+    location: string | null;
+    html_link: string | null;
+    color: string | null;
+    all_day: boolean;
+    start: string | null;
+    end: string | null;
+}
 
 /** Weeks start on Monday, matching the app's ISO-week date math elsewhere. */
 const WEEK_STARTS_ON = 1;
@@ -10,6 +43,27 @@ export const calendarView = ref<CalendarViewKind>('week');
 
 /** The day the current view is anchored on (local midnight). */
 export const anchor = ref<Date>(startOfDay(new Date()));
+
+const SECOND_ZONE_KEY = 'donote:calendar:second-zone';
+
+/** Optional IANA zone shown as a secondary axis in the week/day grid. */
+export const secondZone = ref<string | null>(
+    typeof localStorage !== 'undefined'
+        ? localStorage.getItem(SECOND_ZONE_KEY)
+        : null,
+);
+
+export function setSecondZone(zone: string | null): void {
+    secondZone.value = zone;
+
+    if (typeof localStorage !== 'undefined') {
+        if (zone) {
+            localStorage.setItem(SECOND_ZONE_KEY, zone);
+        } else {
+            localStorage.removeItem(SECOND_ZONE_KEY);
+        }
+    }
+}
 
 export function setCalendarView(view: CalendarViewKind): void {
     calendarView.value = view;
@@ -73,3 +127,112 @@ export const anchorLabel = computed<string>(() => {
         ? `${format(start, 'MMM d')} – ${format(end, 'd, yyyy')}`
         : `${format(start, 'MMM d')} – ${format(end, 'MMM d, yyyy')}`;
 });
+
+/* ---- Events ---------------------------------------------------------- */
+
+export const events = ref<CalendarEvent[]>([]);
+export const eventsLoading = ref(false);
+export const eventsFailed = ref(false);
+
+/** Monotonic guard so a slow response can't overwrite a newer range. */
+let requestSeq = 0;
+
+function mapGoogle(dto: GoogleEventDto): CalendarEvent | null {
+    if (dto.start === null || dto.end === null) {
+        return null;
+    }
+
+    return {
+        key: `google:${dto.calendar_id}:${dto.id}`,
+        source: 'google',
+        calendarId: dto.calendar_id,
+        calendarName: dto.calendar_name,
+        title: dto.summary || '(no title)',
+        location: dto.location,
+        color: dto.color,
+        allDay: dto.all_day,
+        start: dto.start,
+        end: dto.end,
+        htmlLink: dto.html_link,
+    };
+}
+
+async function fetchApple(startIso: string, endIso: string): Promise<CalendarEvent[]> {
+    if (appleCalendar === null) {
+        return [];
+    }
+
+    try {
+        const { status } = await appleCalendar.status();
+
+        if (status !== 'authorized') {
+            return [];
+        }
+
+        const calendars = await appleCalendar.calendars();
+        const colorById = new Map(calendars.map((c) => [c.id, c.color]));
+        const raw = await appleCalendar.events(startIso, endIso);
+
+        return raw.map((event) => ({
+            key: `apple:${event.id}`,
+            source: 'apple' as const,
+            calendarId: event.calendarId,
+            calendarName: event.calendarTitle,
+            title: event.title,
+            location: event.location,
+            color: colorById.get(event.calendarId) ?? null,
+            allDay: event.allDay,
+            start: event.start,
+            end: event.end,
+            htmlLink: null,
+        }));
+    } catch {
+        return [];
+    }
+}
+
+/** Load events for the currently visible range from Google + Apple. */
+export async function fetchEvents(): Promise<void> {
+    const { start, end } = visibleRange.value;
+    const startIso = start.toISOString();
+    const endIso = end.toISOString();
+    const seq = ++requestSeq;
+
+    eventsLoading.value = true;
+    eventsFailed.value = false;
+
+    try {
+        const [google, apple] = await Promise.all([
+            apiFetch<{ events: GoogleEventDto[] }>(
+                `/api/google/events?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`,
+            )
+                .then((res) => res.events.map(mapGoogle).filter((e): e is CalendarEvent => e !== null))
+                .catch(() => [] as CalendarEvent[]),
+            fetchApple(startIso, endIso),
+        ]);
+
+        if (seq !== requestSeq) {
+            return;
+        }
+
+        events.value = [...google, ...apple];
+    } catch {
+        if (seq === requestSeq) {
+            eventsFailed.value = true;
+            events.value = [];
+        }
+    } finally {
+        if (seq === requestSeq) {
+            eventsLoading.value = false;
+        }
+    }
+}
+
+/** Refetch whenever the visible range changes (view switch or navigation). */
+export function watchCalendarRange(): void {
+    watch(
+        () => [visibleRange.value.start.getTime(), visibleRange.value.end.getTime()],
+        () => void fetchEvents(),
+        { immediate: true },
+    );
+}
