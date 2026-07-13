@@ -33,7 +33,8 @@ class ApplyNoteChange
         $clientUpdatedAt = CarbonImmutable::parse($change['client_updated_at'])->min(now());
 
         $note = Note::withTrashed()
-            ->forWorkspace($team, $user)
+            ->visibleTo($team, $user)
+            ->with('shares')
             ->find($id);
 
         $status = 'applied';
@@ -61,6 +62,20 @@ class ApplyNoteChange
                 'status' => 'applied',
                 'note' => $this->create($team, $user, $type, $change, $clientUpdatedAt),
             ];
+        }
+
+        // Authorize the change against the caller's access to an existing note.
+        // Deleting or restoring is the author's alone; editing content needs
+        // write access.
+        $access = $note->accessFor($user);
+        $togglesTrash = $change['deleted'] !== $note->trashed();
+
+        if ($togglesTrash && ! $access->isOwner()) {
+            abort(403, 'Only the author can delete or restore this note.');
+        }
+
+        if (! $togglesTrash && ! $access->canWrite()) {
+            abort(403, 'You do not have write access to this note.');
         }
 
         $applies = $change['base_version'] === $note->version
