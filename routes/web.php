@@ -3,6 +3,7 @@
 use App\Http\Controllers\AiCompletionController;
 use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\CalendarEventController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GoogleCalendarController;
 use App\Http\Controllers\MemoTranscriptionController;
@@ -73,6 +74,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('api/google/accounts/{googleAccount}', [GoogleCalendarController::class, 'update'])->name('google.accounts.update');
     Route::delete('api/google/accounts/{googleAccount}', [GoogleCalendarController::class, 'destroy'])->name('google.accounts.destroy');
     Route::get('api/google/events', [GoogleCalendarController::class, 'events'])->name('google.events');
+
+    // Calendar event write + collaboration (Google full-access scope).
+    Route::post('api/google/events', [CalendarEventController::class, 'store'])->name('google.events.store');
+    Route::patch('api/google/events', [CalendarEventController::class, 'update'])->name('google.events.update');
+    Route::delete('api/google/events', [CalendarEventController::class, 'destroy'])->name('google.events.destroy');
+    Route::post('api/google/freebusy', [CalendarEventController::class, 'freeBusy'])->name('google.freebusy');
+    Route::get('api/google/overlay', [CalendarEventController::class, 'overlay'])->name('google.overlay');
 });
 
 require __DIR__.'/settings.php';

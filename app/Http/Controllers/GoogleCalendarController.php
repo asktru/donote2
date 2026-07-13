@@ -26,7 +26,9 @@ class GoogleCalendarController extends Controller
             'redirect_uri' => route('google.callback'),
             'response_type' => 'code',
             'scope' => implode(' ', [
-                'https://www.googleapis.com/auth/calendar.readonly',
+                // Full calendar access: read + create/edit/delete events,
+                // free/busy, and reading colleagues' shared calendars.
+                'https://www.googleapis.com/auth/calendar',
                 'https://www.googleapis.com/auth/userinfo.email',
             ]),
             'access_type' => 'offline',

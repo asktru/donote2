@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 
 /**
  * @property int $id
@@ -46,6 +47,31 @@ class GoogleAccount extends Model
     {
         return $this->token_expires_at === null
             || $this->token_expires_at->isBefore(now()->addMinutes(2));
+    }
+
+    /**
+     * Refresh the access token when it is about to expire (no-op otherwise).
+     */
+    public function ensureFreshToken(): void
+    {
+        if (! $this->tokenNeedsRefresh() || $this->refresh_token === null) {
+            return;
+        }
+
+        $tokens = Http::asForm()
+            ->post('https://oauth2.googleapis.com/token', [
+                'client_id' => config('services.google.client_id'),
+                'client_secret' => config('services.google.client_secret'),
+                'refresh_token' => $this->refresh_token,
+                'grant_type' => 'refresh_token',
+            ])
+            ->throw()
+            ->json();
+
+        $this->update([
+            'access_token' => $tokens['access_token'],
+            'token_expires_at' => now()->addSeconds((int) ($tokens['expires_in'] ?? 3600)),
+        ]);
     }
 
     /**

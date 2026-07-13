@@ -37,7 +37,7 @@ class FetchGoogleEvents
      */
     protected function eventsForAccount(GoogleAccount $account, Carbon $start, Carbon $end): array
     {
-        $this->refreshTokenIfNeeded($account);
+        $account->ensureFreshToken();
 
         $calendars = collect($account->calendars ?? [])
             ->filter(fn (array $calendar): bool => $calendar['selected'] ?? false);
@@ -101,30 +101,5 @@ class FetchGoogleEvents
             'start' => $allDay ? $item['start']['date'] : ($item['start']['dateTime'] ?? null),
             'end' => $allDay ? $item['end']['date'] : ($item['end']['dateTime'] ?? null),
         ];
-    }
-
-    /**
-     * Refresh the account's access token when it is about to expire.
-     */
-    protected function refreshTokenIfNeeded(GoogleAccount $account): void
-    {
-        if (! $account->tokenNeedsRefresh() || $account->refresh_token === null) {
-            return;
-        }
-
-        $tokens = Http::asForm()
-            ->post('https://oauth2.googleapis.com/token', [
-                'client_id' => config('services.google.client_id'),
-                'client_secret' => config('services.google.client_secret'),
-                'refresh_token' => $account->refresh_token,
-                'grant_type' => 'refresh_token',
-            ])
-            ->throw()
-            ->json();
-
-        $account->update([
-            'access_token' => $tokens['access_token'],
-            'token_expires_at' => now()->addSeconds((int) ($tokens['expires_in'] ?? 3600)),
-        ]);
     }
 }
