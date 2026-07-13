@@ -21,7 +21,8 @@ class NoteSyncController extends Controller
         $since = (int) $request->query('since', '0');
 
         $notes = Note::withTrashed()
-            ->forWorkspace($current_team, $request->user())
+            ->visibleTo($current_team, $request->user())
+            ->with('shares')
             ->where('server_seq', '>', $since)
             ->orderBy('server_seq')
             ->limit(500)

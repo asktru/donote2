@@ -18,6 +18,9 @@ class NoteResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $user = $request->user();
+        $isAuthor = $user !== null && $this->user_id === $user->id;
+
         return [
             'id' => $this->id,
             'type' => $this->type->value,
@@ -30,6 +33,20 @@ class NoteResource extends JsonResource
             'server_seq' => $this->server_seq,
             'updated_at' => $this->updated_at?->toISOString(),
             'deleted' => $this->trashed(),
+            'author_id' => $this->user_id,
+            'access' => $user !== null ? $this->accessFor($user)->value : 'none',
+            // Only the author receives the recipient list (for the share UI).
+            $this->mergeWhen($isAuthor, fn (): array => [
+                'sharing' => [
+                    'team_readable' => $this->team_readable,
+                    'shares' => $this->shares
+                        ->map(fn ($share): array => [
+                            'user_id' => $share->user_id,
+                            'access' => $share->access,
+                        ])
+                        ->values(),
+                ],
+            ]),
         ];
     }
 }
