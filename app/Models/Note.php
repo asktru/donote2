@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\NoteAccess;
 use App\Enums\NoteType;
 use Carbon\CarbonImmutable;
 use Database\Factories\NoteFactory;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Laravel\Scout\Searchable;
 
@@ -23,6 +25,7 @@ use Laravel\Scout\Searchable;
  * @property string $title
  * @property string $content
  * @property string $folder
+ * @property bool $team_readable
  * @property bool $pinned
  * @property int $version
  * @property int $server_seq
@@ -32,7 +35,7 @@ use Laravel\Scout\Searchable;
  * @property-read Team $team
  * @property-read User $user
  */
-#[Fillable(['id', 'team_id', 'user_id', 'type', 'date_key', 'title', 'content', 'folder', 'pinned', 'version', 'server_seq'])]
+#[Fillable(['id', 'team_id', 'user_id', 'type', 'date_key', 'title', 'content', 'folder', 'team_readable', 'pinned', 'version', 'server_seq'])]
 class Note extends Model
 {
     /** @use HasFactory<NoteFactory> */
@@ -48,6 +51,7 @@ class Note extends Model
         'title' => '',
         'content' => '',
         'folder' => '',
+        'team_readable' => false,
         'pinned' => false,
         'version' => 1,
         'server_seq' => 0,
@@ -74,6 +78,16 @@ class Note extends Model
     }
 
     /**
+     * The explicit per-teammate shares on this note.
+     *
+     * @return HasMany<NoteShare, $this>
+     */
+    public function shares(): HasMany
+    {
+        return $this->hasMany(NoteShare::class);
+    }
+
+    /**
      * Scope the query to a single user's workspace within a team.
      *
      * @param  Builder<$this>  $query
@@ -82,6 +96,54 @@ class Note extends Model
     public function scopeForWorkspace(Builder $query, Team $team, User $user): Builder
     {
         return $query->whereBelongsTo($team)->whereBelongsTo($user);
+    }
+
+    /**
+     * Scope to notes a user may see within a team: their own, any note the
+     * team may read, or a note explicitly shared with them.
+     *
+     * @param  Builder<$this>  $query
+     * @return Builder<$this>
+     */
+    public function scopeVisibleTo(Builder $query, Team $team, User $user): Builder
+    {
+        return $query->whereBelongsTo($team)->where(function (Builder $q) use ($user) {
+            $q->where('user_id', $user->id)
+                ->orWhere('team_readable', true)
+                ->orWhereHas('shares', fn (Builder $s) => $s->where('user_id', $user->id));
+        });
+    }
+
+    /**
+     * Resolve a viewer's effective access to this note. Eager-load `shares`
+     * before calling in a loop to avoid N+1 queries.
+     */
+    public function accessFor(User $user): NoteAccess
+    {
+        if ($this->user_id === $user->id) {
+            return NoteAccess::Owner;
+        }
+
+        $share = $this->shares->firstWhere('user_id', $user->id);
+
+        if ($share !== null) {
+            return $share->access === 'write' ? NoteAccess::Write : NoteAccess::Read;
+        }
+
+        return $this->team_readable ? NoteAccess::Read : NoteAccess::None;
+    }
+
+    /**
+     * Advance the global change sequence for this note without touching its
+     * content timestamps — used when only sharing changes, so recipients
+     * re-pull the note on their next sync cycle.
+     */
+    public function touchServerSeq(): void
+    {
+        $this->server_seq = self::nextServerSeq();
+        $this->timestamps = false;
+        $this->save();
+        $this->timestamps = true;
     }
 
     /**
@@ -129,6 +191,7 @@ class Note extends Model
     {
         return [
             'type' => NoteType::class,
+            'team_readable' => 'boolean',
             'pinned' => 'boolean',
             'version' => 'integer',
             'server_seq' => 'integer',
