@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { ChevronLeft, ChevronRight, Globe, SlidersHorizontal } from '@lucide/vue';
 import { addDays, startOfDay } from 'date-fns';
-import { computed, onMounted } from 'vue';
+import { computed, onBeforeUnmount, onMounted } from 'vue';
 
 import MonthView from '@/components/calendar/MonthView.vue';
 import TimeGridView from '@/components/calendar/TimeGridView.vue';
@@ -14,6 +14,7 @@ import {
     DropdownMenuLabel,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { isMacDesktopShell } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import {
     anchor,
@@ -91,19 +92,59 @@ function openDay(day: Date): void {
     setCalendarView('day');
 }
 
+function onKeydown(event: KeyboardEvent): void {
+    // ⌘⌃1 Notes / ⌘⌃2 Calendar — switch top-level section.
+    if (event.metaKey && event.ctrlKey && (event.key === '1' || event.key === '2')) {
+        event.preventDefault();
+
+        if (event.key === '1') {
+            router.visit(notesHref.value);
+        }
+
+        return;
+    }
+
+    // ⌘1/2/3 — Day / Week / Month (calendar page only).
+    if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.shiftKey &&
+        !event.altKey
+    ) {
+        const view = { '1': 'day', '2': 'week', '3': 'month' }[event.key];
+
+        if (view) {
+            event.preventDefault();
+            setCalendarView(view as 'day' | 'week' | 'month');
+        }
+    }
+}
+
 onMounted(() => {
     setTeamMembers(props.members);
     initCalendarPrefs(props.workspace.teamSlug);
     watchCalendarRange();
+    window.addEventListener('keydown', onKeydown);
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('keydown', onKeydown);
 });
 </script>
 
 <template>
     <Head title="Calendar" />
 
-    <div class="flex h-screen min-h-0 flex-col bg-background text-foreground">
+    <div
+        class="flex h-dvh min-h-0 flex-col bg-background text-foreground pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+    >
         <header
-            class="flex h-14 shrink-0 items-center gap-3 border-b border-border/60 px-4"
+            :class="
+                cn(
+                    'flex h-14 shrink-0 items-center gap-3 border-b border-border/60 px-4',
+                    // Clear the macOS traffic lights in the Electron shell.
+                    isMacDesktopShell && 'pl-20',
+                )
+            "
         >
             <nav class="flex items-center gap-1 text-sm">
                 <Link

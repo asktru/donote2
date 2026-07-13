@@ -77,7 +77,13 @@ const cells = computed(() =>
             <div
                 v-for="cell in cells"
                 :key="cell.day.toISOString()"
-                class="min-h-0 min-w-0 border-r border-b border-border/30 p-1"
+                :class="
+                    cn(
+                        'min-h-0 min-w-0 border-r border-b border-border/30 p-1',
+                        // Recede days from the previous/next month.
+                        cell.inMonth ? 'bg-background' : 'bg-muted/25',
+                    )
+                "
             >
                 <button
                     type="button"

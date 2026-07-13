@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import AiPromptDialog from '@/components/notes/AiPromptDialog.vue';
@@ -228,6 +228,22 @@ function onKeydown(event: KeyboardEvent): void {
     ) {
         event.preventDefault();
         void revealCurrentNote();
+
+        return;
+    }
+
+    // ⌘⌃1 Notes / ⌘⌃2 Calendar — top-level section switch (handle before the
+    // ⌘1-5 calendar-note shortcuts so the combos don't collide).
+    if (
+        event.metaKey &&
+        event.ctrlKey &&
+        (event.key === '1' || event.key === '2')
+    ) {
+        event.preventDefault();
+
+        if (event.key === '2') {
+            router.visit(`/${props.workspace.teamSlug}/calendar`);
+        }
 
         return;
     }
