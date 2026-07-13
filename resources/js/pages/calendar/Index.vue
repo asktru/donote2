@@ -7,6 +7,7 @@ import { computed, onBeforeUnmount, onMounted } from 'vue';
 import EventDetailPanel from '@/components/calendar/EventDetailPanel.vue';
 import MonthView from '@/components/calendar/MonthView.vue';
 import TimeGridView from '@/components/calendar/TimeGridView.vue';
+import RecordingIndicator from '@/components/notes/RecordingIndicator.vue';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -362,5 +363,6 @@ onBeforeUnmount(() => {
         </div>
 
         <EventDetailPanel />
+        <RecordingIndicator />
     </div>
 </template>

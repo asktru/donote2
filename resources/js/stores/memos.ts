@@ -51,6 +51,7 @@ let active: ActiveRecording | null = null;
 let db: WorkspaceDb | null = null;
 let uploaderTimer: ReturnType<typeof setInterval> | null = null;
 let elapsedTimer: ReturnType<typeof setInterval> | null = null;
+let booted = false;
 const uploadsInFlight = new Set<string>();
 
 export const isRecording = ref(false);
@@ -653,27 +654,38 @@ async function adoptOrphanedGroups(): Promise<void> {
     }
 }
 
-export function startMemoUploader(): void {
-    void adoptOrphanedGroups().then(refreshQueue).then(processQueue);
-
-    window.addEventListener('online', () => void processQueue());
-
-    if (uploaderTimer === null) {
-        uploaderTimer = setInterval(() => void processQueue(), 30000);
-    }
-}
-
-export function stopMemoUploader(): void {
-    if (uploaderTimer !== null) {
-        clearInterval(uploaderTimer);
-        uploaderTimer = null;
-    }
-
-    // Deliberately leaves saved parts in place: an accidental tab close
-    // during a long recording should not discard captured audio.
+/**
+ * A real page unload (reload / quit) should stop and persist an active
+ * recording so captured audio isn't lost. An in-app navigation must NOT:
+ * the recorder lives at module scope and keeps running across Inertia page
+ * visits, which is what makes recording persistent everywhere in the app.
+ */
+function handlePageHide(): void {
     if (active !== null) {
         active.recorder.onstop = null;
         active.recorder.stop();
         teardownRecording();
+    }
+}
+
+/**
+ * Boot the memo engine once per session: recover orphaned groups, resume
+ * uploads, and keep the recorder alive across page navigations. Safe to call
+ * from every page's onMounted — subsequent calls are no-ops.
+ */
+export function startMemoUploader(): void {
+    if (booted) {
+        return;
+    }
+
+    booted = true;
+
+    void adoptOrphanedGroups().then(refreshQueue).then(processQueue);
+
+    window.addEventListener('online', () => void processQueue());
+    window.addEventListener('pagehide', handlePageHide);
+
+    if (uploaderTimer === null) {
+        uploaderTimer = setInterval(() => void processQueue(), 30000);
     }
 }

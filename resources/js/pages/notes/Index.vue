@@ -14,6 +14,7 @@ import NotePane from '@/components/notes/NotePane.vue';
 import NotesSidebar from '@/components/notes/NotesSidebar.vue';
 import PromptDialog from '@/components/notes/PromptDialog.vue';
 import QuickCaptureFab from '@/components/notes/QuickCaptureFab.vue';
+import RecordingIndicator from '@/components/notes/RecordingIndicator.vue';
 import ReminderHost from '@/components/notes/ReminderHost.vue';
 import RemindersView from '@/components/notes/RemindersView.vue';
 import SearchDialog from '@/components/notes/SearchDialog.vue';
@@ -32,11 +33,7 @@ import type { CalendarKind } from '@/core/dates';
 import { isMacDesktopShell, isNarrowViewport } from '@/lib/platform';
 import { resolveSwipeAction } from '@/lib/swipeActions';
 import { aiDialogOpen } from '@/stores/aiPrompts';
-import {
-    startMemoUploader,
-    stopMemoUploader,
-    toggleRecording,
-} from '@/stores/memos';
+import { startMemoUploader, toggleRecording } from '@/stores/memos';
 import { startMoveToNote } from '@/stores/move';
 import { promptText } from '@/stores/prompt';
 import { startSync, stopSync } from '@/stores/sync';
@@ -359,7 +356,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
     window.removeEventListener('keydown', onKeydown);
-    stopMemoUploader();
     stopSync();
 });
 </script>
@@ -545,6 +541,7 @@ onBeforeUnmount(() => {
                 <SyncedLineLocations />
                 <PromptDialog />
                 <EditorToolbar />
+                <RecordingIndicator />
                 <ReminderHost
                     @open-note="(id, line) => handleOpenNote(id, false, line)"
                 />
