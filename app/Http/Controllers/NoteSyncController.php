@@ -52,6 +52,26 @@ class NoteSyncController extends Controller
     }
 
     /**
+     * A snapshot of the caller's server-side state, so a client can compare
+     * it against its local cache and spot a gap (missing notes, a stale
+     * cursor). `visible_count` counts live notes; `max_seq` is the highest
+     * change cursor the caller could ever pull.
+     */
+    public function stats(Request $request, Team $current_team): JsonResponse
+    {
+        $user = $request->user();
+
+        return response()->json([
+            'visible_count' => Note::query()
+                ->visibleTo($current_team, $user)
+                ->count(),
+            'max_seq' => (int) Note::withTrashed()
+                ->visibleTo($current_team, $user)
+                ->max('server_seq'),
+        ]);
+    }
+
+    /**
      * Push a batch of local note changes to the server.
      */
     public function store(SyncNotesRequest $request, Team $current_team, ApplyNoteChange $applyNoteChange): JsonResponse

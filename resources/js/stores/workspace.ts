@@ -151,6 +151,28 @@ export async function removeLocalNote(id: string): Promise<void> {
     await requireDb().notes.delete(id);
 }
 
+/**
+ * Drop every clean (fully synced) note from the local cache so the next pull
+ * re-downloads them from scratch. Notes with unpushed edits (`dirty === 1`)
+ * are kept — a rebuild must never discard changes the server hasn't seen.
+ * Returns the number of notes removed.
+ */
+export async function clearCleanLocalNotes(): Promise<number> {
+    const cleanIds = [...notes.values()]
+        .filter((note) => note.dirty === 0)
+        .map((note) => note.id);
+
+    for (const id of cleanIds) {
+        notes.delete(id);
+        parseCache.delete(id);
+        metaCache.delete(id);
+    }
+
+    await requireDb().notes.bulkDelete(cleanIds);
+
+    return cleanIds.length;
+}
+
 async function mutate(
     id: string,
     changes: Partial<LocalNote>,

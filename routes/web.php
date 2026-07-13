@@ -53,6 +53,7 @@ Route::prefix('api/{current_team}')
         Route::get('notes/sync', [NoteSyncController::class, 'index'])->name('notes.sync.pull');
         Route::post('notes/sync', [NoteSyncController::class, 'store'])->name('notes.sync.push');
         Route::get('notes/visible-ids', [NoteSyncController::class, 'visibleIds'])->name('notes.visible-ids');
+        Route::get('notes/sync-stats', [NoteSyncController::class, 'stats'])->name('notes.sync.stats');
         Route::get('notes/{note}/share', [NoteShareController::class, 'show'])->name('notes.share.show');
         Route::put('notes/{note}/share', [NoteShareController::class, 'update'])->name('notes.share.update');
         Route::get('search', NoteSearchController::class)->name('notes.search');

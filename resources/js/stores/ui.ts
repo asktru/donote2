@@ -30,6 +30,8 @@ export const currentView = ref<MainView>({
 export const splitView = ref<SplitView | null>(null);
 export const searchOpen = ref(false);
 export const shortcutsOpen = ref(false);
+/** Sync diagnostics & recovery panel. */
+export const syncPanelOpen = ref(false);
 /** Off-canvas sidebar state on small screens. */
 export const mobileSidebarOpen = ref(false);
 /**

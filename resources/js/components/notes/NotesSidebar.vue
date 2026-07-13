@@ -59,6 +59,7 @@ import {
     openView,
     searchOpen,
     shortcutsOpen,
+    syncPanelOpen,
 } from '@/stores/ui';
 import type { MainView } from '@/stores/ui';
 import {
@@ -183,18 +184,25 @@ const syncLabel = computed(() => {
             <TeamSwitcher in-header class="min-w-0 flex-1" />
             <Tooltip>
                 <TooltipTrigger as-child>
-                    <span
-                        :class="
-                            cn(
-                                'ml-1 inline-block size-2 shrink-0 rounded-full',
-                                syncStatus === 'synced' && 'bg-emerald-500',
-                                syncStatus === 'syncing' &&
-                                    'animate-pulse bg-amber-400',
-                                syncStatus === 'offline' && 'bg-zinc-400',
-                                syncStatus === 'error' && 'bg-red-500',
-                            )
-                        "
-                    />
+                    <button
+                        type="button"
+                        class="ml-1 flex size-5 shrink-0 items-center justify-center rounded-full hover:bg-muted"
+                        aria-label="Open sync panel"
+                        @click="syncPanelOpen = true"
+                    >
+                        <span
+                            :class="
+                                cn(
+                                    'inline-block size-2 rounded-full',
+                                    syncStatus === 'synced' && 'bg-emerald-500',
+                                    syncStatus === 'syncing' &&
+                                        'animate-pulse bg-amber-400',
+                                    syncStatus === 'offline' && 'bg-zinc-400',
+                                    syncStatus === 'error' && 'bg-red-500',
+                                )
+                            "
+                        />
+                    </button>
                 </TooltipTrigger>
                 <TooltipContent side="right">{{ syncLabel }}</TooltipContent>
             </Tooltip>

@@ -19,6 +19,7 @@ import RemindersView from '@/components/notes/RemindersView.vue';
 import SearchDialog from '@/components/notes/SearchDialog.vue';
 import ShortcutsDialog from '@/components/notes/ShortcutsDialog.vue';
 import SyncedLineLocations from '@/components/notes/SyncedLineLocations.vue';
+import SyncPanel from '@/components/notes/SyncPanel.vue';
 import TasksView from '@/components/notes/TasksView.vue';
 import TrashView from '@/components/notes/TrashView.vue';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -537,6 +538,7 @@ onBeforeUnmount(() => {
                     @open-calendar="(key) => handleOpenCalendar(key)"
                 />
                 <ShortcutsDialog />
+                <SyncPanel />
                 <AiPromptDialog />
                 <ImageLightbox />
                 <FilePreview />
