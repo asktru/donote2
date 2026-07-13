@@ -20,6 +20,7 @@ const groups: ShortcutGroup[] = [
                 '⌘1 … ⌘5',
                 "Today's daily / weekly / monthly / quarterly / yearly note",
             ],
+            ['⌘⌃1 / ⌘⌃2', 'Switch to Notes / Calendar'],
             ['⌘⌥← / ⌘⌥→', 'Focus main / split pane'],
             ['Esc', 'Close split pane'],
             ['⌘⇧G', 'Connections graph for the current note (split)'],
@@ -30,6 +31,14 @@ const groups: ShortcutGroup[] = [
             ['⌥-click token', 'Open in split pane'],
             ['⌘⏎ / ⌘⌥⏎', 'Open token under cursor (main / split)'],
             ['⌘/', 'Show this cheatsheet'],
+        ],
+    },
+    {
+        title: 'Calendar',
+        shortcuts: [
+            ['⌘1 / ⌘2 / ⌘3', 'Day / Week / Month view'],
+            ['← / →', 'Previous / next period'],
+            ['Click an event', 'Open its details panel'],
         ],
     },
     {

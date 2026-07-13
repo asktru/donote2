@@ -5,16 +5,31 @@ import { computed } from 'vue';
 import { cn } from '@/lib/utils';
 import type { CalendarEvent } from '@/stores/calendar';
 
+type GridEvent = CalendarEvent & { hidden?: boolean };
+
 const props = defineProps<{
     days: Date[];
     anchorMonth: number;
-    events: CalendarEvent[];
+    events: GridEvent[];
+    showHidden?: boolean;
 }>();
 
 const emit = defineEmits<{
-    'open-event': [event: CalendarEvent];
+    'open-event': [event: GridEvent];
     'open-day': [day: Date];
 }>();
+
+/** Dim declined, soften tentative — matching the time grid. */
+function rsvpClass(event: GridEvent): string {
+    switch (event.responseStatus) {
+        case 'declined':
+            return 'line-through opacity-50';
+        case 'tentative':
+            return 'italic opacity-70';
+        default:
+            return '';
+    }
+}
 
 const MAX_CHIPS = 3;
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -25,9 +40,13 @@ function parseAllDay(value: string): Date {
     return new Date(y, (m ?? 1) - 1, d ?? 1);
 }
 
-function eventsFor(day: Date): CalendarEvent[] {
+function eventsFor(day: Date): GridEvent[] {
     return props.events
         .filter((event) => {
+            if (event.hidden && !props.showHidden) {
+                return false;
+            }
+
             if (event.allDay) {
                 return (
                     day >= startOfDay(parseAllDay(event.start)) &&
@@ -107,7 +126,12 @@ const cells = computed(() =>
                         v-for="event in cell.chips"
                         :key="event.key"
                         type="button"
-                        class="flex w-full items-center gap-1 truncate rounded px-1 text-left text-[10px] hover:bg-muted/60"
+                        :class="
+                            cn(
+                                'flex w-full items-center gap-1 truncate rounded px-1 text-left text-[10px] hover:bg-muted/60',
+                                rsvpClass(event),
+                            )
+                        "
                         @click="emit('open-event', event)"
                     >
                         <span

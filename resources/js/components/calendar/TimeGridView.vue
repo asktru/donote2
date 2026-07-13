@@ -15,14 +15,19 @@ import { readableTextColor } from '@/core/color';
 import { cn } from '@/lib/utils';
 import type { CalendarEvent } from '@/stores/calendar';
 
+/** Events carry a `hidden` flag from the store's displayEvents. */
+type GridEvent = CalendarEvent & { hidden?: boolean };
+
 const props = defineProps<{
     days: Date[];
-    events: CalendarEvent[];
+    events: GridEvent[];
     /** IANA zone for the secondary time axis, e.g. "Europe/London". */
     secondZone?: string | null;
+    /** Render hidden events normally (dimmed) instead of as a thin strip. */
+    showHidden?: boolean;
 }>();
 
-const emit = defineEmits<{ 'open-event': [event: CalendarEvent] }>();
+const emit = defineEmits<{ 'open-event': [event: GridEvent] }>();
 
 const HOUR_HEIGHT = 48;
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
@@ -37,16 +42,42 @@ function parseAllDay(value: string): Date {
     return new Date(y, (m ?? 1) - 1, d ?? 1);
 }
 
+/** True when an event should collapse to a thin declutter strip. */
+function isStripped(event: GridEvent): boolean {
+    return (event.hidden ?? false) && !props.showHidden;
+}
+
+/** RSVP-derived styling: dim declined, soften tentative, outline pending. */
+function rsvpClass(event: GridEvent): string {
+    switch (event.responseStatus) {
+        case 'declined':
+            return 'opacity-40 line-through';
+        case 'tentative':
+            return 'opacity-70 italic';
+        case 'needsAction':
+            return 'border-2 border-dashed opacity-90';
+        default:
+            return '';
+    }
+}
+
 interface PositionedEvent {
-    event: CalendarEvent;
+    event: GridEvent;
     top: number;
     height: number;
     leftPct: number;
     widthPct: number;
 }
 
-/** Timed events that intersect a given day, laid out in overlap columns. */
-function timedFor(day: Date): PositionedEvent[] {
+interface StripEvent {
+    event: GridEvent;
+    top: number;
+    height: number;
+    offset: number;
+}
+
+/** Timed events for a day, split into laid-out blocks and declutter strips. */
+function timedFor(day: Date): { blocks: PositionedEvent[]; strips: StripEvent[] } {
     const dayStart = startOfDay(day);
     const dayEnd = addDays(dayStart, 1);
 
@@ -61,19 +92,32 @@ function timedFor(day: Date): PositionedEvent[] {
             return { event, startMin, endMin: Math.max(endMin, startMin + 20) };
         });
 
-    return layoutDayColumns(items).map(({ item, lane, lanes }) => ({
-        event: item.event,
-        top: (item.startMin / 60) * HOUR_HEIGHT,
-        height: ((item.endMin - item.startMin) / 60) * HOUR_HEIGHT,
-        leftPct: (lane / lanes) * 100,
-        widthPct: (1 / lanes) * 100,
-    }));
+    const strips = items
+        .filter((item) => isStripped(item.event))
+        .map((item, offset) => ({
+            event: item.event,
+            top: (item.startMin / 60) * HOUR_HEIGHT,
+            height: ((item.endMin - item.startMin) / 60) * HOUR_HEIGHT,
+            offset,
+        }));
+
+    const blocks = layoutDayColumns(items.filter((item) => !isStripped(item.event))).map(
+        ({ item, lane, lanes }) => ({
+            event: item.event,
+            top: (item.startMin / 60) * HOUR_HEIGHT,
+            height: ((item.endMin - item.startMin) / 60) * HOUR_HEIGHT,
+            leftPct: (lane / lanes) * 100,
+            widthPct: (1 / lanes) * 100,
+        }),
+    );
+
+    return { blocks, strips };
 }
 
-/** All-day events covering a given day. */
-function allDayFor(day: Date): CalendarEvent[] {
+/** All-day events covering a given day (decluttered ones dropped). */
+function allDayFor(day: Date): GridEvent[] {
     return props.events.filter((event) => {
-        if (!event.allDay) {
+        if (!event.allDay || isStripped(event)) {
             return false;
         }
 
@@ -178,7 +222,12 @@ onMounted(() => {
                     v-for="event in col.allDay"
                     :key="event.key"
                     type="button"
-                    class="block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px]"
+                    :class="
+                        cn(
+                            'block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px]',
+                            rsvpClass(event),
+                        )
+                    "
                     :style="{
                         backgroundColor: event.color ?? 'var(--primary)',
                         color: readableTextColor(event.color),
@@ -236,11 +285,32 @@ onMounted(() => {
                         />
                     </div>
 
+                    <!-- Decluttered (hidden) events: a thin strip at the left. -->
                     <button
-                        v-for="pos in col.timed"
+                        v-for="strip in col.timed.strips"
+                        :key="strip.event.key"
+                        type="button"
+                        class="absolute w-1 rounded-sm opacity-70 hover:opacity-100"
+                        :style="{
+                            top: `${strip.top}px`,
+                            height: `${strip.height}px`,
+                            left: `${strip.offset * 5}px`,
+                            backgroundColor: strip.event.color ?? 'var(--primary)',
+                        }"
+                        :title="strip.event.title"
+                        @click="emit('open-event', strip.event)"
+                    />
+
+                    <button
+                        v-for="pos in col.timed.blocks"
                         :key="pos.event.key"
                         type="button"
-                        class="absolute flex flex-col items-start gap-0.5 overflow-hidden rounded-md border border-black/10 px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm"
+                        :class="
+                            cn(
+                                'absolute flex flex-col items-start gap-0.5 overflow-hidden rounded-md border border-black/10 px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm',
+                                rsvpClass(pos.event),
+                            )
+                        "
                         :style="{
                             top: `${pos.top}px`,
                             height: `${pos.height}px`,

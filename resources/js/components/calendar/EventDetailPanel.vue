@@ -1,12 +1,52 @@
 <script setup lang="ts">
-import { CalendarClock, Check, ExternalLink, MapPin, Video, X } from '@lucide/vue';
+import {
+    CalendarClock,
+    Check,
+    ExternalLink,
+    Eye,
+    EyeOff,
+    MapPin,
+    Video,
+    X,
+} from '@lucide/vue';
 import { format, parseISO } from 'date-fns';
 import { computed } from 'vue';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { closeEventDetail, selectedEvent } from '@/stores/calendar';
+import {
+    closeEventDetail,
+    hideEvent,
+    isEventHidden,
+    selectedEvent,
+    unhideEvent,
+} from '@/stores/calendar';
 import type { RsvpStatus } from '@/stores/calendar';
+
+const isHidden = computed<boolean>(() =>
+    selectedEvent.value ? isEventHidden(selectedEvent.value) : false,
+);
+
+function hideOne(): void {
+    if (selectedEvent.value) {
+        hideEvent(selectedEvent.value, 'one');
+        closeEventDetail();
+    }
+}
+
+function hideSeries(): void {
+    if (selectedEvent.value) {
+        hideEvent(selectedEvent.value, 'series');
+        closeEventDetail();
+    }
+}
+
+function unhide(): void {
+    if (selectedEvent.value) {
+        unhideEvent(selectedEvent.value);
+        closeEventDetail();
+    }
+}
 
 function parseAllDay(value: string): Date {
     const [y, m, d] = value.split('-').map(Number);
@@ -147,6 +187,38 @@ const RSVP_CLASS: Record<RsvpStatus, string> = {
                         · {{ selectedEvent.accountEmail }}</span
                     >
                 </p>
+
+                <div class="flex flex-wrap gap-2 border-t border-border/60 pt-3">
+                    <template v-if="isHidden">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            class="h-8 gap-1.5 text-xs"
+                            @click="unhide"
+                        >
+                            <Eye class="size-3.5" /> Unhide
+                        </Button>
+                    </template>
+                    <template v-else>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            class="h-8 gap-1.5 text-xs"
+                            @click="hideOne"
+                        >
+                            <EyeOff class="size-3.5" /> Hide this event
+                        </Button>
+                        <Button
+                            v-if="selectedEvent.seriesId"
+                            variant="outline"
+                            size="sm"
+                            class="h-8 gap-1.5 text-xs"
+                            @click="hideSeries"
+                        >
+                            <EyeOff class="size-3.5" /> Hide all in series
+                        </Button>
+                    </template>
+                </div>
             </div>
 
             <footer

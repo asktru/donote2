@@ -13,6 +13,7 @@ import {
     DropdownMenuCheckboxItem,
     DropdownMenuContent,
     DropdownMenuLabel,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { isMacDesktopShell } from '@/lib/platform';
@@ -26,11 +27,14 @@ import {
     eventsFailed,
     goToday,
     hiddenCalendars,
+    hideDeclined,
     initCalendarPrefs,
     openEventDetail,
     secondZone,
     setCalendarView,
+    setHideDeclined,
     setSecondZone,
+    showHidden,
     stepCalendar,
     toggleCalendar,
     visibleRange,
@@ -116,6 +120,25 @@ function onKeydown(event: KeyboardEvent): void {
             event.preventDefault();
             setCalendarView(view as 'day' | 'week' | 'month');
         }
+
+        return;
+    }
+
+    // ← / → — step to the previous / next period (ignore while typing).
+    const target = event.target as HTMLElement | null;
+    const typing =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLSelectElement ||
+        target instanceof HTMLTextAreaElement;
+
+    if (!typing && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            stepCalendar(-1);
+        } else if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            stepCalendar(1);
+        }
     }
 }
 
@@ -190,14 +213,14 @@ onBeforeUnmount(() => {
             <h1 class="text-base font-semibold">{{ anchorLabel }}</h1>
 
             <div class="ml-auto flex items-center gap-2">
-                <DropdownMenu v-if="calendarList.length > 0">
+                <DropdownMenu>
                     <DropdownMenuTrigger as-child>
                         <Button
                             variant="ghost"
                             size="icon"
                             class="size-8 text-muted-foreground"
-                            aria-label="Choose calendars"
-                            title="Show / hide calendars"
+                            aria-label="Calendar options"
+                            title="Show / hide calendars and events"
                         >
                             <SlidersHorizontal class="size-4" />
                         </Button>
@@ -206,28 +229,51 @@ onBeforeUnmount(() => {
                         <DropdownMenuLabel
                             class="text-[11px] tracking-wide text-muted-foreground uppercase"
                         >
-                            Calendars
+                            Filters
                         </DropdownMenuLabel>
                         <DropdownMenuCheckboxItem
-                            v-for="calendar in calendarList"
-                            :key="calendar.id"
-                            :model-value="!hiddenCalendars.has(calendar.id)"
+                            :model-value="hideDeclined"
                             @select.prevent
-                            @update:model-value="toggleCalendar(calendar.id)"
+                            @update:model-value="setHideDeclined($event)"
                         >
-                            <span
-                                class="mr-1.5 inline-block size-2 shrink-0 rounded-full"
-                                :style="{
-                                    backgroundColor: calendar.color ?? 'var(--primary)',
-                                }"
-                            />
-                            <span class="min-w-0 flex-1 truncate">{{
-                                calendar.name
-                            }}</span>
-                            <span class="ml-2 text-[10px] text-muted-foreground">
-                                {{ calendar.source }}
-                            </span>
+                            <span class="min-w-0 flex-1">Hide declined events</span>
                         </DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem
+                            :model-value="showHidden"
+                            @select.prevent
+                            @update:model-value="showHidden = $event"
+                        >
+                            <span class="min-w-0 flex-1">Show hidden events</span>
+                        </DropdownMenuCheckboxItem>
+
+                        <template v-if="calendarList.length > 0">
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel
+                                class="text-[11px] tracking-wide text-muted-foreground uppercase"
+                            >
+                                Calendars
+                            </DropdownMenuLabel>
+                            <DropdownMenuCheckboxItem
+                                v-for="calendar in calendarList"
+                                :key="calendar.id"
+                                :model-value="!hiddenCalendars.has(calendar.id)"
+                                @select.prevent
+                                @update:model-value="toggleCalendar(calendar.id)"
+                            >
+                                <span
+                                    class="mr-1.5 inline-block size-2 shrink-0 rounded-full"
+                                    :style="{
+                                        backgroundColor: calendar.color ?? 'var(--primary)',
+                                    }"
+                                />
+                                <span class="min-w-0 flex-1 truncate">{{
+                                    calendar.name
+                                }}</span>
+                                <span class="ml-2 text-[10px] text-muted-foreground">
+                                    {{ calendar.source }}
+                                </span>
+                            </DropdownMenuCheckboxItem>
+                        </template>
                     </DropdownMenuContent>
                 </DropdownMenu>
 
@@ -301,6 +347,7 @@ onBeforeUnmount(() => {
                 :days="gridDays"
                 :anchor-month="anchor.getMonth()"
                 :events="displayEvents"
+                :show-hidden="showHidden"
                 @open-event="openEvent"
                 @open-day="openDay"
             />
@@ -309,6 +356,7 @@ onBeforeUnmount(() => {
                 :days="gridDays"
                 :events="displayEvents"
                 :second-zone="secondZone"
+                :show-hidden="showHidden"
                 @open-event="openEvent"
             />
         </div>
