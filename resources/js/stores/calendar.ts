@@ -7,13 +7,25 @@ import { dedupeEvents } from '@/lib/dedupeEvents';
 
 export type CalendarViewKind = 'day' | 'week' | 'month';
 
+export type RsvpStatus = 'accepted' | 'declined' | 'tentative' | 'needsAction';
+
+export interface EventAttendee {
+    email: string;
+    name: string | null;
+    response: RsvpStatus;
+    organizer: boolean;
+    self: boolean;
+}
+
 /** One event on the calendar, normalized across Google and Apple. */
 export interface CalendarEvent {
     key: string;
     source: 'google' | 'apple';
     calendarId: string;
     calendarName: string;
+    accountEmail: string;
     title: string;
+    description: string | null;
     location: string | null;
     color: string | null;
     allDay: boolean;
@@ -22,19 +34,31 @@ export interface CalendarEvent {
     /** ISO end; for all-day events the exclusive end date. */
     end: string;
     htmlLink: string | null;
+    hangoutLink: string | null;
+    /** The id shared by every occurrence of a repeating series, if any. */
+    seriesId: string | null;
+    /** The current user's RSVP to this event. */
+    responseStatus: RsvpStatus;
+    attendees: EventAttendee[];
 }
 
 interface GoogleEventDto {
     id: string;
     calendar_id: string;
     calendar_name: string;
+    account_email: string;
     summary: string;
+    description: string | null;
     location: string | null;
     html_link: string | null;
+    hangout_link: string | null;
     color: string | null;
     all_day: boolean;
     start: string | null;
     end: string | null;
+    recurring_event_id: string | null;
+    response_status: RsvpStatus;
+    attendees: EventAttendee[];
 }
 
 /** Weeks start on Monday, matching the app's ISO-week date math elsewhere. */
@@ -148,13 +172,19 @@ function mapGoogle(dto: GoogleEventDto): CalendarEvent | null {
         source: 'google',
         calendarId: dto.calendar_id,
         calendarName: dto.calendar_name,
+        accountEmail: dto.account_email,
         title: dto.summary || '(no title)',
+        description: dto.description,
         location: dto.location,
         color: dto.color,
         allDay: dto.all_day,
         start: dto.start,
         end: dto.end,
         htmlLink: dto.html_link,
+        hangoutLink: dto.hangout_link,
+        seriesId: dto.recurring_event_id,
+        responseStatus: dto.response_status ?? 'accepted',
+        attendees: dto.attendees ?? [],
     };
 }
 
@@ -179,13 +209,19 @@ async function fetchApple(startIso: string, endIso: string): Promise<CalendarEve
             source: 'apple' as const,
             calendarId: event.calendarId,
             calendarName: event.calendarTitle,
+            accountEmail: '',
             title: event.title,
+            description: null,
             location: event.location,
             color: colorById.get(event.calendarId) ?? null,
             allDay: event.allDay,
             start: event.start,
             end: event.end,
             htmlLink: null,
+            hangoutLink: null,
+            seriesId: event.seriesId,
+            responseStatus: 'accepted' as const,
+            attendees: [],
         }));
     } catch {
         return [];
@@ -246,6 +282,8 @@ export function initCalendarPrefs(teamSlug: string): void {
     } catch {
         hiddenCalendars.value = new Set();
     }
+
+    loadHidePrefs(teamSlug);
 }
 
 export function toggleCalendar(id: string): void {
@@ -289,15 +327,112 @@ export const calendarList = computed<CalendarSource[]>(() => {
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
 });
 
+/* ---- Declined filter + hidden events (per team) --------------------- */
+
+const HIDE_DECLINED_PREFIX = 'donote:calendar:hide-declined:';
+const HIDDEN_EVENTS_PREFIX = 'donote:calendar:hidden-events:';
+
+/** Drop events the user has declined entirely. */
+export const hideDeclined = ref(false);
+/** Keys of hidden events/series (declutter). Session reveal via showHidden. */
+export const hiddenEventKeys = ref<Set<string>>(new Set());
+/** Session-only: reveal hidden events (shown dimmed instead of as a strip). */
+export const showHidden = ref(false);
+
+function loadHidePrefs(teamSlug: string): void {
+    try {
+        hideDeclined.value = localStorage.getItem(HIDE_DECLINED_PREFIX + teamSlug) === '1';
+        const raw = localStorage.getItem(HIDDEN_EVENTS_PREFIX + teamSlug);
+        hiddenEventKeys.value = new Set(Array.isArray(JSON.parse(raw ?? 'null')) ? JSON.parse(raw!) : []);
+    } catch {
+        hideDeclined.value = false;
+        hiddenEventKeys.value = new Set();
+    }
+}
+
+export function setHideDeclined(value: boolean): void {
+    hideDeclined.value = value;
+
+    if (prefsTeam) {
+        localStorage.setItem(HIDE_DECLINED_PREFIX + prefsTeam, value ? '1' : '0');
+    }
+}
+
+/** The stored key for hiding a single event vs a whole repeating series. */
+function hideKeyFor(event: CalendarEvent, scope: 'one' | 'series'): string {
+    return scope === 'series' && event.seriesId
+        ? `series:${event.seriesId}`
+        : `one:${event.key}`;
+}
+
+export function isEventHidden(event: CalendarEvent): boolean {
+    return (
+        hiddenEventKeys.value.has(`one:${event.key}`) ||
+        (event.seriesId !== null && hiddenEventKeys.value.has(`series:${event.seriesId}`))
+    );
+}
+
+export function hideEvent(event: CalendarEvent, scope: 'one' | 'series'): void {
+    const next = new Set(hiddenEventKeys.value);
+    next.add(hideKeyFor(event, scope));
+    hiddenEventKeys.value = next;
+    persistHiddenEvents();
+}
+
+export function unhideEvent(event: CalendarEvent): void {
+    const next = new Set(hiddenEventKeys.value);
+    next.delete(`one:${event.key}`);
+
+    if (event.seriesId !== null) {
+        next.delete(`series:${event.seriesId}`);
+    }
+
+    hiddenEventKeys.value = next;
+    persistHiddenEvents();
+}
+
+function persistHiddenEvents(): void {
+    if (prefsTeam) {
+        localStorage.setItem(
+            HIDDEN_EVENTS_PREFIX + prefsTeam,
+            JSON.stringify([...hiddenEventKeys.value]),
+        );
+    }
+}
+
+export interface DisplayEvent extends CalendarEvent {
+    hidden: boolean;
+}
+
 /**
- * Events actually shown: switched-off calendars removed, then de-duplicated
- * (Google wins over Apple, since Google events are listed first).
+ * Events actually shown: switched-off calendars removed, declined dropped when
+ * requested, de-duplicated (Google wins), and annotated with `hidden` so the
+ * views can render decluttered events as a thin strip.
  */
-export const visibleEvents = computed<CalendarEvent[]>(() =>
-    dedupeEvents(
-        events.value.filter((event) => !hiddenCalendars.value.has(event.calendarId)),
-    ),
-);
+export const displayEvents = computed<DisplayEvent[]>(() => {
+    const base = events.value.filter(
+        (event) => !hiddenCalendars.value.has(event.calendarId),
+    );
+    const filtered = hideDeclined.value
+        ? base.filter((event) => event.responseStatus !== 'declined')
+        : base;
+
+    return dedupeEvents(filtered).map((event) => ({
+        ...event,
+        hidden: isEventHidden(event),
+    }));
+});
+
+/** Currently open event in the detail panel, if any. */
+export const selectedEvent = ref<CalendarEvent | null>(null);
+
+export function openEventDetail(event: CalendarEvent): void {
+    selectedEvent.value = event;
+}
+
+export function closeEventDetail(): void {
+    selectedEvent.value = null;
+}
 
 /** Refetch whenever the visible range changes (view switch or navigation). */
 export function watchCalendarRange(): void {

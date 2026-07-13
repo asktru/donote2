@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Globe, SlidersHorizontal } from '@lucide/vue
 import { addDays, startOfDay } from 'date-fns';
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 
+import EventDetailPanel from '@/components/calendar/EventDetailPanel.vue';
 import MonthView from '@/components/calendar/MonthView.vue';
 import TimeGridView from '@/components/calendar/TimeGridView.vue';
 import { Button } from '@/components/ui/button';
@@ -21,16 +22,17 @@ import {
     anchorLabel,
     calendarList,
     calendarView,
+    displayEvents,
     eventsFailed,
     goToday,
     hiddenCalendars,
     initCalendarPrefs,
+    openEventDetail,
     secondZone,
     setCalendarView,
     setSecondZone,
     stepCalendar,
     toggleCalendar,
-    visibleEvents,
     visibleRange,
     watchCalendarRange,
 } from '@/stores/calendar';
@@ -82,9 +84,7 @@ const gridDays = computed<Date[]>(() => {
 });
 
 function openEvent(event: CalendarEvent): void {
-    if (event.htmlLink) {
-        window.open(event.htmlLink, '_blank', 'noopener');
-    }
+    openEventDetail(event);
 }
 
 function openDay(day: Date): void {
@@ -300,17 +300,19 @@ onBeforeUnmount(() => {
                 v-if="calendarView === 'month'"
                 :days="gridDays"
                 :anchor-month="anchor.getMonth()"
-                :events="visibleEvents"
+                :events="displayEvents"
                 @open-event="openEvent"
                 @open-day="openDay"
             />
             <TimeGridView
                 v-else
                 :days="gridDays"
-                :events="visibleEvents"
+                :events="displayEvents"
                 :second-zone="secondZone"
                 @open-event="openEvent"
             />
         </div>
+
+        <EventDetailPanel />
     </div>
 </template>

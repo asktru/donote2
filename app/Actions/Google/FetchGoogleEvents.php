@@ -87,6 +87,8 @@ class FetchGoogleEvents
     protected function mapEvent(array $item, GoogleAccount $account, array $calendar): array
     {
         $allDay = isset($item['start']['date']);
+        $attendees = is_array($item['attendees'] ?? null) ? $item['attendees'] : [];
+        $self = collect($attendees)->first(fn (array $a): bool => ($a['self'] ?? false) === true);
 
         return [
             'id' => $item['id'],
@@ -94,12 +96,25 @@ class FetchGoogleEvents
             'calendar_name' => $calendar['summary'],
             'account_email' => $account->email,
             'summary' => $item['summary'] ?? '(no title)',
+            'description' => $item['description'] ?? null,
             'location' => $item['location'] ?? null,
             'html_link' => $item['htmlLink'] ?? null,
+            'hangout_link' => $item['hangoutLink'] ?? null,
             'color' => $calendar['color'] ?? null,
             'all_day' => $allDay,
             'start' => $allDay ? $item['start']['date'] : ($item['start']['dateTime'] ?? null),
             'end' => $allDay ? $item['end']['date'] : ($item['end']['dateTime'] ?? null),
+            // Identifies a repeating series (for "hide all occurrences").
+            'recurring_event_id' => $item['recurringEventId'] ?? null,
+            // The current user's RSVP; personal/own events have no attendees.
+            'response_status' => $self['responseStatus'] ?? 'accepted',
+            'attendees' => array_map(fn (array $a): array => [
+                'email' => $a['email'] ?? '',
+                'name' => $a['displayName'] ?? null,
+                'response' => $a['responseStatus'] ?? 'needsAction',
+                'organizer' => $a['organizer'] ?? false,
+                'self' => $a['self'] ?? false,
+            ], $attendees),
         ];
     }
 }
