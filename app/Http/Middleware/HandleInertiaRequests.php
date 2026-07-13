@@ -46,6 +46,12 @@ class HandleInertiaRequests extends Middleware
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'currentTeam' => fn () => $user?->currentTeam ? $user->toUserTeam($user->currentTeam) : null,
             'teams' => fn () => $user?->toUserTeams(includeCurrent: true) ?? [],
+            'flash' => [
+                // The Bluedot webhook URL is only readable once, right after
+                // it's minted — flashed here so the page can reveal it.
+                'bluedotUrl' => fn () => $request->session()->get('bluedotUrl'),
+                'bluedotTeam' => fn () => $request->session()->get('bluedotTeam'),
+            ],
         ];
     }
 }

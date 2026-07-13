@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3';
-import { CalendarPlus, Trash2 } from '@lucide/vue';
-import { ref } from 'vue';
+import { Head, router, usePage } from '@inertiajs/vue3';
+import { CalendarPlus, Check, Copy, Trash2, Webhook } from '@lucide/vue';
+import { computed, ref } from 'vue';
 
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,10 @@ import {
     destroy as destroyAccount,
 } from '@/routes/google/accounts';
 import { edit } from '@/routes/integrations';
+import {
+    store as bluedotStore,
+    destroy as bluedotDestroy,
+} from '@/routes/integrations/bluedot';
 
 interface GoogleCalendarOption {
     id: string;
@@ -28,10 +32,71 @@ interface GoogleAccountView {
     calendars: GoogleCalendarOption[];
 }
 
+interface TeamOption {
+    id: number;
+    name: string;
+}
+
+interface BluedotWebhook {
+    id: number;
+    team: string | null;
+    createdAt: string | null;
+    lastUsedAt: string | null;
+}
+
 const props = defineProps<{
     googleAccounts: GoogleAccountView[];
     googleConfigured: boolean;
+    teams: TeamOption[];
+    bluedotWebhooks: BluedotWebhook[];
 }>();
+
+const page = usePage<{
+    flash: { bluedotUrl: string | null; bluedotTeam: string | null };
+}>();
+
+const selectedTeamId = ref<number | null>(props.teams[0]?.id ?? null);
+const copied = ref(false);
+
+/** The freshly minted URL, shown once right after generation. */
+const newWebhookUrl = computed(() => page.props.flash?.bluedotUrl ?? null);
+const newWebhookTeam = computed(() => page.props.flash?.bluedotTeam ?? null);
+
+function generateWebhook(): void {
+    if (selectedTeamId.value === null) {
+        return;
+    }
+
+    router.post(
+        bluedotStore().url,
+        { team_id: selectedTeamId.value },
+        { preserveScroll: true },
+    );
+}
+
+function revokeWebhook(id: number): void {
+    if (!confirm('Revoke this webhook URL? Bluedot will stop delivering to it.')) {
+        return;
+    }
+
+    router.delete(bluedotDestroy(id).url, { preserveScroll: true });
+}
+
+async function copyUrl(): Promise<void> {
+    if (newWebhookUrl.value === null) {
+        return;
+    }
+
+    await navigator.clipboard.writeText(newWebhookUrl.value);
+    copied.value = true;
+    setTimeout(() => {
+        copied.value = false;
+    }, 2000);
+}
+
+function formatDate(iso: string | null): string {
+    return iso ? new Date(iso).toLocaleDateString() : '—';
+}
 
 defineOptions({
     layout: {
@@ -172,6 +237,98 @@ async function disconnect(account: GoogleAccountView): Promise<void> {
                             >
                         </span>
                     </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-4 border-t border-border pt-6">
+            <div>
+                <h3 class="text-sm font-medium">Bluedot meetings</h3>
+                <p class="text-sm text-muted-foreground">
+                    Generate a webhook URL and paste it into Bluedot. Meeting
+                    summaries land in the chosen team's
+                    <span class="font-mono text-xs">Meetings</span> folder and
+                    are linked from that day's daily note.
+                </p>
+            </div>
+
+            <div class="flex flex-wrap items-end gap-2">
+                <label class="flex flex-col gap-1 text-sm">
+                    <span class="text-muted-foreground">Team</span>
+                    <select
+                        v-model="selectedTeamId"
+                        class="h-9 min-w-48 rounded-md border border-border bg-background px-2 text-sm"
+                    >
+                        <option
+                            v-for="team in teams"
+                            :key="team.id"
+                            :value="team.id"
+                        >
+                            {{ team.name }}
+                        </option>
+                    </select>
+                </label>
+                <Button :disabled="selectedTeamId === null" @click="generateWebhook">
+                    <Webhook class="size-4" /> Generate webhook URL
+                </Button>
+            </div>
+
+            <div
+                v-if="newWebhookUrl"
+                class="space-y-2 rounded-xl border border-primary/40 bg-primary/5 p-4"
+            >
+                <p class="text-sm font-medium">
+                    Webhook URL for “{{ newWebhookTeam }}”
+                </p>
+                <p class="text-xs text-muted-foreground">
+                    Copy it now — for security it won't be shown again. Paste it
+                    as the webhook URL in Bluedot.
+                </p>
+                <div class="flex items-center gap-2">
+                    <code
+                        class="min-w-0 flex-1 truncate rounded-md border border-border bg-background px-2 py-1.5 font-mono text-xs"
+                    >
+                        {{ newWebhookUrl }}
+                    </code>
+                    <Button variant="outline" size="sm" @click="copyUrl">
+                        <Check v-if="copied" class="size-4" />
+                        <Copy v-else class="size-4" />
+                        {{ copied ? 'Copied' : 'Copy' }}
+                    </Button>
+                </div>
+            </div>
+
+            <div
+                v-if="bluedotWebhooks.length > 0"
+                class="divide-y divide-border rounded-xl border border-border"
+            >
+                <div
+                    v-for="webhook in bluedotWebhooks"
+                    :key="webhook.id"
+                    class="flex items-center justify-between gap-3 p-3"
+                >
+                    <div class="min-w-0">
+                        <p class="truncate text-sm font-medium">
+                            {{ webhook.team ?? 'Unknown team' }}
+                        </p>
+                        <p class="text-xs text-muted-foreground">
+                            Created {{ formatDate(webhook.createdAt) }} · Last
+                            used
+                            {{
+                                webhook.lastUsedAt
+                                    ? formatDate(webhook.lastUsedAt)
+                                    : 'never'
+                            }}
+                        </p>
+                    </div>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        class="text-muted-foreground hover:text-destructive"
+                        @click="revokeWebhook(webhook.id)"
+                    >
+                        <Trash2 class="size-4" /> Revoke
+                    </Button>
                 </div>
             </div>
         </div>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Webhooks;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessBluedotSummary;
+use App\Models\Team;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,11 +20,13 @@ class BluedotController extends Controller
      */
     public function __invoke(Request $request): JsonResponse
     {
-        $user = $this->resolveUser($request);
+        $resolved = $this->resolve($request);
 
-        if ($user === null) {
+        if ($resolved === null) {
             return response()->json(['message' => 'Invalid or missing token.'], 401);
         }
+
+        [$user, $team] = $resolved;
 
         $validated = $request->validate([
             'type' => ['nullable', 'string'],
@@ -48,12 +51,20 @@ class BluedotController extends Controller
             return response()->json(['message' => 'No summary in payload.'], 422);
         }
 
-        ProcessBluedotSummary::dispatch($user->id, $validated);
+        ProcessBluedotSummary::dispatch($user->id, $team->id, $validated);
 
         return response()->json(['status' => 'queued'], 202);
     }
 
-    private function resolveUser(Request $request): ?User
+    /**
+     * Resolve the (user, team) the webhook token is bound to. The target team
+     * is encoded in the token's abilities as `team:<id>`; tokens minted before
+     * team binding fall back to the user's current team. Returns null unless
+     * the user still belongs to the resolved team.
+     *
+     * @return array{0: User, 1: Team}|null
+     */
+    private function resolve(Request $request): ?array
     {
         $token = $request->query('token');
 
@@ -66,8 +77,27 @@ class BluedotController extends Controller
         }
 
         $accessToken = PersonalAccessToken::findToken($token);
-        $tokenable = $accessToken?->tokenable;
+        $user = $accessToken?->tokenable;
 
-        return $tokenable instanceof User ? $tokenable : null;
+        if (! $user instanceof User) {
+            return null;
+        }
+
+        $teamId = null;
+
+        foreach ((array) ($accessToken->abilities ?? []) as $ability) {
+            if (is_string($ability) && str_starts_with($ability, 'team:')) {
+                $teamId = (int) substr($ability, 5);
+                break;
+            }
+        }
+
+        $team = $teamId !== null ? Team::find($teamId) : $user->currentTeam;
+
+        if (! $team instanceof Team || ! $user->belongsToTeam($team)) {
+            return null;
+        }
+
+        return [$user, $team];
     }
 }

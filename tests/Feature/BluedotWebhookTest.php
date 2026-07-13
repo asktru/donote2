@@ -5,6 +5,7 @@ use App\Actions\Notes\AppendUnderHeading;
 use App\Actions\Notes\WriteNote;
 use App\Jobs\ProcessBluedotSummary;
 use App\Models\Note;
+use App\Models\Team;
 use App\Models\User;
 use Illuminate\Support\Facades\Queue;
 
@@ -41,8 +42,55 @@ test('a valid token queues the summary for its owner', function () {
 
     Queue::assertPushed(
         ProcessBluedotSummary::class,
-        fn (ProcessBluedotSummary $job) => $job->userId === $user->id,
+        fn (ProcessBluedotSummary $job) => $job->userId === $user->id
+            && $job->teamId === $user->currentTeam->id,
     );
+});
+
+test('the webhook files into the team encoded in the token', function () {
+    Queue::fake();
+    $user = User::factory()->create();
+    $other = Team::factory()->create();
+    $user->teams()->attach($other, ['role' => 'member']);
+
+    $token = $user->createToken('bluedot:'.$other->slug, ['bluedot', 'team:'.$other->id])
+        ->plainTextToken;
+
+    $this->postJson("/webhooks/bluedot?token={$token}", bluedotPayload())
+        ->assertStatus(202);
+
+    Queue::assertPushed(
+        ProcessBluedotSummary::class,
+        fn (ProcessBluedotSummary $job) => $job->teamId === $other->id,
+    );
+});
+
+test('the webhook rejects a token whose team the user has left', function () {
+    Queue::fake();
+    $user = User::factory()->create();
+    $stranger = Team::factory()->create();
+
+    // Token references a team the user does not belong to.
+    $token = $user->createToken('bluedot:'.$stranger->slug, ['bluedot', 'team:'.$stranger->id])
+        ->plainTextToken;
+
+    $this->postJson("/webhooks/bluedot?token={$token}", bluedotPayload())
+        ->assertUnauthorized();
+
+    Queue::assertNothingPushed();
+});
+
+test('the job drops the summary when the user no longer belongs to the team', function () {
+    $user = User::factory()->create();
+    $team = Team::factory()->create(); // user is NOT a member
+
+    (new ProcessBluedotSummary($user->id, $team->id, bluedotPayload()))->handle(
+        app(WriteNote::class),
+        app(AppendUnderHeading::class),
+        app(FormatBluedotSummary::class),
+    );
+
+    expect(Note::query()->where('team_id', $team->id)->count())->toBe(0);
 });
 
 test('non-summary events are ignored', function () {
@@ -61,7 +109,7 @@ test('the job stores a meeting note and links it from the daily note', function 
     $user = User::factory()->create();
     $team = $user->currentTeam;
 
-    (new ProcessBluedotSummary($user->id, bluedotPayload()))->handle(
+    (new ProcessBluedotSummary($user->id, $team->id, bluedotPayload()))->handle(
         app(WriteNote::class),
         app(AppendUnderHeading::class),
         app(FormatBluedotSummary::class),
@@ -89,7 +137,7 @@ test('a re-sent summary updates the same note without duplicating', function () 
     $user = User::factory()->create();
     $team = $user->currentTeam;
 
-    $run = fn (array $payload) => (new ProcessBluedotSummary($user->id, $payload))->handle(
+    $run = fn (array $payload) => (new ProcessBluedotSummary($user->id, $team->id, $payload))->handle(
         app(WriteNote::class),
         app(AppendUnderHeading::class),
         app(FormatBluedotSummary::class),
@@ -112,7 +160,7 @@ test('an opaque id title falls back to a dated title', function () {
     $user = User::factory()->create();
     $team = $user->currentTeam;
 
-    (new ProcessBluedotSummary($user->id, bluedotPayload(['title' => '67b607ef046d4245108ea83f'])))->handle(
+    (new ProcessBluedotSummary($user->id, $team->id, bluedotPayload(['title' => '67b607ef046d4245108ea83f'])))->handle(
         app(WriteNote::class),
         app(AppendUnderHeading::class),
         app(FormatBluedotSummary::class),

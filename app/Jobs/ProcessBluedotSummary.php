@@ -21,6 +21,7 @@ class ProcessBluedotSummary implements ShouldQueue
      */
     public function __construct(
         public int $userId,
+        public int $teamId,
         public array $payload,
     ) {}
 
@@ -30,9 +31,11 @@ class ProcessBluedotSummary implements ShouldQueue
         FormatBluedotSummary $formatSummary,
     ): void {
         $user = User::find($this->userId);
-        $team = $user?->currentTeam;
+        $team = Team::find($this->teamId);
 
-        if ($user === null || $team === null) {
+        // The webhook URL is bound to a team; drop the summary if the user
+        // has since lost access to it rather than filing it somewhere wrong.
+        if ($user === null || $team === null || ! $user->belongsToTeam($team)) {
             return;
         }
 
