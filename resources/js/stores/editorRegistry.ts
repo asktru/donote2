@@ -15,6 +15,17 @@ export const activeEditorNoteId = shallowRef<string | null>(null);
 export const editorFocused = ref(false);
 
 /**
+ * Bumped on every selection or document change in the active editor so Vue
+ * can react to cursor movement (CodeMirror state isn't reactive on its own).
+ * Read it inside a computed to recompute against the current line.
+ */
+export const editorTick = ref(0);
+
+export function bumpEditorTick(): void {
+    editorTick.value = (editorTick.value + 1) % 1_000_000;
+}
+
+/**
  * Mark an editor as the active one (for selection-reading features) without
  * implying it holds focus. Called when an editor mounts.
  */

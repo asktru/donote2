@@ -11,6 +11,7 @@ import { attachmentHandlers } from '@/lib/attachments';
 import { recallCursor, rememberCursor } from '@/lib/cursorMemory';
 import {
     blurEditor,
+    bumpEditorTick,
     focusEditor,
     registerEditor,
     unregisterEditor,
@@ -105,14 +106,17 @@ function createView(): void {
                         emit('update:modelValue', lastEmitted);
                     }
 
-                    if (
-                        (update.selectionSet || update.docChanged) &&
-                        props.stateKey
-                    ) {
-                        rememberCursor(
-                            props.stateKey,
-                            update.state.selection.main.head,
-                        );
+                    if (update.selectionSet || update.docChanged) {
+                        // Let the mobile toolbar recompute against the line
+                        // the cursor is now on.
+                        bumpEditorTick();
+
+                        if (props.stateKey) {
+                            rememberCursor(
+                                props.stateKey,
+                                update.state.selection.main.head,
+                            );
+                        }
                     }
                 }),
             ],
