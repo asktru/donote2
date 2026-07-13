@@ -10,10 +10,10 @@ import { editorLineActions } from './markdownExtensions';
  * only read `state` and `dispatch` transactions/specs. Avoids needing a
  * DOM (tests run in the node environment).
  */
-function makeView(doc: string, anchor = 0) {
+function makeView(doc: string, anchor = 0, head = anchor) {
     let state = EditorState.create({
         doc,
-        selection: { anchor },
+        selection: { anchor, head },
         extensions: [indentUnit.of('    ')],
     });
 
@@ -93,5 +93,37 @@ describe('editorLineActions', () => {
         const up = makeView('Alpha\nBravo', 6); // cursor on "Bravo"
         run(up, 'moveUp');
         expect(up.doc).toBe('Bravo\nAlpha');
+    });
+
+    it('cycles a task priority none → ! → !! → !!! → none', () => {
+        const view = makeView('- [ ] Pay invoices', 8);
+        run(view, 'priority');
+        expect(view.doc).toBe('- [ ] ! Pay invoices');
+        run(view, 'priority');
+        expect(view.doc).toBe('- [ ] !! Pay invoices');
+        run(view, 'priority');
+        expect(view.doc).toBe('- [ ] !!! Pay invoices');
+        run(view, 'priority');
+        expect(view.doc).toBe('- [ ] Pay invoices');
+    });
+
+    it('cancels and restores a task', () => {
+        const view = makeView('- [ ] Do it', 8);
+        run(view, 'cancel');
+        expect(view.doc).toBe('- [-] Do it');
+        run(view, 'cancel');
+        expect(view.doc).toBe('- [ ] Do it');
+    });
+
+    it('wraps a selection in bold and highlight, and unwraps bold', () => {
+        const bold = makeView('make me bold', 8, 12); // select "bold"
+        run(bold, 'bold');
+        expect(bold.doc).toBe('make me **bold**');
+        run(bold, 'bold');
+        expect(bold.doc).toBe('make me bold');
+
+        const hi = makeView('note', 0, 4); // select "note"
+        run(hi, 'highlight');
+        expect(hi.doc).toBe('==note==');
     });
 });

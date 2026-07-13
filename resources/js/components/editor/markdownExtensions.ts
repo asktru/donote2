@@ -1833,6 +1833,12 @@ export const editorLineActions = {
     moveDown: moveLineDown,
     indent: indentMore,
     outdent: indentLess,
+    cancel: cancelTaskCommand,
+    // Defined below this object; referenced lazily so ordering is fine.
+    priority: (view: EditorView): boolean => cyclePriorityCommand(view),
+    bold: (view: EditorView): boolean => toggleInlineMark(view, '**'),
+    italic: (view: EditorView): boolean => toggleInlineMark(view, '*'),
+    highlight: (view: EditorView): boolean => toggleInlineMark(view, '=='),
 } as const;
 
 /**

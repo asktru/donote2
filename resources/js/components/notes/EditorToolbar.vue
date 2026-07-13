@@ -3,12 +3,17 @@ import type { EditorView } from '@codemirror/view';
 import {
     ArrowDown,
     ArrowUp,
+    Ban,
+    Bold,
     ChevronDown,
     CircleCheckBig,
     FileOutput,
+    Flag,
     Heading,
+    Highlighter,
     IndentDecrease,
     IndentIncrease,
+    Italic,
     List,
     SquareCheckBig,
 } from '@lucide/vue';
@@ -36,6 +41,15 @@ const groups: { action: Action; icon: typeof Heading; label: string }[][] = [
         { action: 'task', icon: CircleCheckBig, label: 'Task' },
         { action: 'checklist', icon: SquareCheckBig, label: 'Checklist' },
         { action: 'bullet', icon: List, label: 'Bullet' },
+    ],
+    [
+        { action: 'cancel', icon: Ban, label: 'Cancel / restore' },
+        { action: 'priority', icon: Flag, label: 'Cycle priority' },
+    ],
+    [
+        { action: 'bold', icon: Bold, label: 'Bold' },
+        { action: 'italic', icon: Italic, label: 'Italic' },
+        { action: 'highlight', icon: Highlighter, label: 'Highlight' },
     ],
     [
         { action: 'outdent', icon: IndentDecrease, label: 'Outdent' },
