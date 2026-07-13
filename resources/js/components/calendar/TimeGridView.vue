@@ -11,6 +11,7 @@ import {
 import { computed, onMounted, ref } from 'vue';
 
 import { layoutDayColumns } from '@/core/calendarLayout';
+import { readableTextColor } from '@/core/color';
 import { cn } from '@/lib/utils';
 import type { CalendarEvent } from '@/stores/calendar';
 
@@ -177,8 +178,11 @@ onMounted(() => {
                     v-for="event in col.allDay"
                     :key="event.key"
                     type="button"
-                    class="block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px] text-white"
-                    :style="{ backgroundColor: event.color ?? 'var(--primary)' }"
+                    class="block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px]"
+                    :style="{
+                        backgroundColor: event.color ?? 'var(--primary)',
+                        color: readableTextColor(event.color),
+                    }"
                     @click="emit('open-event', event)"
                 >
                     {{ event.title }}
@@ -236,18 +240,19 @@ onMounted(() => {
                         v-for="pos in col.timed"
                         :key="pos.event.key"
                         type="button"
-                        class="absolute overflow-hidden rounded-md border border-white/20 px-1.5 py-0.5 text-left text-[11px] leading-tight text-white shadow-sm"
+                        class="absolute flex flex-col items-start gap-0.5 overflow-hidden rounded-md border border-black/10 px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm"
                         :style="{
                             top: `${pos.top}px`,
                             height: `${pos.height}px`,
                             left: `calc(${pos.leftPct}% + 1px)`,
                             width: `calc(${pos.widthPct}% - 2px)`,
                             backgroundColor: pos.event.color ?? 'var(--primary)',
+                            color: readableTextColor(pos.event.color),
                         }"
                         @click="emit('open-event', pos.event)"
                     >
-                        <span class="block font-medium">{{ timeLabel(pos.event) }}</span>
-                        <span class="block truncate">{{ pos.event.title }}</span>
+                        <span class="font-semibold">{{ pos.event.title }}</span>
+                        <span class="opacity-80">{{ timeLabel(pos.event) }}</span>
                     </button>
                 </div>
             </div>

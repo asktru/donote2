@@ -44,6 +44,18 @@ describe('dedupeEvents', () => {
         expect(dedupeEvents(rows).map((row) => row.title)).toEqual(['A', 'B']);
     });
 
+    it('collapses the same instant expressed in different zones/offsets', () => {
+        const rows: Row[] = [
+            { title: 'Standup', start: '2026-07-13T07:00:00-04:00', end: '2026-07-13T07:30:00-04:00', source: 'google' },
+            { title: 'Standup', start: '2026-07-13T11:00:00Z', end: '2026-07-13T11:30:00Z', source: 'apple' },
+        ];
+
+        const result = dedupeEvents(rows);
+
+        expect(result).toHaveLength(1);
+        expect(result[0]?.source).toBe('google');
+    });
+
     it('treats null start/end as their own group without collapsing distinct titles', () => {
         const rows: Row[] = [
             { title: 'All day', start: null, end: null, source: 'a' },

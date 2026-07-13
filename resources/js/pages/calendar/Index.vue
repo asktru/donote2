@@ -1,24 +1,35 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { ChevronLeft, ChevronRight, Globe } from '@lucide/vue';
+import { ChevronLeft, ChevronRight, Globe, SlidersHorizontal } from '@lucide/vue';
 import { addDays, startOfDay } from 'date-fns';
 import { computed, onMounted } from 'vue';
 
 import MonthView from '@/components/calendar/MonthView.vue';
 import TimeGridView from '@/components/calendar/TimeGridView.vue';
 import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuLabel,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import {
     anchor,
     anchorLabel,
+    calendarList,
     calendarView,
-    events,
     eventsFailed,
     goToday,
+    hiddenCalendars,
+    initCalendarPrefs,
     secondZone,
     setCalendarView,
     setSecondZone,
     stepCalendar,
+    toggleCalendar,
+    visibleEvents,
     visibleRange,
     watchCalendarRange,
 } from '@/stores/calendar';
@@ -38,15 +49,17 @@ const views: { value: 'day' | 'week' | 'month'; label: string }[] = [
     { value: 'month', label: 'Month' },
 ];
 
+const supported = (
+    Intl as unknown as { supportedValuesOf?: (k: string) => string[] }
+).supportedValuesOf;
+
+const allZones: string[] = supported
+    ? supported('timeZone')
+    : ['Europe/Kyiv', 'Europe/London', 'America/New_York', 'America/Los_Angeles', 'Asia/Tokyo'];
+
 const zones: { value: string; label: string }[] = [
     { value: '', label: 'No 2nd zone' },
-    { value: 'America/Los_Angeles', label: 'Los Angeles' },
-    { value: 'America/New_York', label: 'New York' },
-    { value: 'Europe/London', label: 'London' },
-    { value: 'Europe/Berlin', label: 'Berlin' },
-    { value: 'Asia/Kolkata', label: 'Kolkata' },
-    { value: 'Asia/Tokyo', label: 'Tokyo' },
-    { value: 'Australia/Sydney', label: 'Sydney' },
+    ...allZones.map((zone) => ({ value: zone, label: zone.replace(/_/g, ' ') })),
 ];
 
 const notesHref = computed(() => `/${props.workspace.teamSlug}/notes`);
@@ -80,6 +93,7 @@ function openDay(day: Date): void {
 
 onMounted(() => {
     setTeamMembers(props.members);
+    initCalendarPrefs(props.workspace.teamSlug);
     watchCalendarRange();
 });
 </script>
@@ -135,6 +149,47 @@ onMounted(() => {
             <h1 class="text-base font-semibold">{{ anchorLabel }}</h1>
 
             <div class="ml-auto flex items-center gap-2">
+                <DropdownMenu v-if="calendarList.length > 0">
+                    <DropdownMenuTrigger as-child>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            class="size-8 text-muted-foreground"
+                            aria-label="Choose calendars"
+                            title="Show / hide calendars"
+                        >
+                            <SlidersHorizontal class="size-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" class="w-64">
+                        <DropdownMenuLabel
+                            class="text-[11px] tracking-wide text-muted-foreground uppercase"
+                        >
+                            Calendars
+                        </DropdownMenuLabel>
+                        <DropdownMenuCheckboxItem
+                            v-for="calendar in calendarList"
+                            :key="calendar.id"
+                            :model-value="!hiddenCalendars.has(calendar.id)"
+                            @select.prevent
+                            @update:model-value="toggleCalendar(calendar.id)"
+                        >
+                            <span
+                                class="mr-1.5 inline-block size-2 shrink-0 rounded-full"
+                                :style="{
+                                    backgroundColor: calendar.color ?? 'var(--primary)',
+                                }"
+                            />
+                            <span class="min-w-0 flex-1 truncate">{{
+                                calendar.name
+                            }}</span>
+                            <span class="ml-2 text-[10px] text-muted-foreground">
+                                {{ calendar.source }}
+                            </span>
+                        </DropdownMenuCheckboxItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+
                 <label
                     v-if="calendarView !== 'month'"
                     class="flex items-center gap-1 text-xs text-muted-foreground"
@@ -204,14 +259,14 @@ onMounted(() => {
                 v-if="calendarView === 'month'"
                 :days="gridDays"
                 :anchor-month="anchor.getMonth()"
-                :events="events"
+                :events="visibleEvents"
                 @open-event="openEvent"
                 @open-day="openDay"
             />
             <TimeGridView
                 v-else
                 :days="gridDays"
-                :events="events"
+                :events="visibleEvents"
                 :second-zone="secondZone"
                 @open-event="openEvent"
             />

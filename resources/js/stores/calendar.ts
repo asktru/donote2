@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 
 import { apiFetch } from '@/lib/api';
 import { appleCalendar } from '@/lib/appleCalendar';
+import { dedupeEvents } from '@/lib/dedupeEvents';
 
 export type CalendarViewKind = 'day' | 'week' | 'month';
 
@@ -227,6 +228,76 @@ export async function fetchEvents(): Promise<void> {
         }
     }
 }
+
+/* ---- Calendar visibility (per team) --------------------------------- */
+
+const HIDDEN_CALS_PREFIX = 'donote:calendar:hidden-cals:';
+
+/** Calendar ids the user has switched off in this team's calendar view. */
+export const hiddenCalendars = ref<Set<string>>(new Set());
+let prefsTeam: string | null = null;
+
+export function initCalendarPrefs(teamSlug: string): void {
+    prefsTeam = teamSlug;
+
+    try {
+        const raw = localStorage.getItem(HIDDEN_CALS_PREFIX + teamSlug);
+        hiddenCalendars.value = new Set(Array.isArray(JSON.parse(raw ?? 'null')) ? JSON.parse(raw!) : []);
+    } catch {
+        hiddenCalendars.value = new Set();
+    }
+}
+
+export function toggleCalendar(id: string): void {
+    const next = new Set(hiddenCalendars.value);
+
+    if (next.has(id)) {
+        next.delete(id);
+    } else {
+        next.add(id);
+    }
+
+    hiddenCalendars.value = next;
+
+    if (prefsTeam) {
+        localStorage.setItem(HIDDEN_CALS_PREFIX + prefsTeam, JSON.stringify([...next]));
+    }
+}
+
+export interface CalendarSource {
+    id: string;
+    name: string;
+    color: string | null;
+    source: 'google' | 'apple';
+}
+
+/** The distinct calendars present in the loaded range, for the picker. */
+export const calendarList = computed<CalendarSource[]>(() => {
+    const map = new Map<string, CalendarSource>();
+
+    for (const event of events.value) {
+        if (!map.has(event.calendarId)) {
+            map.set(event.calendarId, {
+                id: event.calendarId,
+                name: event.calendarName || 'Calendar',
+                color: event.color,
+                source: event.source,
+            });
+        }
+    }
+
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+});
+
+/**
+ * Events actually shown: switched-off calendars removed, then de-duplicated
+ * (Google wins over Apple, since Google events are listed first).
+ */
+export const visibleEvents = computed<CalendarEvent[]>(() =>
+    dedupeEvents(
+        events.value.filter((event) => !hiddenCalendars.value.has(event.calendarId)),
+    ),
+);
 
 /** Refetch whenever the visible range changes (view switch or navigation). */
 export function watchCalendarRange(): void {
