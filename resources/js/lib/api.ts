@@ -54,7 +54,11 @@ export async function apiUpload<T>(url: string, form: FormData): Promise<T> {
     });
 
     if (!response.ok) {
-        let message = `POST ${url} failed with ${response.status}`;
+        // Lead with the status so failures are diagnosable even when the
+        // body isn't JSON (e.g. a 413 from the web server, or an HTML 5xx
+        // page). Only our own JSON error bodies carry a friendly message.
+        const statusText = response.statusText || 'Upload failed';
+        let message = `${response.status} ${statusText}`;
 
         try {
             const body = (await response.json()) as { message?: string };
@@ -63,7 +67,7 @@ export async function apiUpload<T>(url: string, form: FormData): Promise<T> {
                 message = body.message;
             }
         } catch {
-            // Non-JSON error body — keep the generic message.
+            // Non-JSON error body — keep the status-led message.
         }
 
         throw new ApiError(response.status, message);

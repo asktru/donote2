@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 
@@ -63,6 +64,26 @@ test('transcription surfaces provider failures', function () {
         ])
         ->assertStatus(502)
         ->assertJsonPath('message', 'Transcription failed: rate limited');
+});
+
+test('a provider timeout returns a retryable message, not a 500', function () {
+    config(['services.openai.key' => 'sk-test']);
+
+    Http::fake(function () {
+        throw new ConnectionException('cURL error 28: Operation timed out');
+    });
+
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->postJson(route('memos.transcribe', $user->currentTeam), [
+            'audio' => UploadedFile::fake()->create('memo.webm', 100, 'audio/webm'),
+        ])
+        ->assertStatus(504)
+        ->assertJsonPath(
+            'message',
+            'Transcription timed out reaching the provider — it will retry.',
+        );
 });
 
 test('non-audio uploads are rejected', function () {

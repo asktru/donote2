@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -40,12 +41,22 @@ class MemoTranscriptionController extends Controller
             abort(422, 'Could not read the uploaded audio.');
         }
 
-        $response = Http::withToken($key)
-            ->timeout(120)
-            ->attach('file', $contents, $audio->getClientOriginalName() ?: 'memo.webm')
-            ->post('https://api.openai.com/v1/audio/transcriptions', [
-                'model' => is_string($model) ? $model : 'gpt-4o-transcribe',
-            ]);
+        try {
+            $response = Http::withToken($key)
+                ->connectTimeout(15)
+                ->timeout(180)
+                ->attach('file', $contents, $audio->getClientOriginalName() ?: 'memo.webm')
+                ->post('https://api.openai.com/v1/audio/transcriptions', [
+                    'model' => is_string($model) ? $model : 'gpt-4o-transcribe',
+                ]);
+        } catch (ConnectionException $exception) {
+            // A timeout or dropped connection to the provider — the memo is
+            // still queued locally, so surface a clear, retryable message
+            // instead of letting an uncaught exception become a 500.
+            return response()->json([
+                'message' => 'Transcription timed out reaching the provider — it will retry.',
+            ], 504);
+        }
 
         if ($response->failed()) {
             return response()->json([
