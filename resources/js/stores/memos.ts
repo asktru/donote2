@@ -26,13 +26,25 @@ import {
  * a single bullet once every part is transcribed.
  */
 
+/** Upper time bound on a segment — mostly a fallback for near-silent audio;
+ *  the byte budget below rotates first for normal speech. */
 const SEGMENT_MS = 10 * 60 * 1000;
-/** Voice-optimized bitrate: ~2.4 MB per 10-minute segment. */
+/**
+ * Rotate a segment once it reaches this many bytes so every upload stays
+ * well under a conservative web-server body limit (nginx defaults to 1 MB).
+ * This keeps recordings uploadable without raising server upload limits.
+ */
+const MAX_SEGMENT_BYTES = 800 * 1024;
+/** Voice-optimized bitrate: ~800 KB ≈ 3.4 minutes of speech per segment. */
 const AUDIO_BITS_PER_SECOND = 32000;
+/** Recordings at least this long prompt for a transcript destination. */
+const LONG_RECORDING_SEC = 10 * 60;
 
 interface ActiveRecording {
     recorder: MediaRecorder;
     chunks: Blob[];
+    /** Bytes captured in the current segment; drives size-based rotation. */
+    bytes: number;
     /** The mixed stream the recorder consumes; reused across segments. */
     stream: MediaStream;
     streams: MediaStream[];
@@ -48,6 +60,8 @@ interface ActiveRecording {
 }
 
 let active: ActiveRecording | null = null;
+/** Guards against re-entrant rotation (size trigger racing the time timer). */
+let rotating = false;
 let db: WorkspaceDb | null = null;
 let uploaderTimer: ReturnType<typeof setInterval> | null = null;
 let elapsedTimer: ReturnType<typeof setInterval> | null = null;
@@ -226,6 +240,13 @@ function attachRecorder(current: ActiveRecording): void {
     current.recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
             current.chunks.push(event.data);
+            current.bytes += event.data.size;
+
+            // Close the segment as soon as it's big enough to keep every
+            // upload under the server's body limit.
+            if (current.bytes >= MAX_SEGMENT_BYTES && !rotating) {
+                void rotateSegment();
+            }
         }
     };
 
@@ -278,19 +299,33 @@ async function persistPart(
 async function rotateSegment(): Promise<void> {
     const current = active;
 
-    if (current === null) {
+    if (current === null || rotating) {
         return;
     }
 
-    const blob = await collectSegment(current);
-    await persistPart(current, blob);
+    rotating = true;
 
-    current.part += 1;
-    current.chunks = [];
-    current.segmentStartedAt = Date.now();
-    current.recorder = makeRecorder(current.stream);
-    attachRecorder(current);
-    current.segmentTimer = setTimeout(() => void rotateSegment(), SEGMENT_MS);
+    // Clear the time-based timer: a byte-triggered rotation may have arrived
+    // first, and we don't want its old timer firing a second rotation.
+    if (current.segmentTimer !== null) {
+        clearTimeout(current.segmentTimer);
+        current.segmentTimer = null;
+    }
+
+    try {
+        const blob = await collectSegment(current);
+        await persistPart(current, blob);
+
+        current.part += 1;
+        current.chunks = [];
+        current.bytes = 0;
+        current.segmentStartedAt = Date.now();
+        current.recorder = makeRecorder(current.stream);
+        attachRecorder(current);
+        current.segmentTimer = setTimeout(() => void rotateSegment(), SEGMENT_MS);
+    } finally {
+        rotating = false;
+    }
 
     void processQueue();
 }
@@ -305,6 +340,7 @@ export async function startRecording(): Promise<void> {
     active = {
         recorder: makeRecorder(capture.stream),
         chunks: [],
+        bytes: 0,
         stream: capture.stream,
         streams: capture.streams,
         audioContext: capture.audioContext,
@@ -389,12 +425,16 @@ export async function stopRecording(): Promise<void> {
         await refreshQueue();
     }
 
-    if (current.part > 0) {
+    const durationSec = Math.round((Date.now() - current.startedAt) / 1000);
+
+    if (durationSec >= LONG_RECORDING_SEC) {
         // Long recording — let the user pick where the transcript goes.
+        // Gated on real duration, not part count: segments now rotate by
+        // size, so a short memo can span several parts.
         heldGroups.add(current.groupId);
         pendingDestination.value = {
             groupId: current.groupId,
-            durationSec: Math.round((Date.now() - current.startedAt) / 1000),
+            durationSec,
         };
     }
 
