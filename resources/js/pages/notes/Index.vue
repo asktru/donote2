@@ -39,6 +39,8 @@ import {
 import { startMoveToNote } from '@/stores/move';
 import { promptText } from '@/stores/prompt';
 import { startSync, stopSync } from '@/stores/sync';
+import { setTeamMembers } from '@/stores/team';
+import type { TeamMember } from '@/stores/team';
 import {
     closeSplit,
     collapseAllFolders,
@@ -72,6 +74,7 @@ const props = defineProps<{
         teamName: string;
         userId: number;
     };
+    members: TeamMember[];
     googleConnected: boolean;
 }>();
 
@@ -324,6 +327,7 @@ useSwipe((swipe) => {
 });
 
 onMounted(async () => {
+    setTeamMembers(props.members);
     await initWorkspace({
         teamSlug: props.workspace.teamSlug,
         userId: props.workspace.userId,

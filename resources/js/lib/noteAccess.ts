@@ -4,6 +4,18 @@
  */
 export type NoteAccess = 'owner' | 'write' | 'read';
 
+/** One recipient of an explicit share. */
+export interface NoteShareEntry {
+    user_id: number;
+    access: 'read' | 'write';
+}
+
+/** A note's sharing state, as managed by its author. */
+export interface NoteSharing {
+    team_readable: boolean;
+    shares: NoteShareEntry[];
+}
+
 /**
  * Whether the current user may edit a note right now. Owners always can;
  * write-collaborators only while online (shared notes have no offline edit

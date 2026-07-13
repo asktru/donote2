@@ -9,6 +9,7 @@ import {
     Check,
     CheckCircle2,
     ChevronRight,
+    FileText,
     FolderPlus,
     Keyboard,
     Layers,
@@ -21,6 +22,7 @@ import {
     Sparkles,
     Target,
     Trash2,
+    Users,
 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
@@ -67,9 +69,10 @@ import {
     mentionCounts,
     noteMetaFor,
     noteProgressFor,
+    ownNotes,
     pinnedNotes,
-    regularNotes,
     reviewQueue,
+    sharedNotes,
     tagCounts,
     trashedNotes,
 } from '@/stores/workspace';
@@ -385,10 +388,43 @@ const syncLabel = computed(() => {
                     path=""
                     :depth="0"
                     :folders="folders"
-                    :notes="regularNotes"
+                    :notes="ownNotes"
                     :active-note-id="activeNoteId"
                     @open-note="(id, split) => openNote(id, { split })"
                 />
+
+                <div v-if="sharedNotes.length > 0" class="mt-3">
+                    <p
+                        class="flex items-center gap-1.5 px-2 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
+                    >
+                        <Users class="size-3" /> Shared with me
+                    </p>
+                    <button
+                        v-for="shared in sharedNotes"
+                        :key="shared.id"
+                        type="button"
+                        :class="
+                            cn(
+                                'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-muted/70',
+                                activeNoteId === shared.id
+                                    ? 'bg-muted font-medium text-primary'
+                                    : 'text-foreground/90',
+                            )
+                        "
+                        @click="openNote(shared.id)"
+                    >
+                        <FileText class="size-4 shrink-0 text-muted-foreground" />
+                        <span class="min-w-0 flex-1 truncate">{{
+                            shared.title || 'Untitled'
+                        }}</span>
+                        <span
+                            v-if="shared.access === 'read'"
+                            class="shrink-0 text-[10px] text-muted-foreground"
+                            title="Read-only"
+                            >view</span
+                        >
+                    </button>
+                </div>
                 <button
                     v-if="trashedNotes.length > 0"
                     type="button"

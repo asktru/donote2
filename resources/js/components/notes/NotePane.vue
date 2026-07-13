@@ -10,6 +10,7 @@ import {
     Sparkles,
     Target,
     Trash2,
+    Users,
     Waypoints,
     X,
 } from '@lucide/vue';
@@ -21,13 +22,17 @@ import DueTasksSection from '@/components/notes/DueTasksSection.vue';
 import EventsList from '@/components/notes/EventsList.vue';
 import MobileSidebarButton from '@/components/notes/MobileSidebarButton.vue';
 import PieProgress from '@/components/notes/PieProgress.vue';
+import ShareDialog from '@/components/notes/ShareDialog.vue';
 import { Button } from '@/components/ui/button';
+import { useOnline } from '@/composables/useOnline';
 import { addPeriods, humanizeKey, todayKey } from '@/core/dates';
 import { daysUntil, dueLabel, isReviewDue } from '@/core/frontmatter';
 import type { NoteKind } from '@/core/frontmatter';
+import { canEditNote } from '@/lib/noteAccess';
 import { isMacDesktopShell } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import type { LocalNote } from '@/stores/db';
+import { syncNow } from '@/stores/sync';
 import type { PaneView } from '@/stores/ui';
 import { openGraphView, pendingScrollLine } from '@/stores/ui';
 import {
@@ -105,6 +110,23 @@ const note = computed<LocalNote | undefined>(() => {
 
 const isCalendar = computed(() => props.view.kind === 'calendar');
 
+const online = useOnline();
+const shareOpen = ref(false);
+
+/** After the author changes sharing, sync so the change reaches teammates. */
+function onSharingSaved(): void {
+    void syncNow();
+}
+
+/** The current user's access to this note ('owner' for own + calendar notes). */
+const access = computed(() => note.value?.access ?? 'owner');
+
+/** Only the author may re-share, delete, or move a note. */
+const isOwner = computed(() => access.value === 'owner');
+
+/** Read-only in the editor: a read share, or a write share while offline. */
+const readOnly = computed(() => !canEditNote(access.value, online.value));
+
 const meta = computed(() => (note.value ? noteMetaFor(note.value.id) : null));
 
 const progress = computed(() =>
@@ -180,7 +202,10 @@ function navigateCalendar(offset: number): void {
 }
 
 function onContentUpdate(content: string): void {
-    if (note.value) {
+    // Never persist edits to a note the viewer can't currently write (a
+    // read share, or a write share while offline). The editor is read-only
+    // in those states; this is a belt-and-suspenders guard.
+    if (note.value && !readOnly.value) {
         void updateNoteContent(note.value.id, content);
     }
 }
@@ -377,6 +402,17 @@ defineExpose({ focusEditor });
                         <Waypoints class="size-4" />
                     </Button>
                     <Button
+                        v-if="note && isOwner && !isCalendar"
+                        variant="ghost"
+                        size="icon"
+                        class="size-7"
+                        aria-label="Share note"
+                        title="Share note"
+                        @click="shareOpen = true"
+                    >
+                        <Users class="size-4" />
+                    </Button>
+                    <Button
                         variant="ghost"
                         size="icon"
                         class="size-7"
@@ -387,6 +423,7 @@ defineExpose({ focusEditor });
                         <Pin v-else class="size-4" />
                     </Button>
                     <Button
+                        v-if="isOwner"
                         variant="ghost"
                         size="icon"
                         class="size-7 text-muted-foreground hover:text-destructive"
@@ -413,11 +450,26 @@ defineExpose({ focusEditor });
 
         <div class="min-h-0 flex-1 overflow-y-auto">
             <div class="px-4">
+                <p
+                    v-if="note && access === 'read'"
+                    class="mb-2 rounded-md bg-muted/60 px-2.5 py-1 text-xs text-muted-foreground"
+                >
+                    Shared with you · read-only
+                </p>
+                <p
+                    v-else-if="note && access === 'write' && !online"
+                    class="mb-2 rounded-md bg-amber-500/10 px-2.5 py-1 text-xs text-amber-600 dark:text-amber-500"
+                >
+                    You're offline — this shared note is read-only until you
+                    reconnect.
+                </p>
+
                 <MarkdownEditor
                     v-if="note"
                     ref="editor"
                     :key="note.id"
                     grow
+                    :read-only="readOnly"
                     :model-value="note.content"
                     :state-key="note.id"
                     :placeholder="'Type markdown, add a task (- [ ]), a checklist (+ [ ]), or link a note with [['"
@@ -449,5 +501,12 @@ defineExpose({ focusEditor });
                 @open-note="(id, line) => emit('open-note-line', id, line)"
             />
         </div>
+
+        <ShareDialog
+            v-if="note && isOwner"
+            v-model:open="shareOpen"
+            :note-id="note.id"
+            @saved="onSharingSaved"
+        />
     </div>
 </template>

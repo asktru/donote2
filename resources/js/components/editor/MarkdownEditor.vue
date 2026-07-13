@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { EditorState } from '@codemirror/state';
+import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, placeholder as placeholderExt } from '@codemirror/view';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
@@ -29,6 +29,8 @@ const props = defineProps<{
      * references section) as one region.
      */
     grow?: boolean;
+    /** Make the note non-editable (a read-only share, or offline write). */
+    readOnly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -43,6 +45,14 @@ const host = ref<HTMLDivElement | null>(null);
 let view: EditorView | null = null;
 /** Guards against feeding our own emitted updates back into the editor. */
 let lastEmitted: string | null = null;
+/** Lets us toggle read-only without rebuilding the whole editor state. */
+const readOnlyCompartment = new Compartment();
+
+function readOnlyExtension(readOnly: boolean) {
+    return readOnly
+        ? [EditorState.readOnly.of(true), EditorView.editable.of(false)]
+        : [];
+}
 
 function createView(): void {
     if (!host.value) {
@@ -82,6 +92,7 @@ function createView(): void {
                     getMentions: () => [...mentionCounts.value.keys()],
                 }),
                 placeholderExt(props.placeholder ?? 'Type something…'),
+                readOnlyCompartment.of(readOnlyExtension(props.readOnly ?? false)),
                 attachmentHandlers(() => props.stateKey),
                 EditorView.domEventHandlers({
                     focus: (_event, focusedView) =>
@@ -137,6 +148,17 @@ watch(
         });
         // External replaces (sync pulls) reset folds; restore persisted ones.
         applyPersistedFolds(view);
+    },
+);
+
+watch(
+    () => props.readOnly,
+    (readOnly) => {
+        view?.dispatch({
+            effects: readOnlyCompartment.reconfigure(
+                readOnlyExtension(readOnly ?? false),
+            ),
+        });
     },
 );
 
