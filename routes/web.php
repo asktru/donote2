@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AiCompletionController;
 use App\Http\Controllers\AttachmentController;
+use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GoogleCalendarController;
 use App\Http\Controllers\MemoTranscriptionController;
@@ -42,6 +43,7 @@ Route::prefix('{current_team}')
     ->group(function () {
         Route::get('dashboard', DashboardController::class)->name('dashboard');
         Route::get('notes', NotesAppController::class)->name('notes');
+        Route::get('calendar', CalendarController::class)->name('calendar');
     });
 
 Route::prefix('api/{current_team}')

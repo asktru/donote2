@@ -75,7 +75,14 @@ import {
     sharedNotes,
     tagCounts,
     trashedNotes,
+    workspaceConfig,
 } from '@/stores/workspace';
+
+const calendarHref = computed<string | null>(() => {
+    const slug = workspaceConfig()?.teamSlug;
+
+    return slug ? `/${slug}/calendar` : null;
+});
 
 const REVIEW_ICONS: Record<NoteKind, typeof Target> = {
     project: Target,
@@ -207,11 +214,20 @@ const syncLabel = computed(() => {
         </button>
 
         <div class="mt-3 min-h-0 flex-1 space-y-4 overflow-y-auto px-3 pb-4">
+            <Link
+                v-if="calendarHref"
+                :href="calendarHref"
+                class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-foreground/80 hover:bg-muted/70"
+            >
+                <CalendarDays class="size-4 shrink-0 text-muted-foreground" />
+                Calendar
+            </Link>
+
             <section>
                 <p
                     class="px-2 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
                 >
-                    Calendar
+                    Journal
                 </p>
                 <button
                     v-for="section in calendarSections"
