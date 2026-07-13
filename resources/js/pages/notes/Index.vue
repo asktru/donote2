@@ -57,6 +57,7 @@ import {
     splitView,
     stepCalendar,
 } from '@/stores/ui';
+import { initSectionPrefs } from '@/stores/uiSections';
 import {
     createFolder,
     createNote,
@@ -342,6 +343,7 @@ useSwipe((swipe) => {
 
 onMounted(async () => {
     setTeamMembers(props.members);
+    initSectionPrefs(props.workspace.teamSlug);
     await initWorkspace({
         teamSlug: props.workspace.teamSlug,
         userId: props.workspace.userId,

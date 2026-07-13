@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronRight } from '@lucide/vue';
 import { format } from 'date-fns';
 import { computed } from 'vue';
 
@@ -6,6 +7,7 @@ import { humanizeKey, keyRange, keyStartDate, todayDailyKey } from '@/core/dates
 import { priorityColor } from '@/core/priority';
 import { cn } from '@/lib/utils';
 import { currentView } from '@/stores/ui';
+import { isSectionCollapsed, toggleSection } from '@/stores/uiSections';
 import { taskDayKey, toggleTaskLine, workspaceTasks } from '@/stores/workspace';
 import type { WorkspaceTask } from '@/stores/workspace';
 
@@ -77,12 +79,22 @@ function dueBadge(task: WorkspaceTask): string | null {
 
 <template>
     <div v-if="dueTasks.length > 0">
-        <p
-            class="px-1 pb-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
+        <button
+            type="button"
+            class="flex w-full items-center gap-1 px-1 pb-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground"
+            @click="toggleSection('tasks')"
         >
+            <ChevronRight
+                :class="
+                    cn(
+                        'size-3 shrink-0 transition-transform',
+                        !isSectionCollapsed('tasks') && 'rotate-90',
+                    )
+                "
+            />
             Tasks · {{ periodLabel }}
-        </p>
-        <div class="space-y-0.5">
+        </button>
+        <div v-if="!isSectionCollapsed('tasks')" class="space-y-0.5">
             <div
                 v-for="task in dueTasks"
                 :key="`${task.noteId}:${task.line.index}`"

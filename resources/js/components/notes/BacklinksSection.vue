@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ChevronRight, FileText, Layers, ListTodo, Sparkles, Target } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 
 import { humanizeKey } from '@/core/dates';
 import type { NoteKind } from '@/core/frontmatter';
@@ -8,6 +8,7 @@ import { childrenOf } from '@/core/parser';
 import type { ParsedLine } from '@/core/parser';
 import { cn } from '@/lib/utils';
 import type { LocalNote } from '@/stores/db';
+import { isSectionCollapsed, toggleSection } from '@/stores/uiSections';
 import { backlinksTo, noteMetaFor, parsedNote } from '@/stores/workspace';
 
 const props = defineProps<{
@@ -17,8 +18,6 @@ const props = defineProps<{
 const emit = defineEmits<{
     'open-note': [id: string, line: number];
 }>();
-
-const expanded = ref(true);
 
 const TYPE_ICONS: Record<NoteKind, typeof FileText> = {
     project: Target,
@@ -117,17 +116,20 @@ function displayText(line: ParsedLine): string {
         <button
             type="button"
             class="flex w-full items-center gap-1.5 px-4 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground"
-            @click="expanded = !expanded"
+            @click="toggleSection('reference')"
         >
             <ChevronRight
                 :class="
-                    cn('size-3 transition-transform', expanded && 'rotate-90')
+                    cn(
+                        'size-3 transition-transform',
+                        !isSectionCollapsed('reference') && 'rotate-90',
+                    )
                 "
             />
             {{ total }} Reference{{ total === 1 ? '' : 's' }}
         </button>
 
-        <div v-if="expanded" class="space-y-4 px-4 pb-4">
+        <div v-if="!isSectionCollapsed('reference')" class="space-y-4 px-4 pb-4">
             <div v-for="group in groups" :key="group.note.id">
                 <button
                     type="button"

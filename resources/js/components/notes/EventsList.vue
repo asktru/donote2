@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { CalendarPlus, Eye, EyeOff, SlidersHorizontal } from '@lucide/vue';
+import {
+    CalendarPlus,
+    ChevronRight,
+    Eye,
+    EyeOff,
+    SlidersHorizontal,
+} from '@lucide/vue';
 import { format } from 'date-fns';
 import { computed, onMounted, ref, watch } from 'vue';
 
@@ -30,6 +36,7 @@ import {
     unhideEvent,
 } from '@/stores/eventPrefs';
 import { currentView } from '@/stores/ui';
+import { isSectionCollapsed, toggleSection } from '@/stores/uiSections';
 
 const props = defineProps<{
     googleConnected: boolean;
@@ -258,11 +265,21 @@ watch(() => range.value.start.getTime(), load);
 <template>
     <div>
         <div class="flex items-center justify-between pb-1.5">
-            <p
-                class="px-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
+            <button
+                type="button"
+                class="flex min-w-0 flex-1 items-center gap-1 px-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                @click="toggleSection('events')"
             >
-                Events · {{ rangeLabel }}
-            </p>
+                <ChevronRight
+                    :class="
+                        cn(
+                            'size-3 shrink-0 transition-transform',
+                            !isSectionCollapsed('events') && 'rotate-90',
+                        )
+                    "
+                />
+                <span class="truncate">Events · {{ rangeLabel }}</span>
+            </button>
             <DropdownMenu v-if="appleConnected || hiddenEvents.size > 0">
                 <DropdownMenuTrigger as-child>
                     <Button
@@ -321,6 +338,7 @@ watch(() => range.value.start.getTime(), load);
             </DropdownMenu>
         </div>
 
+        <template v-if="!isSectionCollapsed('events')">
         <div
             v-if="!anySourceConnected"
             class="rounded-lg border border-dashed border-border/70 p-3 text-center"
@@ -441,6 +459,7 @@ watch(() => range.value.start.getTime(), load);
                     </button>
                 </component>
             </div>
+        </template>
         </template>
     </div>
 </template>

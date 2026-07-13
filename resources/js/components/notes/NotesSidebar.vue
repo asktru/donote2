@@ -26,6 +26,7 @@ import {
 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
+import CollapsibleSection from '@/components/notes/CollapsibleSection.vue';
 import FolderTree from '@/components/notes/FolderTree.vue';
 import PieProgress from '@/components/notes/PieProgress.vue';
 import RecordingsSection from '@/components/notes/RecordingsSection.vue';
@@ -62,6 +63,7 @@ import {
     syncPanelOpen,
 } from '@/stores/ui';
 import type { MainView } from '@/stores/ui';
+import { isSectionCollapsed, toggleSection } from '@/stores/uiSections';
 import {
     createFolder,
     createNote,
@@ -107,8 +109,6 @@ const calendarSections: {
     { kind: 'yearly', label: 'Yearly', icon: CalendarClock },
 ];
 
-const tagsExpanded = ref(false);
-const mentionsExpanded = ref(false);
 
 const activeNoteId = computed(() =>
     currentView.value.kind === 'note' ? currentView.value.id : null,
@@ -231,12 +231,7 @@ const syncLabel = computed(() => {
                 Calendar
             </Link>
 
-            <section>
-                <p
-                    class="px-2 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
-                >
-                    Journal
-                </p>
+            <CollapsibleSection section-id="journal" title="Journal">
                 <button
                     v-for="section in calendarSections"
                     :key="section.kind"
@@ -257,7 +252,7 @@ const syncLabel = computed(() => {
                     />
                     {{ section.label }}
                 </button>
-            </section>
+            </CollapsibleSection>
 
             <section>
                 <p
@@ -301,12 +296,15 @@ const syncLabel = computed(() => {
 
             <RecordingsSection />
 
-            <section v-if="reviewQueue.length > 0">
-                <p
-                    class="px-2 pb-1 text-[11px] font-semibold tracking-wide text-amber-600 uppercase dark:text-amber-500"
-                >
-                    Review due · {{ reviewQueue.length }}
-                </p>
+            <CollapsibleSection
+                v-if="reviewQueue.length > 0"
+                section-id="review"
+            >
+                <template #title>
+                    <span class="text-amber-600 dark:text-amber-500">
+                        Review due · {{ reviewQueue.length }}
+                    </span>
+                </template>
                 <div
                     v-for="note in reviewQueue"
                     :key="note.id"
@@ -342,7 +340,7 @@ const syncLabel = computed(() => {
                         <Check class="size-4" />
                     </button>
                 </div>
-            </section>
+            </CollapsibleSection>
 
             <section v-if="pinnedNotes.length > 0">
                 <p
@@ -382,11 +380,21 @@ const syncLabel = computed(() => {
                 @drop.prevent="onRootDrop"
             >
                 <div class="flex items-center px-2 pb-1">
-                    <p
-                        class="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
+                    <button
+                        type="button"
+                        class="flex items-center gap-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                        @click="toggleSection('notes')"
                     >
+                        <ChevronRight
+                            :class="
+                                cn(
+                                    'size-3 shrink-0 transition-transform',
+                                    !isSectionCollapsed('notes') && 'rotate-90',
+                                )
+                            "
+                        />
                         Notes
-                    </p>
+                    </button>
                     <div class="ml-auto flex gap-0.5">
                         <Button
                             variant="ghost"
@@ -408,6 +416,7 @@ const syncLabel = computed(() => {
                         </Button>
                     </div>
                 </div>
+                <template v-if="!isSectionCollapsed('notes')">
                 <FolderTree
                     path=""
                     :depth="0"
@@ -468,55 +477,32 @@ const syncLabel = computed(() => {
                         {{ trashedNotes.length }}
                     </span>
                 </button>
+                </template>
             </section>
 
-            <section v-if="topTags.length > 0">
-                <button
-                    type="button"
-                    class="flex w-full items-center gap-1 px-2 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
-                    @click="tagsExpanded = !tagsExpanded"
-                >
-                    <ChevronRight
-                        :class="
-                            cn(
-                                'size-3 transition-transform',
-                                tagsExpanded && 'rotate-90',
-                            )
-                        "
-                    />
-                    Tags ({{ topTags.length }})
-                </button>
+            <CollapsibleSection
+                v-if="topTags.length > 0"
+                section-id="tags"
+                :title="`Tags (${topTags.length})`"
+            >
                 <TagTree
-                    v-if="tagsExpanded"
                     :counts="tagCounts"
                     sigil="#"
                     @open="(tag) => openView({ kind: 'tag', tag })"
                 />
-            </section>
+            </CollapsibleSection>
 
-            <section v-if="topMentions.length > 0">
-                <button
-                    type="button"
-                    class="flex w-full items-center gap-1 px-2 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
-                    @click="mentionsExpanded = !mentionsExpanded"
-                >
-                    <ChevronRight
-                        :class="
-                            cn(
-                                'size-3 transition-transform',
-                                mentionsExpanded && 'rotate-90',
-                            )
-                        "
-                    />
-                    Mentions ({{ topMentions.length }})
-                </button>
+            <CollapsibleSection
+                v-if="topMentions.length > 0"
+                section-id="mentions"
+                :title="`Mentions (${topMentions.length})`"
+            >
                 <TagTree
-                    v-if="mentionsExpanded"
                     :counts="mentionCounts"
                     sigil="@"
                     @open="(mention) => openView({ kind: 'mention', mention })"
                 />
-            </section>
+            </CollapsibleSection>
         </div>
 
         <div class="flex items-center gap-1 border-t border-border/60 p-2">
