@@ -42,7 +42,7 @@ const mainNavItems = computed<NavItem[]>(() => [
 
 <template>
     <Sidebar collapsible="icon" variant="inset">
-        <SidebarHeader>
+        <SidebarHeader class="pt-[env(safe-area-inset-top)]">
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
