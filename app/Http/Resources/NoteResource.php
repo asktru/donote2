@@ -19,9 +19,8 @@ class NoteResource extends JsonResource
     public function toArray(Request $request): array
     {
         $user = $request->user();
-        $isAuthor = $user !== null && $this->user_id === $user->id;
 
-        return [
+        $data = [
             'id' => $this->id,
             'type' => $this->type->value,
             'date_key' => $this->date_key,
@@ -35,18 +34,21 @@ class NoteResource extends JsonResource
             'deleted' => $this->trashed(),
             'author_id' => $this->user_id,
             'access' => $user !== null ? $this->accessFor($user)->value : 'none',
-            // Only the author receives the recipient list (for the share UI).
-            $this->mergeWhen($isAuthor, fn (): array => [
-                'sharing' => [
-                    'team_readable' => $this->team_readable,
-                    'shares' => $this->shares
-                        ->map(fn ($share): array => [
-                            'user_id' => $share->user_id,
-                            'access' => $share->access,
-                        ])
-                        ->values(),
-                ],
-            ]),
         ];
+
+        // Only the author receives the recipient list (for the share UI).
+        if ($user !== null && $this->user_id === $user->id) {
+            $data['sharing'] = [
+                'team_readable' => $this->team_readable,
+                'shares' => $this->shares
+                    ->map(fn ($share): array => [
+                        'user_id' => $share->user_id,
+                        'access' => $share->access,
+                    ])
+                    ->values(),
+            ];
+        }
+
+        return $data;
     }
 }

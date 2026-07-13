@@ -38,6 +38,20 @@ class NoteSyncController extends Controller
     }
 
     /**
+     * The ids of every note currently visible to the caller — used by the
+     * client to prune notes it has lost access to (revoked shares, a note
+     * flipped back to private, a departed collaborator).
+     */
+    public function visibleIds(Request $request, Team $current_team): JsonResponse
+    {
+        return response()->json([
+            'ids' => Note::query()
+                ->visibleTo($current_team, $request->user())
+                ->pluck('id'),
+        ]);
+    }
+
+    /**
      * Push a batch of local note changes to the server.
      */
     public function store(SyncNotesRequest $request, Team $current_team, ApplyNoteChange $applyNoteChange): JsonResponse

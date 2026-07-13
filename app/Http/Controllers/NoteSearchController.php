@@ -21,11 +21,22 @@ class NoteSearchController extends Controller
             return response()->json(['results' => []]);
         }
 
+        $user = $request->user();
+
+        // The note_shares subquery isn't expressible as a Scout filter, so
+        // match within the team then drop anything the viewer can't see.
+        $visibleIds = Note::query()
+            ->visibleTo($current_team, $user)
+            ->pluck('id')
+            ->flip();
+
         $notes = Note::search($query)
             ->where('team_id', $current_team->id)
-            ->where('user_id', $request->user()->id)
+            ->take(50)
+            ->get()
+            ->filter(fn (Note $note): bool => $visibleIds->has($note->id))
             ->take(20)
-            ->get();
+            ->values();
 
         return response()->json([
             'results' => $notes->map(fn (Note $note): array => [

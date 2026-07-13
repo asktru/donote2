@@ -21,6 +21,15 @@ class NotesAppController extends Controller
                 'teamName' => $current_team->name,
                 'userId' => $request->user()->id,
             ],
+            // Team members drive the note-sharing picker.
+            'members' => $current_team->members()
+                ->get(['users.id', 'users.name', 'users.email'])
+                ->map(fn ($member): array => [
+                    'id' => $member->id,
+                    'name' => $member->name,
+                    'email' => $member->email,
+                ])
+                ->values(),
             'googleConnected' => $request->user()->googleAccounts()->exists(),
         ]);
     }
