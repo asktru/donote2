@@ -54,11 +54,13 @@ export async function apiUpload<T>(url: string, form: FormData): Promise<T> {
     });
 
     if (!response.ok) {
-        // Lead with the status so failures are diagnosable even when the
-        // body isn't JSON (e.g. a 413 from the web server, or an HTML 5xx
-        // page). Only our own JSON error bodies carry a friendly message.
-        const statusText = response.statusText || 'Upload failed';
-        let message = `${response.status} ${statusText}`;
+        // A 413 is raised by the web server (nginx) before Laravel runs, so
+        // it never carries a JSON body — name the real cause instead of a
+        // bare status code.
+        let message =
+            response.status === 413
+                ? 'File too large — the server rejected the upload (raise its upload limit).'
+                : `${response.status} ${response.statusText || 'Upload failed'}`;
 
         try {
             const body = (await response.json()) as { message?: string };
