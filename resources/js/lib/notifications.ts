@@ -198,6 +198,9 @@ async function reconcileIos(desired: DesiredNotification[]): Promise<void> {
                 body: entry.body,
                 schedule: { at: new Date(entry.at) },
                 actionTypeId: ACTION_TYPE_ID,
+                // Reminders are time-sensitive: break through Focus/DND and
+                // light the screen rather than sitting silently in the summary.
+                interruptionLevel: 'timeSensitive',
                 extra: { noteId: entry.noteId, line: entry.line },
             })),
         });
