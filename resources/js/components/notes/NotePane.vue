@@ -14,13 +14,14 @@ import {
     Waypoints,
     X,
 } from '@lucide/vue';
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
 import MarkdownEditor from '@/components/editor/MarkdownEditor.vue';
 import BacklinksSection from '@/components/notes/BacklinksSection.vue';
 import DueTasksSection from '@/components/notes/DueTasksSection.vue';
 import EventsList from '@/components/notes/EventsList.vue';
 import MobileSidebarButton from '@/components/notes/MobileSidebarButton.vue';
+import NoteFilters from '@/components/notes/NoteFilters.vue';
 import PieProgress from '@/components/notes/PieProgress.vue';
 import ShareDialog from '@/components/notes/ShareDialog.vue';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,7 @@ import {
     noteMetaFor,
     noteProgressFor,
     openCalendarNote,
+    parsedNote,
     renameNote,
     resolveWikiTarget,
     setNotePinned,
@@ -81,6 +83,15 @@ const emit = defineEmits<{
 }>();
 
 const editor = ref<InstanceType<typeof MarkdownEditor> | null>(null);
+
+/** Whether an in-note task filter is active (hides the editor for the list). */
+const filterActive = ref(false);
+
+/** Jump from a filtered row back into the editor at that line. */
+function jumpToLine(line: number): void {
+    filterActive.value = false;
+    void nextTick(() => setTimeout(() => editor.value?.scrollToLine(line), 50));
+}
 
 watch(
     () => props.view,
@@ -115,6 +126,23 @@ const note = computed<LocalNote | undefined>(() => {
 });
 
 const isCalendar = computed(() => props.view.kind === 'calendar');
+
+/** The filter bar only appears for notes that contain tasks or checklists. */
+const noteHasTasks = computed<boolean>(() =>
+    note.value
+        ? parsedNote(note.value.id).some(
+              (line) => line.kind === 'task' || line.kind === 'checklist',
+          )
+        : false,
+);
+
+// Reset the filter when switching notes so a new note opens in the editor.
+watch(
+    () => note.value?.id,
+    () => {
+        filterActive.value = false;
+    },
+);
 
 const online = useOnline();
 const shareOpen = ref(false);
@@ -516,8 +544,17 @@ defineExpose({ focusEditor });
                     reconnect.
                 </p>
 
+                <NoteFilters
+                    v-if="note && noteHasTasks"
+                    :note-id="note.id"
+                    :read-only="readOnly"
+                    @update:active="filterActive = $event"
+                    @open-line="jumpToLine"
+                />
+
                 <MarkdownEditor
                     v-if="note"
+                    v-show="!filterActive"
                     ref="editor"
                     :key="note.id"
                     grow
