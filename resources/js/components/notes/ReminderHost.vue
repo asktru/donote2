@@ -5,6 +5,11 @@ import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import { formatReminderToken, reminderCandidates } from '@/core/reminders';
 import type { ReminderCandidate } from '@/core/reminders';
+import {
+    notificationId,
+    reconcileNotifications,
+} from '@/lib/notifications';
+import type { DesiredNotification } from '@/lib/notifications';
 import { openWorkspaceDb } from '@/stores/db';
 import type { WorkspaceDb } from '@/stores/db';
 import {
@@ -31,17 +36,37 @@ async function scan(): Promise<void> {
 
     const now = Date.now();
     const candidates: ReminderCandidate[] = [];
+    const noteTitles = new Map<string, string>();
 
     for (const note of liveNotes.value) {
+        noteTitles.set(note.id, note.title);
         candidates.push(...reminderCandidates(note.id, parsedNote(note.id)));
     }
 
+    const desired: DesiredNotification[] = [];
+
     for (const candidate of candidates) {
+        const fireAt = candidate.at.getTime();
+        const state = await db.reminders.get(candidate.key);
+        const silenced =
+            state?.status === 'dismissed' ||
+            (state?.status === 'snoozed' &&
+                state.until !== null &&
+                state.until > now);
+
+        // Future reminders become on-device OS notifications; a completed or
+        // rescheduled task drops its candidate, so it's cancelled on reconcile.
+        if (fireAt > now && !silenced) {
+            desired.push({
+                id: notificationId(candidate.key),
+                at: fireAt,
+                title: candidate.line.title || 'Reminder',
+                body: noteTitles.get(candidate.noteId) || 'Task reminder',
+            });
+        }
+
         // Fire reminders due within the last 12 hours (missed while away) up to now.
-        if (
-            candidate.at.getTime() > now ||
-            now - candidate.at.getTime() > 12 * 3600 * 1000
-        ) {
+        if (fireAt > now || now - fireAt > 12 * 3600 * 1000) {
             continue;
         }
 
@@ -49,22 +74,14 @@ async function scan(): Promise<void> {
             continue;
         }
 
-        const state = await db.reminders.get(candidate.key);
-
-        if (state?.status === 'dismissed') {
-            continue;
-        }
-
-        if (
-            state?.status === 'snoozed' &&
-            state.until !== null &&
-            state.until > now
-        ) {
+        if (silenced) {
             continue;
         }
 
         active.value = [...active.value, candidate];
     }
+
+    void reconcileNotifications(desired);
 }
 
 async function dismiss(candidate: ReminderCandidate): Promise<void> {
