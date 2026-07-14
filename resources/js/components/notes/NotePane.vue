@@ -25,12 +25,18 @@ import PieProgress from '@/components/notes/PieProgress.vue';
 import ShareDialog from '@/components/notes/ShareDialog.vue';
 import { Button } from '@/components/ui/button';
 import { useOnline } from '@/composables/useOnline';
-import { addPeriods, humanizeKey, todayKey } from '@/core/dates';
-import { daysUntil, dueLabel, isReviewDue } from '@/core/frontmatter';
+import { addPeriods, humanizeKey, shortLabelForKey, todayKey } from '@/core/dates';
+import {
+    daysUntil,
+    dueLabel,
+    isReviewDue,
+    upsertFrontMatterKey,
+} from '@/core/frontmatter';
 import type { NoteKind } from '@/core/frontmatter';
 import { canEditNote } from '@/lib/noteAccess';
 import { isMacDesktopShell } from '@/lib/platform';
 import { cn } from '@/lib/utils';
+import { openDatePicker } from '@/stores/datePicker';
 import type { LocalNote } from '@/stores/db';
 import { syncNow } from '@/stores/sync';
 import type { PaneView } from '@/stores/ui';
@@ -173,6 +179,32 @@ async function markThisReviewed(): Promise<void> {
     if (note.value) {
         await markReviewed(note.value.id);
     }
+}
+
+/** Edit a project's start/due date with the shared date picker (day-only). */
+function editProjectDate(field: 'start' | 'due'): void {
+    const current = note.value;
+
+    if (!current) {
+        return;
+    }
+
+    const id = current.id;
+
+    openDatePicker({
+        mode: field === 'start' ? 'projectStart' : 'projectDue',
+        allowPeriods: false,
+        current: meta.value?.[field] ?? null,
+        title: field === 'start' ? 'Project start' : 'Project due',
+        onApply: (key) => {
+            const content = getNote(id)?.content ?? current.content;
+
+            void updateNoteContent(
+                id,
+                upsertFrontMatterKey(content, field, key ?? ''),
+            );
+        },
+    });
 }
 
 const calendarTitle = computed(() =>
@@ -351,17 +383,37 @@ defineExpose({ focusEditor });
                     >
                         {{ listRemaining }} left
                     </span>
-                    <span
-                        v-if="dueBadge"
-                        :class="
-                            cn(
-                                'rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap',
-                                dueBadge.tone,
-                            )
-                        "
-                    >
-                        {{ dueBadge.label }}
-                    </span>
+                    <template v-if="meta?.type === 'project'">
+                        <button
+                            type="button"
+                            :disabled="readOnly"
+                            class="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-muted-foreground hover:bg-muted/70 disabled:pointer-events-none"
+                            title="Set project start"
+                            @click="editProjectDate('start')"
+                        >
+                            {{
+                                meta.start
+                                    ? `Starts ${shortLabelForKey(meta.start)}`
+                                    : 'Set start'
+                            }}
+                        </button>
+                        <button
+                            type="button"
+                            :disabled="readOnly"
+                            :class="
+                                cn(
+                                    'rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap hover:opacity-80 disabled:pointer-events-none',
+                                    dueBadge
+                                        ? dueBadge.tone
+                                        : 'bg-muted text-muted-foreground',
+                                )
+                            "
+                            title="Set project due date"
+                            @click="editProjectDate('due')"
+                        >
+                            {{ dueBadge ? dueBadge.label : 'Set due' }}
+                        </button>
+                    </template>
                     <Button
                         v-if="meta?.review"
                         :variant="reviewIsDue ? 'secondary' : 'ghost'"
