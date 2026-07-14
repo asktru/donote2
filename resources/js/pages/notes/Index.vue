@@ -37,6 +37,7 @@ import { aiDialogOpen } from '@/stores/aiPrompts';
 import { startMemoUploader, toggleRecording } from '@/stores/memos';
 import { startMoveToNote } from '@/stores/move';
 import { promptText } from '@/stores/prompt';
+import { startReminderScheduler } from '@/stores/reminderScheduler';
 import { startSync, stopSync } from '@/stores/sync';
 import { setTeamMembers } from '@/stores/team';
 import type { TeamMember } from '@/stores/team';
@@ -354,6 +355,7 @@ onMounted(async () => {
     window.addEventListener('keydown', onKeydown);
     void hideNativeAccessoryBar();
     startMemoUploader();
+    startReminderScheduler();
     await startSync();
 });
 

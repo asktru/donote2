@@ -42,8 +42,10 @@ import {
     watchCalendarRange,
 } from '@/stores/calendar';
 import type { CalendarEvent } from '@/stores/calendar';
+import { startReminderScheduler } from '@/stores/reminderScheduler';
 import { setTeamMembers } from '@/stores/team';
 import type { TeamMember } from '@/stores/team';
+import { initWorkspace } from '@/stores/workspace';
 
 const props = defineProps<{
     workspace: { teamSlug: string; teamName: string; userId: number };
@@ -143,11 +145,19 @@ function onKeydown(event: KeyboardEvent): void {
     }
 }
 
-onMounted(() => {
+onMounted(async () => {
     setTeamMembers(props.members);
     initCalendarPrefs(props.workspace.teamSlug);
     watchCalendarRange();
     window.addEventListener('keydown', onKeydown);
+
+    // Load cached notes and schedule reminder notifications even when the
+    // Notes page was never opened this session (e.g. app launched here).
+    await initWorkspace({
+        teamSlug: props.workspace.teamSlug,
+        userId: props.workspace.userId,
+    });
+    startReminderScheduler();
 });
 
 onBeforeUnmount(() => {
