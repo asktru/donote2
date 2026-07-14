@@ -1,12 +1,18 @@
-import { reminderCandidates } from '@/core/reminders';
+import { formatReminderToken, reminderCandidates } from '@/core/reminders';
 import {
     notificationId,
+    onNotificationSnooze,
     reconcileNotifications,
 } from '@/lib/notifications';
 import type { DesiredNotification } from '@/lib/notifications';
 import { openWorkspaceDb } from '@/stores/db';
 import type { WorkspaceDb } from '@/stores/db';
-import { liveNotes, parsedNote, workspaceConfig } from '@/stores/workspace';
+import {
+    liveNotes,
+    parsedNote,
+    rewriteReminderToken,
+    workspaceConfig,
+} from '@/stores/workspace';
 
 /**
  * App-wide scheduling of local reminder notifications. Runs independently of
@@ -73,6 +79,34 @@ export async function reconcileReminderNotifications(): Promise<void> {
     await reconcileNotifications(desired);
 }
 
+/**
+ * Snooze a task's reminder by rewriting its `@time` token to `minutes` from
+ * now, so the note reflects the new time; the next reconcile then reschedules
+ * the OS notification accordingly.
+ */
+async function snoozeReminder(
+    noteId: string,
+    lineIndex: number,
+    minutes: number,
+): Promise<void> {
+    const line = parsedNote(noteId)[lineIndex];
+
+    if (!line || line.reminderRaw === null) {
+        return;
+    }
+
+    const at = new Date(Date.now() + minutes * 60_000);
+
+    await rewriteReminderToken(
+        noteId,
+        line,
+        line.reminderRaw,
+        formatReminderToken(at),
+    );
+
+    await reconcileReminderNotifications();
+}
+
 /** Boot once per session; safe to call from every page's onMounted. */
 export function startReminderScheduler(): void {
     if (started) {
@@ -80,6 +114,9 @@ export function startReminderScheduler(): void {
     }
 
     started = true;
+    onNotificationSnooze((noteId, line, minutes) => {
+        void snoozeReminder(noteId, line, minutes);
+    });
     void reconcileReminderNotifications();
     timer = setInterval(
         () => void reconcileReminderNotifications(),

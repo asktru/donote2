@@ -23,19 +23,37 @@ export interface DesiredNotification {
     line: number;
 }
 
-/** Called when the user taps a reminder notification. */
+/** How many minutes the notification's Snooze action defers a reminder. */
+export const SNOOZE_MINUTES = 15;
+const ACTION_TYPE_ID = 'donote-reminder';
+const SNOOZE_ACTION_ID = 'snooze';
+
+type Target = { noteId: string; line: number };
+/** Opens the note a tapped reminder points to. */
 type TapHandler = (noteId: string, line: number) => void;
+/** Reschedules a reminder and rewrites its `@time` token in the note. */
+type SnoozeHandler = (noteId: string, line: number, minutes: number) => void;
 
 let tapHandler: TapHandler | null = null;
-/** A tap that arrived before a handler was registered (e.g. cold start). */
-let pendingTap: { noteId: string; line: number } | null = null;
-let iosTapListenerReady = false;
+let snoozeHandler: SnoozeHandler | null = null;
+/** Actions that arrived before a handler was registered (e.g. cold start). */
+let pendingTap: Target | null = null;
+let pendingSnooze: Target | null = null;
+let iosListenersReady = false;
 
 function deliverTap(noteId: string, line: number): void {
     if (tapHandler) {
         tapHandler(noteId, line);
     } else {
         pendingTap = { noteId, line };
+    }
+}
+
+function deliverSnooze(noteId: string, line: number): void {
+    if (snoozeHandler) {
+        snoozeHandler(noteId, line, SNOOZE_MINUTES);
+    } else {
+        pendingSnooze = { noteId, line };
     }
 }
 
@@ -48,26 +66,59 @@ export function onNotificationTap(handler: TapHandler): void {
         pendingTap = null;
     }
 
-    void registerIosTapListener();
+    void registerIosListeners();
 }
 
-async function registerIosTapListener(): Promise<void> {
-    if (!isNativeIos() || iosTapListenerReady) {
+/** Register the handler that snoozes a reminder from the notification action. */
+export function onNotificationSnooze(handler: SnoozeHandler): void {
+    snoozeHandler = handler;
+
+    if (pendingSnooze) {
+        handler(pendingSnooze.noteId, pendingSnooze.line, SNOOZE_MINUTES);
+        pendingSnooze = null;
+    }
+
+    void registerIosListeners();
+}
+
+async function registerIosListeners(): Promise<void> {
+    if (!isNativeIos() || iosListenersReady) {
         return;
     }
 
-    iosTapListenerReady = true;
+    iosListenersReady = true;
 
     const { LocalNotifications } = await import('@capacitor/local-notifications');
+
+    // The Snooze button; `foreground` brings the app up so we can rewrite the
+    // note's @time token and reschedule.
+    await LocalNotifications.registerActionTypes({
+        types: [
+            {
+                id: ACTION_TYPE_ID,
+                actions: [
+                    {
+                        id: SNOOZE_ACTION_ID,
+                        title: `Snooze ${SNOOZE_MINUTES} min`,
+                        foreground: true,
+                    },
+                ],
+            },
+        ],
+    });
 
     await LocalNotifications.addListener(
         'localNotificationActionPerformed',
         (action) => {
-            const extra = action.notification.extra as
-                | { noteId?: string; line?: number }
-                | undefined;
+            const extra = action.notification.extra as Partial<Target> | undefined;
 
-            if (extra?.noteId) {
+            if (!extra?.noteId) {
+                return;
+            }
+
+            if (action.actionId === SNOOZE_ACTION_ID) {
+                deliverSnooze(extra.noteId, extra.line ?? 0);
+            } else {
                 deliverTap(extra.noteId, extra.line ?? 0);
             }
         },
@@ -146,6 +197,7 @@ async function reconcileIos(desired: DesiredNotification[]): Promise<void> {
                 title: entry.title,
                 body: entry.body,
                 schedule: { at: new Date(entry.at) },
+                actionTypeId: ACTION_TYPE_ID,
                 extra: { noteId: entry.noteId, line: entry.line },
             })),
         });
