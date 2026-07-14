@@ -753,6 +753,15 @@ export async function toggleTaskLine(
         `$1${nextChar}$2`,
     );
 
+    // Priority is meaningless once done — strip !/!!/!!! (and its trailing
+    // space), mirroring the editor so completion is consistent everywhere.
+    if (completing) {
+        rawLines[lineIndex] = rawLines[lineIndex].replace(
+            /^(\s*[-*+]\s\[[ xX>-]\]\s)(!{1,3})\s/,
+            '$1',
+        );
+    }
+
     if (completing && line.repeat !== null) {
         const { buildNextOccurrenceLine } = await import('@/core/repeat');
         const { todayDailyKey } = await import('@/core/dates');
