@@ -2,6 +2,7 @@
 import { AtSign, CalendarClock, Flag, Hash, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import MobileSidebarButton from '@/components/notes/MobileSidebarButton.vue';
+import TaskTitle from '@/components/notes/TaskTitle.vue';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -339,7 +340,7 @@ function dueLabel(task: WorkspaceTask): string | null {
                                 }"
                                 >{{ '!'.repeat(task.line.priority) }}</span
                             >
-                            {{ task.line.title }}
+                            <TaskTitle :text="task.line.title" />
                         </p>
                         <p
                             class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground"

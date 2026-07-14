@@ -24,7 +24,7 @@ import {
     Trash2,
     Users,
 } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import CollapsibleSection from '@/components/notes/CollapsibleSection.vue';
 import FolderTree from '@/components/notes/FolderTree.vue';
@@ -155,6 +155,23 @@ async function onRootDrop(event: DragEvent): Promise<void> {
         await acceptTreeDrop(payload, '');
     }
 }
+
+// Dropping into a child folder re-renders (unmounting the dragged row), so the
+// section's own dragend never fires and its highlight would stick. Clear it on
+// any drag end/drop anywhere.
+function clearRootDropTarget(): void {
+    rootDropTarget.value = false;
+}
+
+onMounted(() => {
+    document.addEventListener('dragend', clearRootDropTarget);
+    document.addEventListener('drop', clearRootDropTarget);
+});
+
+onBeforeUnmount(() => {
+    document.removeEventListener('dragend', clearRootDropTarget);
+    document.removeEventListener('drop', clearRootDropTarget);
+});
 
 const syncLabel = computed(() => {
     switch (syncStatus.value) {

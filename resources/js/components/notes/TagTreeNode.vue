@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { AtSign, ChevronRight, Hash, ListChecks, Pencil } from '@lucide/vue';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 import {
     ContextMenu,
@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/context-menu';
 import { cn } from '@/lib/utils';
 import { promptText } from '@/stores/prompt';
+import { currentView } from '@/stores/ui';
 import { renameMention, renameTag } from '@/stores/workspace';
 
 export interface TagNode {
@@ -30,6 +31,15 @@ const emit = defineEmits<{
 }>();
 
 const expanded = ref(false);
+
+/** Highlight the row when its tasks are the view currently open. */
+const isActive = computed<boolean>(() =>
+    props.sigil === '#'
+        ? currentView.value.kind === 'tag' &&
+          currentView.value.tag === props.node.full
+        : currentView.value.kind === 'mention' &&
+          currentView.value.mention === props.node.full,
+);
 
 async function renamePrompt(): Promise<void> {
     const next = (
@@ -60,7 +70,10 @@ async function renamePrompt(): Promise<void> {
                 <div
                     :class="
                         cn(
-                            'flex w-full items-center gap-1 rounded-md py-1 pr-2 text-sm text-foreground/80 hover:bg-muted/70',
+                            'flex w-full items-center gap-1 rounded-md py-1 pr-2 text-sm outline-none hover:bg-muted/70',
+                            isActive
+                                ? 'bg-muted font-medium text-primary'
+                                : 'text-foreground/80',
                         )
                     "
                     :style="{ paddingLeft: `${depth * 14 + 8}px` }"
@@ -85,7 +98,7 @@ async function renamePrompt(): Promise<void> {
 
                     <button
                         type="button"
-                        class="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                        class="flex min-w-0 flex-1 items-center gap-1.5 rounded-sm text-left outline-none focus-visible:ring-1 focus-visible:ring-ring"
                         @click="emit('open', node.full)"
                     >
                         <Hash
