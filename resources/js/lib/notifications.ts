@@ -18,6 +18,60 @@ export interface DesiredNotification {
     at: number;
     title: string;
     body: string;
+    /** Where tapping the notification should navigate. */
+    noteId: string;
+    line: number;
+}
+
+/** Called when the user taps a reminder notification. */
+type TapHandler = (noteId: string, line: number) => void;
+
+let tapHandler: TapHandler | null = null;
+/** A tap that arrived before a handler was registered (e.g. cold start). */
+let pendingTap: { noteId: string; line: number } | null = null;
+let iosTapListenerReady = false;
+
+function deliverTap(noteId: string, line: number): void {
+    if (tapHandler) {
+        tapHandler(noteId, line);
+    } else {
+        pendingTap = { noteId, line };
+    }
+}
+
+/** Register the handler that opens the note a tapped reminder points to. */
+export function onNotificationTap(handler: TapHandler): void {
+    tapHandler = handler;
+
+    if (pendingTap) {
+        handler(pendingTap.noteId, pendingTap.line);
+        pendingTap = null;
+    }
+
+    void registerIosTapListener();
+}
+
+async function registerIosTapListener(): Promise<void> {
+    if (!isNativeIos() || iosTapListenerReady) {
+        return;
+    }
+
+    iosTapListenerReady = true;
+
+    const { LocalNotifications } = await import('@capacitor/local-notifications');
+
+    await LocalNotifications.addListener(
+        'localNotificationActionPerformed',
+        (action) => {
+            const extra = action.notification.extra as
+                | { noteId?: string; line?: number }
+                | undefined;
+
+            if (extra?.noteId) {
+                deliverTap(extra.noteId, extra.line ?? 0);
+            }
+        },
+    );
 }
 
 /** iOS keeps at most 64 pending local notifications; stay well under. */
@@ -92,6 +146,7 @@ async function reconcileIos(desired: DesiredNotification[]): Promise<void> {
                 title: entry.title,
                 body: entry.body,
                 schedule: { at: new Date(entry.at) },
+                extra: { noteId: entry.noteId, line: entry.line },
             })),
         });
     }
@@ -143,7 +198,15 @@ async function reconcileTimer(desired: DesiredNotification[]): Promise<void> {
                 timers.delete(entry.id);
 
                 try {
-                    new Notification(entry.title, { body: entry.body });
+                    const notification = new Notification(entry.title, {
+                        body: entry.body,
+                    });
+
+                    notification.onclick = () => {
+                        window.focus();
+                        deliverTap(entry.noteId, entry.line);
+                        notification.close();
+                    };
                 } catch {
                     // Notification construction can throw if permission was
                     // revoked mid-session — ignore.

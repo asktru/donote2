@@ -7,6 +7,7 @@ import { formatReminderToken, reminderCandidates } from '@/core/reminders';
 import type { ReminderCandidate } from '@/core/reminders';
 import {
     notificationId,
+    onNotificationTap,
     reconcileNotifications,
 } from '@/lib/notifications';
 import type { DesiredNotification } from '@/lib/notifications';
@@ -62,6 +63,8 @@ async function scan(): Promise<void> {
                 at: fireAt,
                 title: candidate.line.title || 'Reminder',
                 body: noteTitles.get(candidate.noteId) || 'Task reminder',
+                noteId: candidate.noteId,
+                line: candidate.line.index,
             });
         }
 
@@ -149,6 +152,9 @@ onMounted(() => {
     if (cfg) {
         db = openWorkspaceDb(cfg.teamSlug, cfg.userId);
     }
+
+    // Tapping a reminder notification opens the note at the task's line.
+    onNotificationTap((noteId, line) => emit('open-note', noteId, line));
 
     void scan();
     timer = setInterval(() => void scan(), 30000);
