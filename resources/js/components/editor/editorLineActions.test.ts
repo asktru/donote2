@@ -115,6 +115,43 @@ describe('editorLineActions', () => {
         expect(view.doc).toBe('- [ ] Do it');
     });
 
+    it('completing a repeating task inserts its next occurrence', () => {
+        const view = makeView('- [ ] Water plants >2026-07-11 @repeat(3d)', 8);
+        run(view, 'complete');
+
+        expect(view.doc).toBe(
+            [
+                '- [x] Water plants >2026-07-11 @repeat(3d)',
+                '- [ ] Water plants >2026-07-14 @repeat(3d)',
+            ].join('\n'),
+        );
+    });
+
+    it('inserts the next occurrence after the task’s indented children', () => {
+        const view = makeView(
+            [
+                '- [ ] Water plants >2026-07-11 @repeat(3d)',
+                '    context note',
+            ].join('\n'),
+            8,
+        );
+        run(view, 'complete');
+
+        expect(view.doc).toBe(
+            [
+                '- [x] Water plants >2026-07-11 @repeat(3d)',
+                '    context note',
+                '- [ ] Water plants >2026-07-14 @repeat(3d)',
+            ].join('\n'),
+        );
+    });
+
+    it('does not add an occurrence when completing a non-repeating task', () => {
+        const view = makeView('- [ ] Buy milk', 8);
+        run(view, 'complete');
+        expect(view.doc).toBe('- [x] Buy milk');
+    });
+
     it('wraps a selection in bold and highlight, and unwraps bold', () => {
         const bold = makeView('make me bold', 8, 12); // select "bold"
         run(bold, 'bold');
