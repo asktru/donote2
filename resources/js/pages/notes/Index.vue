@@ -3,6 +3,7 @@ import { Head, router } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import AiPromptDialog from '@/components/notes/AiPromptDialog.vue';
+import DatePickerDialog from '@/components/notes/DatePickerDialog.vue';
 import DueTasksSection from '@/components/notes/DueTasksSection.vue';
 import EditorToolbar from '@/components/notes/EditorToolbar.vue';
 import EventsList from '@/components/notes/EventsList.vue';
@@ -537,6 +538,7 @@ onBeforeUnmount(() => {
                 />
                 <ShortcutsDialog />
                 <SyncPanel />
+                <DatePickerDialog />
                 <AiPromptDialog />
                 <ImageLightbox />
                 <FilePreview />

@@ -57,6 +57,7 @@ import type { ParsedLine, Priority, TaskState } from '@/core/parser';
 import { PRIORITY_COLORS } from '@/core/priority';
 import { buildNextOccurrenceLine } from '@/core/repeat';
 import { generateSyncId } from '@/core/syncedLines';
+import { openDatePicker } from '@/stores/datePicker';
 import { filePreview, lightboxImage, syncedLinePanel } from '@/stores/ui';
 
 export interface EditorCallbacks {
@@ -865,10 +866,18 @@ function buildDecorations(state: EditorState): DecorationSet {
         }
 
         for (const match of line.text.matchAll(META_TOKEN_RE)) {
+            // Due tokens get an extra class so a click opens the date picker.
+            const isDue = match[0].startsWith('@due(');
+
             tokens.push({
                 from: line.from + match.index,
                 to: line.from + match.index + match[0].length,
-                decoration: Decoration.mark({ class: 'cm-meta-pill' }),
+                decoration: Decoration.mark({
+                    class: isDue ? 'cm-meta-pill cm-due-pill' : 'cm-meta-pill',
+                    ...(isDue
+                        ? { attributes: { title: 'Click to edit the due date' } }
+                        : {}),
+                }),
             });
         }
 
@@ -1833,9 +1842,20 @@ export const editorLineActions = {
     moveDown: moveLineDown,
     indent: indentMore,
     outdent: indentLess,
+    complete: toggleTaskCommand,
     cancel: cancelTaskCommand,
     // Defined below this object; referenced lazily so ordering is fine.
     priority: (view: EditorView): boolean => cyclePriorityCommand(view),
+    schedule: (view: EditorView): boolean => {
+        openDateEditor(view, 'schedule');
+
+        return true;
+    },
+    due: (view: EditorView): boolean => {
+        openDateEditor(view, 'due');
+
+        return true;
+    },
     bold: (view: EditorView): boolean => toggleInlineMark(view, '**'),
     italic: (view: EditorView): boolean => toggleInlineMark(view, '*'),
     highlight: (view: EditorView): boolean => toggleInlineMark(view, '=='),
@@ -1946,68 +1966,127 @@ const SCHEDULE_SINGLE_RE =
     />(\d{4}-\d{2}-\d{2}|\d{4}-W\d{1,2}|\d{4}-Q[1-4]|\d{4}-\d{2}|\d{4}|today)\b/;
 const DUE_SINGLE_RE = /@due\(([^)]*)\)/;
 
+/** The schedule (`>…`) key currently on the line, or null. */
+function readScheduleValue(view: EditorView): string | null {
+    const line = view.state.doc.lineAt(view.state.selection.main.head);
+    const match = line.text.match(SCHEDULE_SINGLE_RE);
+
+    if (!match) {
+        return null;
+    }
+
+    return match[1] === 'today' ? todayDailyKey() : match[1];
+}
+
+/** The `@due(…)` key currently on the line, or null. */
+function readDueValue(view: EditorView): string | null {
+    const line = view.state.doc.lineAt(view.state.selection.main.head);
+    const match = line.text.match(DUE_SINGLE_RE);
+
+    return match ? match[1] : null;
+}
+
 /**
- * Insert a metadata token at the end of the current line (or focus the
- * existing one), selecting the date payload for quick editing.
+ * Set a metadata token on the current line to `replacement`, replacing an
+ * existing match, appending when absent, or removing it (with a leading
+ * space) when `replacement` is null.
  */
-function insertOrSelectLineToken(
+function setLineToken(
     view: EditorView,
     findToken: RegExp,
-    buildToken: (today: string) => string,
-    payloadOffset: number,
-): boolean {
+    replacement: string | null,
+): void {
     const line = view.state.doc.lineAt(view.state.selection.main.head);
     const existing = line.text.match(findToken);
 
     if (existing && existing.index !== undefined) {
-        const start = line.from + existing.index + payloadOffset;
+        const from = line.from + existing.index;
+        const to = from + existing[0].length;
 
-        view.dispatch({
-            selection: EditorSelection.single(
-                start,
-                start + existing[1].length,
-            ),
-            scrollIntoView: true,
-        });
+        if (replacement === null) {
+            const spaceBefore =
+                existing.index > 0 && line.text[existing.index - 1] === ' '
+                    ? 1
+                    : 0;
 
-        return true;
+            view.dispatch({
+                changes: { from: from - spaceBefore, to },
+                userEvent: 'delete',
+            });
+        } else {
+            view.dispatch({
+                changes: { from, to, insert: replacement },
+                userEvent: 'input',
+            });
+        }
+
+        return;
     }
 
-    const token = buildToken(todayDailyKey());
+    if (replacement === null) {
+        return;
+    }
+
     const insertAt = line.to;
     const prefix = line.text.endsWith(' ') || line.text === '' ? '' : ' ';
-    const payloadStart = insertAt + prefix.length + payloadOffset;
 
     view.dispatch({
-        changes: { from: insertAt, to: insertAt, insert: `${prefix}${token}` },
-        selection: EditorSelection.single(
-            payloadStart,
-            payloadStart + todayDailyKey().length,
-        ),
-        scrollIntoView: true,
+        changes: { from: insertAt, to: insertAt, insert: `${prefix}${replacement}` },
         userEvent: 'input',
     });
-
-    return true;
 }
 
-/** ⌘⇧S — schedule the current line (inserts or selects the >date token). */
-const scheduleTaskCommand = (view: EditorView): boolean =>
-    insertOrSelectLineToken(
-        view,
-        SCHEDULE_SINGLE_RE,
-        (today) => `>${today}`,
-        1,
-    );
+function applyScheduleValue(view: EditorView, key: string | null): void {
+    setLineToken(view, SCHEDULE_SINGLE_RE, key === null ? null : `>${key}`);
+}
 
-/** ⌘⇧D — set a due date on the current line. */
-const dueTaskCommand = (view: EditorView): boolean =>
-    insertOrSelectLineToken(
-        view,
-        DUE_SINGLE_RE,
-        (today) => `@due(${today})`,
-        5,
-    );
+function applyDueValue(view: EditorView, key: string | null): void {
+    setLineToken(view, DUE_SINGLE_RE, key === null ? null : `@due(${key})`);
+}
+
+/**
+ * Ensure the line carries a schedule/due token (appending today's key when it
+ * has none), then open the date picker pre-filled with the current value.
+ * Wired to ⌘⇧S / ⌘⇧D and to clicking a schedule/due token.
+ */
+export function openDateEditor(view: EditorView, mode: 'schedule' | 'due'): void {
+    const read = mode === 'schedule' ? readScheduleValue : readDueValue;
+    const apply = mode === 'schedule' ? applyScheduleValue : applyDueValue;
+
+    let current = read(view);
+
+    if (current === null) {
+        current = todayDailyKey();
+        apply(view, current);
+    }
+
+    view.focus();
+
+    openDatePicker({
+        mode,
+        allowPeriods: mode === 'schedule',
+        current,
+        title: mode === 'schedule' ? 'Schedule' : 'Due date',
+        onApply: (key) => {
+            apply(view, key);
+            view.focus();
+        },
+    });
+}
+
+/** ⌘⇧S — append a schedule token if missing, then open the date picker. */
+const scheduleTaskCommand = (view: EditorView): boolean => {
+    openDateEditor(view, 'schedule');
+
+    return true;
+};
+
+/** ⌘⇧D — append a due token if missing, then open the date picker. */
+const dueTaskCommand = (view: EditorView): boolean => {
+    openDateEditor(view, 'due');
+
+    return true;
+};
 
 /**
  * ⌘⇧Y — make the current line a synced line (appending a fresh ^id when it
@@ -2159,7 +2238,7 @@ function clickHandlers(callbacks: EditorCallbacks): Extension {
             }
 
             const tokenEl = target.closest<HTMLElement>(
-                '.cm-wikilink, .cm-date-link, .cm-hashtag, .cm-mention',
+                '.cm-wikilink, .cm-date-link, .cm-due-pill, .cm-hashtag, .cm-mention',
             );
 
             if (!tokenEl) {
@@ -2183,6 +2262,12 @@ function clickHandlers(callbacks: EditorCallbacks): Extension {
 
             if (tokenEl.classList.contains('cm-wikilink')) {
                 callbacks.onOpenLink(tokenEl.dataset.wikiTarget ?? '', split);
+            } else if (tokenEl.classList.contains('cm-due-pill')) {
+                // Editing the due date always wins over navigation.
+                view.dispatch({
+                    selection: EditorSelection.cursor(view.posAtDOM(tokenEl)),
+                });
+                openDateEditor(view, 'due');
             } else if (tokenEl.classList.contains('cm-date-link')) {
                 const key = tokenEl.dataset.dateKey;
 
@@ -2190,10 +2275,20 @@ function clickHandlers(callbacks: EditorCallbacks): Extension {
                     return false;
                 }
 
-                callbacks.onOpenDate(
-                    key === 'today' ? todayDailyKey() : key,
-                    split,
-                );
+                if (forced) {
+                    // ⌘/⌥-click still jumps to the calendar note.
+                    callbacks.onOpenDate(
+                        key === 'today' ? todayDailyKey() : key,
+                        split,
+                    );
+                } else {
+                    view.dispatch({
+                        selection: EditorSelection.cursor(
+                            view.posAtDOM(tokenEl),
+                        ),
+                    });
+                    openDateEditor(view, 'schedule');
+                }
             } else if (tokenEl.classList.contains('cm-hashtag')) {
                 callbacks.onOpenTag(tokenEl.dataset.tag ?? '', split);
             } else {
