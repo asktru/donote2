@@ -26,16 +26,27 @@ const filters = reactive({
     mention: null as string | null,
 });
 
-const active = computed<boolean>(
+/** The primary filters. `+ Checklists` is an additive modifier, not one of
+ *  these — on its own it doesn't put the note into filtered mode. */
+const hasBaseFilter = computed<boolean>(
     () =>
         filters.incomplete ||
         filters.priority ||
-        filters.checklists ||
         filters.tag !== null ||
         filters.mention !== null,
 );
 
+const active = computed<boolean>(() => hasBaseFilter.value);
+
 watch(active, (value) => emit('update:active', value), { immediate: true });
+
+// The Checklists modifier only makes sense alongside a base filter; drop it
+// when the last base filter is cleared so it can't linger or auto-activate.
+watch(hasBaseFilter, (value) => {
+    if (!value) {
+        filters.checklists = false;
+    }
+});
 
 const lines = computed<ParsedLine[]>(() => parsedNote(props.noteId));
 
@@ -151,6 +162,7 @@ const chipClass = (on: boolean): string =>
                 Priority
             </button>
             <button
+                v-if="hasBaseFilter"
                 type="button"
                 :class="chipClass(filters.checklists)"
                 @click="filters.checklists = !filters.checklists"
@@ -194,7 +206,11 @@ const chipClass = (on: boolean): string =>
                     :disabled="readOnly"
                     :class="
                         cn(
-                            'mt-1 size-3.5 shrink-0 rounded-full border-2 transition-colors disabled:opacity-50',
+                            'mt-1 size-3.5 shrink-0 border-2 transition-colors disabled:opacity-50',
+                            // Task = circle, checklist = rounded square.
+                            line.kind === 'checklist'
+                                ? 'rounded-[4px]'
+                                : 'rounded-full',
                             line.state !== 'open'
                                 ? 'border-primary bg-primary'
                                 : line.priority > 0
