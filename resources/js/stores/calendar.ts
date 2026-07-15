@@ -475,6 +475,8 @@ export async function createEvent(input: NewEventInput): Promise<void> {
 
 /** A pending "new event" draft that opens the editor when set. */
 export interface EventDraft {
+    /** 'meeting' shows invitees/availability/Meet; 'timeblock' is minimal. */
+    kind: 'meeting' | 'timeblock';
     start: Date;
     end: Date;
     attendees: string[];

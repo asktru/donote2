@@ -40,6 +40,9 @@ const open = computed({
     },
 });
 
+/** Timeblocks are a minimal form (no invitees / availability / Meet). */
+const isMeeting = computed(() => eventDraft.value?.kind !== 'timeblock');
+
 const summary = ref('');
 const location = ref('');
 const description = ref('');
@@ -243,9 +246,9 @@ async function save(): Promise<void> {
     <Dialog v-model:open="open">
         <DialogContent class="max-w-md gap-0 p-0">
             <DialogHeader class="px-5 pt-5 pb-2">
-                <DialogTitle>New event</DialogTitle>
+                <DialogTitle>{{ isMeeting ? 'New meeting' : 'New timeblock' }}</DialogTitle>
                 <DialogDescription class="sr-only">
-                    Create a calendar event and invite people.
+                    Create a calendar event.
                 </DialogDescription>
             </DialogHeader>
 
@@ -318,6 +321,7 @@ async function save(): Promise<void> {
                     </select>
                 </label>
 
+                <template v-if="isMeeting">
                 <!-- Invitees -->
                 <div>
                     <div class="flex flex-wrap items-center gap-1">
@@ -410,6 +414,7 @@ async function save(): Promise<void> {
                     placeholder="Notes (optional)"
                     class="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary"
                 />
+                </template>
 
                 <p v-if="error" class="text-xs text-destructive">{{ error }}</p>
 

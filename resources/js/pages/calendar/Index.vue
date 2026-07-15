@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
 import {
+    Check,
     ChevronLeft,
     ChevronRight,
     Globe,
@@ -18,6 +19,13 @@ import TimeGridView from '@/components/calendar/TimeGridView.vue';
 import RecordingIndicator from '@/components/notes/RecordingIndicator.vue';
 import { Button } from '@/components/ui/button';
 import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
     DropdownMenuContent,
@@ -26,6 +34,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useSwipe } from '@/composables/useSwipe';
 import { isMacDesktopShell, isNarrowViewport } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import {
@@ -152,23 +161,60 @@ function openDay(day: Date): void {
 
 const HOUR_MS = 60 * 60 * 1000;
 
-/** Open the editor prefilled with a slot + whoever is in "Meet with". */
+const fabOpen = ref(false);
+const meetPickerOpen = ref(false);
+
+/** Tapping a slot: schedule a meeting with overlaid people, else a timeblock. */
 function createAt(at: Date): void {
+    const emails = meetWith.value.map((person) => person.email);
+
     openEventEditor({
+        kind: emails.length > 0 ? 'meeting' : 'timeblock',
         start: at,
         end: new Date(at.getTime() + HOUR_MS),
-        attendees: meetWith.value.map((person) => person.email),
+        attendees: emails,
     });
 }
 
-/** FAB: new event on the anchor day, next hour (or 9am on another day). */
-function newEvent(): void {
+/** A sensible default slot on the anchor day (next hour today, else 9am). */
+function defaultSlot(): Date {
     const now = new Date();
     const onToday = startOfDay(anchor.value).getTime() === startOfDay(now).getTime();
     const at = startOfDay(anchor.value);
     at.setHours(onToday ? Math.min(now.getHours() + 1, 22) : 9, 0, 0, 0);
-    createAt(at);
+
+    return at;
 }
+
+/** FAB → "New timeblock": minimal event editor at the default slot. */
+function newTimeblock(): void {
+    fabOpen.value = false;
+    openEventEditor({
+        kind: 'timeblock',
+        start: defaultSlot(),
+        end: new Date(defaultSlot().getTime() + HOUR_MS),
+        attendees: [],
+    });
+}
+
+/** FAB → "Meet with…": pick people (overlay), then tap a slot to schedule. */
+function startMeetWith(): void {
+    fabOpen.value = false;
+    meetPickerOpen.value = true;
+}
+
+// Swipe left/right over the calendar body to step periods (phones).
+useSwipe((swipe) => {
+    if (swipe.direction !== 'left' && swipe.direction !== 'right') {
+        return;
+    }
+
+    const el = swipe.target as HTMLElement | null;
+
+    if (el && el.closest('[data-cal-body]')) {
+        stepCalendar(swipe.direction === 'left' ? 1 : -1);
+    }
+});
 
 function onKeydown(event: KeyboardEvent): void {
     // ⌘⌃1 Notes / ⌘⌃2 Calendar — switch top-level section.
@@ -466,7 +512,7 @@ onBeforeUnmount(() => {
             </div>
         </header>
 
-        <div class="min-h-0 flex-1 overflow-hidden px-2 py-1">
+        <div class="min-h-0 flex-1 overflow-hidden px-2 py-1" data-cal-body>
             <p
                 v-if="!googleConnected"
                 class="border-b border-border/40 px-2 py-1.5 text-xs text-muted-foreground"
@@ -500,21 +546,89 @@ onBeforeUnmount(() => {
                 :second-zone="secondZone"
                 :show-hidden="showHidden"
                 :overlays="overlayEvents"
+                :hide-header="isNarrow && calendarView === 'day'"
                 @open-event="openEvent"
                 @create-at="createAt"
             />
         </div>
 
-        <button
+        <div
             v-if="googleConnected"
-            type="button"
-            class="fixed right-5 bottom-5 z-40 flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl transition-transform hover:scale-105 pb-[env(safe-area-inset-bottom)]"
-            aria-label="New event"
-            title="New event"
-            @click="newEvent"
+            class="fixed right-5 bottom-[calc(1.25rem+env(safe-area-inset-bottom))] z-40 flex flex-col items-end gap-2"
         >
-            <Plus class="size-5.5" />
-        </button>
+            <template v-if="fabOpen">
+                <button
+                    type="button"
+                    class="flex items-center gap-2 rounded-full border border-border/60 bg-background px-3.5 py-2 text-sm font-medium shadow-lg hover:bg-muted/60"
+                    @click="startMeetWith"
+                >
+                    <Users class="size-4" /> Meet with…
+                </button>
+                <button
+                    type="button"
+                    class="flex items-center gap-2 rounded-full border border-border/60 bg-background px-3.5 py-2 text-sm font-medium shadow-lg hover:bg-muted/60"
+                    @click="newTimeblock"
+                >
+                    <Plus class="size-4" /> New timeblock
+                </button>
+            </template>
+            <button
+                type="button"
+                :class="
+                    cn(
+                        'flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl transition-transform hover:scale-105',
+                        fabOpen && 'rotate-45',
+                    )
+                "
+                aria-label="Create"
+                @click="fabOpen = !fabOpen"
+            >
+                <Plus class="size-6" />
+            </button>
+        </div>
+
+        <Dialog v-model:open="meetPickerOpen">
+            <DialogContent class="max-w-xs gap-0 p-0">
+                <DialogHeader class="px-5 pt-5 pb-2">
+                    <DialogTitle>Meet with</DialogTitle>
+                    <DialogDescription class="text-xs">
+                        Their schedule overlays the calendar — tap a time slot
+                        to schedule a meeting.
+                    </DialogDescription>
+                </DialogHeader>
+                <div class="max-h-[60vh] space-y-1 overflow-y-auto px-3 pb-3">
+                    <button
+                        v-for="member in colleagues"
+                        :key="member.email"
+                        type="button"
+                        class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/60"
+                        @click="toggleMeetWith(member.email, member.name)"
+                    >
+                        <span
+                            class="size-3 shrink-0 rounded-full border border-border"
+                            :style="{
+                                backgroundColor:
+                                    personColor(member.email) ?? 'transparent',
+                                borderColor: personColor(member.email) ?? undefined,
+                            }"
+                        />
+                        <span class="min-w-0 flex-1 truncate">{{
+                            member.name
+                        }}</span>
+                        <Check
+                            v-if="isMeeting(member.email)"
+                            class="size-4 shrink-0 text-primary"
+                        />
+                    </button>
+                </div>
+                <div class="flex justify-end gap-2 border-t border-border/60 p-3">
+                    <Button variant="ghost" size="sm" @click="clearMeetWith">
+                        Clear
+                    </Button>
+                    <Button size="sm" @click="meetPickerOpen = false">Done</Button>
+                </div>
+            </DialogContent>
+        </Dialog>
 
         <EventDetailPanel />
         <EventEditor />

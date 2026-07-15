@@ -27,6 +27,8 @@ const props = defineProps<{
     showHidden?: boolean;
     /** Colleague schedules ("Meet with") drawn as a translucent backdrop. */
     overlays?: OverlayEvent[];
+    /** Hide the per-day date header row (redundant on mobile Day view). */
+    hideHeader?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -231,7 +233,10 @@ onMounted(() => {
 <template>
     <div class="flex h-full min-h-0 flex-col">
         <!-- Column headers -->
-        <div class="flex shrink-0 border-b border-border/60 pr-3">
+        <div
+            v-if="!hideHeader"
+            class="flex shrink-0 border-b border-border/60 pr-3"
+        >
             <div :class="secondZone ? 'w-24' : 'w-14'" class="shrink-0" />
             <div
                 v-for="col in columns"
