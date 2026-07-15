@@ -13,8 +13,7 @@ import { donoteDesktop } from '@/lib/desktop';
 export const isMacDesktopShell =
     donoteDesktop !== null ||
     (typeof navigator !== 'undefined' &&
-        navigator.userAgent.includes('Electron') &&
-        navigator.platform.startsWith('Mac'));
+        navigator.userAgent.includes('Electron'));
 
 /** True on touch-capable devices (phones, tablets) — gates swipe gestures. */
 export const isTouchDevice =
