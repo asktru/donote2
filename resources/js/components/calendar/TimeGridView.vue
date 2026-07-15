@@ -29,7 +29,10 @@ const props = defineProps<{
     overlays?: OverlayEvent[];
 }>();
 
-const emit = defineEmits<{ 'open-event': [event: GridEvent] }>();
+const emit = defineEmits<{
+    'open-event': [event: GridEvent];
+    'create-at': [at: Date];
+}>();
 
 const HOUR_HEIGHT = 48;
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
@@ -196,6 +199,23 @@ function timeLabel(event: CalendarEvent): string {
     return format(parseISO(event.start), 'h:mm');
 }
 
+/** Click empty grid space to start a new event at that time (snapped to 30m). */
+function onColumnClick(event: MouseEvent, day: Date): void {
+    if ((event.target as HTMLElement).closest('button')) {
+        return; // a real event was clicked
+    }
+
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const minutes = Math.min(
+        1410,
+        Math.max(0, Math.round(((event.clientY - rect.top) / HOUR_HEIGHT) * 2) * 30),
+    );
+    const at = new Date(startOfDay(day));
+    at.setMinutes(minutes);
+
+    emit('create-at', at);
+}
+
 onMounted(() => {
     // Scroll to ~7am so the working day is in view on open.
     if (scroller.value) {
@@ -301,6 +321,7 @@ onMounted(() => {
                     :key="col.day.toISOString()"
                     class="relative min-w-0 flex-1 border-l border-border/40"
                     :style="{ height: `${24 * HOUR_HEIGHT}px` }"
+                    @click="onColumnClick($event, col.day)"
                 >
                     <div
                         v-for="h in HOURS"

@@ -4,6 +4,7 @@ import {
     ChevronLeft,
     ChevronRight,
     Globe,
+    Plus,
     SlidersHorizontal,
     Users,
 } from '@lucide/vue';
@@ -11,6 +12,7 @@ import { addDays, startOfDay } from 'date-fns';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 import EventDetailPanel from '@/components/calendar/EventDetailPanel.vue';
+import EventEditor from '@/components/calendar/EventEditor.vue';
 import MonthView from '@/components/calendar/MonthView.vue';
 import TimeGridView from '@/components/calendar/TimeGridView.vue';
 import RecordingIndicator from '@/components/notes/RecordingIndicator.vue';
@@ -40,6 +42,7 @@ import {
     initCalendarPrefs,
     meetWith,
     openEventDetail,
+    openEventEditor,
     overlayEvents,
     secondZone,
     setCalendarView,
@@ -145,6 +148,26 @@ function openEvent(event: CalendarEvent): void {
 function openDay(day: Date): void {
     anchor.value = startOfDay(day);
     setCalendarView('day');
+}
+
+const HOUR_MS = 60 * 60 * 1000;
+
+/** Open the editor prefilled with a slot + whoever is in "Meet with". */
+function createAt(at: Date): void {
+    openEventEditor({
+        start: at,
+        end: new Date(at.getTime() + HOUR_MS),
+        attendees: meetWith.value.map((person) => person.email),
+    });
+}
+
+/** FAB: new event on the anchor day, next hour (or 9am on another day). */
+function newEvent(): void {
+    const now = new Date();
+    const onToday = startOfDay(anchor.value).getTime() === startOfDay(now).getTime();
+    const at = startOfDay(anchor.value);
+    at.setHours(onToday ? Math.min(now.getHours() + 1, 22) : 9, 0, 0, 0);
+    createAt(at);
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -478,10 +501,23 @@ onBeforeUnmount(() => {
                 :show-hidden="showHidden"
                 :overlays="overlayEvents"
                 @open-event="openEvent"
+                @create-at="createAt"
             />
         </div>
 
+        <button
+            v-if="googleConnected"
+            type="button"
+            class="fixed right-5 bottom-5 z-40 flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl transition-transform hover:scale-105 pb-[env(safe-area-inset-bottom)]"
+            aria-label="New event"
+            title="New event"
+            @click="newEvent"
+        >
+            <Plus class="size-5.5" />
+        </button>
+
         <EventDetailPanel />
+        <EventEditor />
         <RecordingIndicator />
     </div>
 </template>

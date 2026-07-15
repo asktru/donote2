@@ -416,6 +416,80 @@ export async function fetchOverlays(): Promise<void> {
     }
 }
 
+/* ---- Event creation & availability ---------------------------------- */
+
+export interface BusyInterval {
+    start: string;
+    end: string;
+}
+
+/** Free/busy for a set of invitees (meeting availability preview). */
+export async function fetchInviteeBusy(
+    emails: string[],
+    start: string,
+    end: string,
+): Promise<Record<string, BusyInterval[]>> {
+    if (emails.length === 0) {
+        return {};
+    }
+
+    const res = await apiFetch<{ busy: Record<string, BusyInterval[]> }>(
+        '/api/google/freebusy',
+        { method: 'POST', body: JSON.stringify({ emails, start, end }) },
+    );
+
+    return res.busy ?? {};
+}
+
+export interface NewEventInput {
+    calendarId: string;
+    summary: string;
+    description: string | null;
+    location: string | null;
+    allDay: boolean;
+    start: string;
+    end: string;
+    attendees: string[];
+    addMeet: boolean;
+}
+
+/** Create an event on a Google calendar, then refresh the grid. */
+export async function createEvent(input: NewEventInput): Promise<void> {
+    await apiFetch('/api/google/events', {
+        method: 'POST',
+        body: JSON.stringify({
+            calendar_id: input.calendarId,
+            summary: input.summary,
+            description: input.description,
+            location: input.location,
+            all_day: input.allDay,
+            start: input.start,
+            end: input.end,
+            attendees: input.attendees,
+            add_meet: input.addMeet,
+        }),
+    });
+
+    await fetchEvents();
+}
+
+/** A pending "new event" draft that opens the editor when set. */
+export interface EventDraft {
+    start: Date;
+    end: Date;
+    attendees: string[];
+}
+
+export const eventDraft = ref<EventDraft | null>(null);
+
+export function openEventEditor(draft: EventDraft): void {
+    eventDraft.value = draft;
+}
+
+export function closeEventEditor(): void {
+    eventDraft.value = null;
+}
+
 /* ---- Calendar visibility (per team) --------------------------------- */
 
 const HIDDEN_CALS_PREFIX = 'donote:calendar:hidden-cals:';
