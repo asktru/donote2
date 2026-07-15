@@ -13,7 +13,7 @@ import { computed, onMounted, ref } from 'vue';
 import { layoutDayColumns } from '@/core/calendarLayout';
 import { readableTextColor } from '@/core/color';
 import { cn } from '@/lib/utils';
-import type { CalendarEvent } from '@/stores/calendar';
+import type { CalendarEvent, OverlayEvent } from '@/stores/calendar';
 
 /** Events carry a `hidden` flag from the store's displayEvents. */
 type GridEvent = CalendarEvent & { hidden?: boolean };
@@ -25,6 +25,8 @@ const props = defineProps<{
     secondZone?: string | null;
     /** Render hidden events normally (dimmed) instead of as a thin strip. */
     showHidden?: boolean;
+    /** Colleague schedules ("Meet with") drawn as a translucent backdrop. */
+    overlays?: OverlayEvent[];
 }>();
 
 const emit = defineEmits<{ 'open-event': [event: GridEvent] }>();
@@ -114,6 +116,37 @@ function timedFor(day: Date): { blocks: PositionedEvent[]; strips: StripEvent[] 
     return { blocks, strips };
 }
 
+interface OverlayBlock {
+    event: OverlayEvent;
+    top: number;
+    height: number;
+}
+
+/** Colleague busy/events for a day, as a translucent backdrop. */
+function overlaysFor(day: Date): OverlayBlock[] {
+    if (!props.overlays || props.overlays.length === 0) {
+        return [];
+    }
+
+    const dayStart = startOfDay(day);
+    const dayEnd = addDays(dayStart, 1);
+
+    return props.overlays
+        .filter((event) => !event.allDay)
+        .map((event) => ({ event, start: parseISO(event.start), end: parseISO(event.end) }))
+        .filter(({ start, end }) => start < dayEnd && end > dayStart)
+        .map(({ event, start, end }) => {
+            const startMin = Math.max(0, differenceInMinutes(start, dayStart));
+            const endMin = Math.min(1440, differenceInMinutes(end, dayStart));
+
+            return {
+                event,
+                top: (startMin / 60) * HOUR_HEIGHT,
+                height: ((Math.max(endMin, startMin + 15) - startMin) / 60) * HOUR_HEIGHT,
+            };
+        });
+}
+
 /** All-day events covering a given day (decluttered ones dropped). */
 function allDayFor(day: Date): GridEvent[] {
     return props.events.filter((event) => {
@@ -134,6 +167,7 @@ const columns = computed(() =>
         isToday: isSameDay(day, now.value),
         timed: timedFor(day),
         allDay: allDayFor(day),
+        overlays: overlaysFor(day),
     })),
 );
 
@@ -283,6 +317,25 @@ onMounted(() => {
                         <span
                             class="absolute -top-1 -left-1 size-2 rounded-full bg-red-500"
                         />
+                    </div>
+
+                    <!-- Meet-with: colleague schedules as a translucent backdrop. -->
+                    <div
+                        v-for="ov in col.overlays"
+                        :key="ov.event.key"
+                        class="pointer-events-none absolute inset-x-0.5 overflow-hidden rounded-md border-l-2 px-1 py-0.5 text-[10px] leading-tight"
+                        :style="{
+                            top: `${ov.top}px`,
+                            height: `${ov.height}px`,
+                            backgroundColor: `${ov.event.color}26`,
+                            borderColor: ov.event.color,
+                            color: ov.event.color,
+                        }"
+                        :title="`${ov.event.personName}: ${ov.event.title}`"
+                    >
+                        <span v-if="ov.height > 20" class="block truncate">{{
+                            ov.event.title
+                        }}</span>
                     </div>
 
                     <!-- Decluttered (hidden) events: a thin strip at the left. -->

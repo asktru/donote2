@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ChevronLeft, ChevronRight, Globe, SlidersHorizontal } from '@lucide/vue';
+import {
+    ChevronLeft,
+    ChevronRight,
+    Globe,
+    SlidersHorizontal,
+    Users,
+} from '@lucide/vue';
 import { addDays, startOfDay } from 'date-fns';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
@@ -13,6 +19,7 @@ import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
     DropdownMenuContent,
+    DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
@@ -24,13 +31,16 @@ import {
     anchorLabel,
     calendarList,
     calendarView,
+    clearMeetWith,
     displayEvents,
     eventsFailed,
     goToday,
     hiddenCalendars,
     hideDeclined,
     initCalendarPrefs,
+    meetWith,
     openEventDetail,
+    overlayEvents,
     secondZone,
     setCalendarView,
     setHideDeclined,
@@ -38,12 +48,13 @@ import {
     showHidden,
     stepCalendar,
     toggleCalendar,
+    toggleMeetWith,
     visibleRange,
     watchCalendarRange,
 } from '@/stores/calendar';
 import type { CalendarEvent } from '@/stores/calendar';
 import { startReminderScheduler } from '@/stores/reminderScheduler';
-import { setTeamMembers } from '@/stores/team';
+import { setTeamMembers, teamMembers } from '@/stores/team';
 import type { TeamMember } from '@/stores/team';
 import { initWorkspace } from '@/stores/workspace';
 
@@ -95,6 +106,21 @@ const zones: { value: string; label: string }[] = [
 ];
 
 const notesHref = computed(() => `/${props.workspace.teamSlug}/notes`);
+
+/** Teammates (excluding me) whose schedules can be overlaid. */
+const colleagues = computed(() =>
+    teamMembers.value.filter(
+        (member) => member.id !== props.workspace.userId && member.email,
+    ),
+);
+
+function isMeeting(email: string): boolean {
+    return meetWith.value.some((person) => person.email === email);
+}
+
+function personColor(email: string): string | null {
+    return meetWith.value.find((person) => person.email === email)?.color ?? null;
+}
 
 const gridDays = computed<Date[]>(() => {
     const { start, end } = visibleRange.value;
@@ -250,6 +276,62 @@ onBeforeUnmount(() => {
             </h1>
 
             <div class="ml-auto flex items-center gap-1.5 sm:gap-2">
+                <DropdownMenu v-if="colleagues.length > 0">
+                    <DropdownMenuTrigger as-child>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            :class="
+                                cn(
+                                    'size-8',
+                                    meetWith.length > 0
+                                        ? 'text-primary'
+                                        : 'text-muted-foreground',
+                                )
+                            "
+                            aria-label="Meet with"
+                            title="Meet with — overlay a colleague's schedule"
+                        >
+                            <Users class="size-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" class="w-64">
+                        <DropdownMenuLabel
+                            class="text-[11px] tracking-wide text-muted-foreground uppercase"
+                        >
+                            Meet with
+                        </DropdownMenuLabel>
+                        <DropdownMenuCheckboxItem
+                            v-for="member in colleagues"
+                            :key="member.email"
+                            :model-value="isMeeting(member.email)"
+                            @select.prevent
+                            @update:model-value="
+                                toggleMeetWith(member.email, member.name)
+                            "
+                        >
+                            <span
+                                class="mr-1.5 inline-block size-2 shrink-0 rounded-full border border-border"
+                                :style="{
+                                    backgroundColor:
+                                        personColor(member.email) ??
+                                        'transparent',
+                                    borderColor: personColor(member.email) ?? undefined,
+                                }"
+                            />
+                            <span class="min-w-0 flex-1 truncate">{{
+                                member.name
+                            }}</span>
+                        </DropdownMenuCheckboxItem>
+                        <template v-if="meetWith.length > 0">
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem @select="clearMeetWith">
+                                Clear meet-with
+                            </DropdownMenuItem>
+                        </template>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+
                 <DropdownMenu>
                     <DropdownMenuTrigger as-child>
                         <Button
@@ -394,6 +476,7 @@ onBeforeUnmount(() => {
                 :events="displayEvents"
                 :second-zone="secondZone"
                 :show-hidden="showHidden"
+                :overlays="overlayEvents"
                 @open-event="openEvent"
             />
         </div>

@@ -265,6 +265,157 @@ export async function fetchEvents(): Promise<void> {
     }
 }
 
+/* ---- Meet with (colleague overlays) --------------------------------- */
+
+export interface MeetWithPerson {
+    email: string;
+    name: string;
+    color: string;
+}
+
+/** A colleague's calendar entry overlaid on the grid. */
+export interface OverlayEvent {
+    key: string;
+    personEmail: string;
+    personName: string;
+    color: string;
+    title: string;
+    allDay: boolean;
+    start: string;
+    end: string;
+    /** false when only free/busy is available (no titles). */
+    shared: boolean;
+}
+
+const MEET_COLORS = [
+    '#f97316',
+    '#0ea5e9',
+    '#a855f7',
+    '#22c55e',
+    '#ec4899',
+    '#eab308',
+];
+
+export const meetWith = ref<MeetWithPerson[]>([]);
+export const overlayEvents = ref<OverlayEvent[]>([]);
+export const overlayLoading = ref(false);
+
+/** Add/remove a colleague, reassigning stable colors by position. */
+export function toggleMeetWith(email: string, name: string): void {
+    const present = meetWith.value.some((person) => person.email === email);
+    const next = present
+        ? meetWith.value.filter((person) => person.email !== email)
+        : [...meetWith.value, { email, name, color: '' }];
+
+    meetWith.value = next.map((person, index) => ({
+        ...person,
+        color: MEET_COLORS[index % MEET_COLORS.length],
+    }));
+}
+
+export function clearMeetWith(): void {
+    meetWith.value = [];
+    overlayEvents.value = [];
+}
+
+interface OverlayDto {
+    shared: boolean;
+    events?: {
+        id: string | null;
+        summary: string;
+        all_day: boolean;
+        start: string | null;
+        end: string | null;
+    }[];
+    busy?: { start: string; end: string }[];
+}
+
+let overlaySeq = 0;
+
+/** Fetch each selected colleague's schedule for the visible range. */
+export async function fetchOverlays(): Promise<void> {
+    const people = meetWith.value;
+
+    if (people.length === 0) {
+        overlayEvents.value = [];
+
+        return;
+    }
+
+    const { start, end } = visibleRange.value;
+    const startIso = start.toISOString();
+    const endIso = end.toISOString();
+    const seq = ++overlaySeq;
+
+    overlayLoading.value = true;
+
+    try {
+        const results = await Promise.all(
+            people.map((person) =>
+                apiFetch<OverlayDto>(
+                    `/api/google/overlay?email=${encodeURIComponent(person.email)}&start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`,
+                )
+                    .then((dto) => ({ person, dto }))
+                    .catch(() => null),
+            ),
+        );
+
+        if (seq !== overlaySeq) {
+            return;
+        }
+
+        const mapped: OverlayEvent[] = [];
+
+        for (const result of results) {
+            if (result === null) {
+                continue;
+            }
+
+            const { person, dto } = result;
+
+            if (dto.shared && dto.events) {
+                for (const event of dto.events) {
+                    if (event.start === null || event.end === null) {
+                        continue;
+                    }
+
+                    mapped.push({
+                        key: `overlay:${person.email}:${event.id ?? event.start}`,
+                        personEmail: person.email,
+                        personName: person.name,
+                        color: person.color,
+                        title: event.summary || 'Busy',
+                        allDay: event.all_day,
+                        start: event.start,
+                        end: event.end,
+                        shared: true,
+                    });
+                }
+            } else if (dto.busy) {
+                dto.busy.forEach((slot, index) => {
+                    mapped.push({
+                        key: `overlay:${person.email}:busy:${index}`,
+                        personEmail: person.email,
+                        personName: person.name,
+                        color: person.color,
+                        title: 'Busy',
+                        allDay: false,
+                        start: slot.start,
+                        end: slot.end,
+                        shared: false,
+                    });
+                });
+            }
+        }
+
+        overlayEvents.value = mapped;
+    } finally {
+        if (seq === overlaySeq) {
+            overlayLoading.value = false;
+        }
+    }
+}
+
 /* ---- Calendar visibility (per team) --------------------------------- */
 
 const HIDDEN_CALS_PREFIX = 'donote:calendar:hidden-cals:';
@@ -438,7 +589,11 @@ export function closeEventDetail(): void {
 export function watchCalendarRange(): void {
     watch(
         () => [visibleRange.value.start.getTime(), visibleRange.value.end.getTime()],
-        () => void fetchEvents(),
+        () => {
+            void fetchEvents();
+            void fetchOverlays();
+        },
         { immediate: true },
     );
+    watch(meetWith, () => void fetchOverlays());
 }
