@@ -311,9 +311,13 @@ onBeforeUnmount(() => {
         <header
             :class="
                 cn(
-                    'flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/60 px-3 py-1.5 sm:px-4',
+                    'flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/60 py-1.5 pr-3 sm:pr-4',
                     // Clear the macOS traffic lights in the Electron shell.
-                    isMacDesktopShell && 'pl-20',
+                    // Left padding is split out from a px-* shorthand: the
+                    // responsive `sm:px-4` came later in the compiled CSS and
+                    // overrode `pl-20` at desktop widths, putting the header
+                    // back under the traffic lights.
+                    isMacDesktopShell ? 'pl-20' : 'pl-3 sm:pl-4',
                 )
             "
         >
