@@ -30,6 +30,8 @@ class GoogleCalendarController extends Controller
                 // free/busy, and reading colleagues' shared calendars.
                 'https://www.googleapis.com/auth/calendar',
                 'https://www.googleapis.com/auth/userinfo.email',
+                // Search the Workspace directory for the invitee autocomplete.
+                'https://www.googleapis.com/auth/directory.readonly',
             ]),
             'access_type' => 'offline',
             'prompt' => 'consent',

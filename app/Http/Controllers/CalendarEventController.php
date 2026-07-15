@@ -73,6 +73,26 @@ class CalendarEventController extends Controller
     }
 
     /**
+     * Search the user's Google Workspace directory (invitee autocomplete).
+     */
+    public function directory(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'q' => ['required', 'string', 'min:1', 'max:100'],
+        ]);
+
+        $account = $request->user()->googleAccounts()->first();
+
+        abort_if($account === null, 422, 'Connect a Google account first.');
+
+        return response()->json([
+            'people' => (new GoogleCalendarClient($account))->searchDirectory(
+                $validated['q'],
+            ),
+        ]);
+    }
+
+    /**
      * Free/busy intervals for a set of people (invitee availability preview).
      */
     public function freeBusy(Request $request): JsonResponse

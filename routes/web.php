@@ -82,6 +82,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('api/google/events', [CalendarEventController::class, 'destroy'])->name('google.events.destroy');
     Route::post('api/google/freebusy', [CalendarEventController::class, 'freeBusy'])->name('google.freebusy');
     Route::get('api/google/overlay', [CalendarEventController::class, 'overlay'])->name('google.overlay');
+    Route::get('api/google/directory', [CalendarEventController::class, 'directory'])->name('google.directory');
 });
 
 require __DIR__.'/settings.php';

@@ -9,6 +9,7 @@ import {
 } from 'date-fns';
 import { computed, ref, watch } from 'vue';
 
+import DirectoryAutocomplete from '@/components/calendar/DirectoryAutocomplete.vue';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -53,7 +54,6 @@ const startDate = ref('');
 const endDate = ref('');
 const calendarId = ref('');
 const attendees = ref<string[]>([]);
-const inviteeInput = ref('');
 const addMeet = ref(false);
 const saving = ref(false);
 const error = ref<string | null>(null);
@@ -108,8 +108,6 @@ function addInvitee(email: string): void {
     if (trimmed && !attendees.value.includes(trimmed)) {
         attendees.value = [...attendees.value, trimmed];
     }
-
-    inviteeInput.value = '';
 }
 
 function removeInvitee(email: string): void {
@@ -340,13 +338,12 @@ async function save(): Promise<void> {
                             </button>
                         </span>
                     </div>
-                    <input
-                        v-model="inviteeInput"
-                        type="email"
-                        placeholder="Invite by email…"
-                        class="mt-1 h-8 w-full rounded-md border border-border bg-background px-2 text-sm outline-none focus:border-primary"
-                        @keydown.enter.prevent="addInvitee(inviteeInput)"
-                    />
+                    <div class="mt-1">
+                        <DirectoryAutocomplete
+                            placeholder="Invite by name or email…"
+                            @add="(email) => addInvitee(email)"
+                        />
+                    </div>
                     <div
                         v-if="otherColleagues.length > 0"
                         class="mt-1 flex flex-wrap gap-1"

@@ -27,6 +27,46 @@ class GoogleCalendarClient
     }
 
     /**
+     * Search the Workspace directory for people (Meet-with autocomplete).
+     * Requires the directory.readonly scope; returns [] without it.
+     *
+     * @return list<array{name: string, email: string}>
+     */
+    public function searchDirectory(string $query, int $limit = 8): array
+    {
+        $response = $this->http()->get(
+            'https://people.googleapis.com/v1/people:searchDirectoryPeople',
+            [
+                'query' => $query,
+                'readMask' => 'names,emailAddresses',
+                'sources' => 'DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE',
+                'pageSize' => $limit,
+            ],
+        );
+
+        if ($response->failed()) {
+            return [];
+        }
+
+        $people = [];
+
+        foreach ($response->json('people', []) as $person) {
+            $email = $person['emailAddresses'][0]['value'] ?? null;
+
+            if ($email === null) {
+                continue;
+            }
+
+            $people[] = [
+                'name' => $person['names'][0]['displayName'] ?? $email,
+                'email' => $email,
+            ];
+        }
+
+        return $people;
+    }
+
+    /**
      * Create an event; attaches a Google Meet link when $withMeet.
      *
      * @param  array<string, mixed>  $body

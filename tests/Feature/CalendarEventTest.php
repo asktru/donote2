@@ -17,6 +17,43 @@ function googleAccount(User $user): GoogleAccount
     ]);
 }
 
+test('directory search maps Workspace people to name + email', function () {
+    $user = User::factory()->create();
+    googleAccount($user);
+
+    Http::fake([
+        'people.googleapis.com/*' => Http::response([
+            'people' => [
+                [
+                    'names' => [['displayName' => 'Casey Jones']],
+                    'emailAddresses' => [['value' => 'casey@example.com']],
+                ],
+                [
+                    'emailAddresses' => [['value' => 'no-name@example.com']],
+                ],
+            ],
+        ]),
+    ]);
+
+    $response = $this->actingAs($user)
+        ->getJson(route('google.directory', ['q' => 'ca']))
+        ->assertSuccessful();
+
+    expect($response->json('people'))->toBe([
+        ['name' => 'Casey Jones', 'email' => 'casey@example.com'],
+        ['name' => 'no-name@example.com', 'email' => 'no-name@example.com'],
+    ]);
+});
+
+test('directory search requires a query', function () {
+    $user = User::factory()->create();
+    googleAccount($user);
+
+    $this->actingAs($user)
+        ->getJson(route('google.directory'))
+        ->assertUnprocessable();
+});
+
 test('creating an event with a Meet link sends conferenceData', function () {
     $user = User::factory()->create();
     googleAccount($user);

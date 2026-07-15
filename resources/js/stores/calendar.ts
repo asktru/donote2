@@ -441,6 +441,26 @@ export async function fetchInviteeBusy(
     return res.busy ?? {};
 }
 
+export interface DirectoryPerson {
+    name: string;
+    email: string;
+}
+
+/** Search the Google Workspace directory (invitee autocomplete). */
+export async function searchDirectory(
+    query: string,
+): Promise<DirectoryPerson[]> {
+    try {
+        const res = await apiFetch<{ people: DirectoryPerson[] }>(
+            `/api/google/directory?q=${encodeURIComponent(query)}`,
+        );
+
+        return res.people ?? [];
+    } catch {
+        return [];
+    }
+}
+
 export interface NewEventInput {
     calendarId: string;
     summary: string;

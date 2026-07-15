@@ -12,6 +12,7 @@ import {
 import { addDays, startOfDay } from 'date-fns';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
+import DirectoryAutocomplete from '@/components/calendar/DirectoryAutocomplete.vue';
 import EventDetailPanel from '@/components/calendar/EventDetailPanel.vue';
 import EventEditor from '@/components/calendar/EventEditor.vue';
 import MonthView from '@/components/calendar/MonthView.vue';
@@ -139,18 +140,11 @@ const colleagueSuggestions = computed(() =>
     colleagues.value.filter((member) => !isMeeting(member.email)),
 );
 
-const meetEmailInput = ref('');
-
-/** Add any Google Workspace colleague by email (not just Donote members). */
-function addMeetEmail(): void {
-    const email = meetEmailInput.value.trim().toLowerCase();
-
-    if (email.includes('@') && !isMeeting(email)) {
-        const member = teamMembers.value.find((entry) => entry.email === email);
-        toggleMeetWith(email, member?.name ?? email);
+/** Add anyone the directory search returns (or a raw email). */
+function addMeetPerson(email: string, name: string): void {
+    if (!isMeeting(email)) {
+        toggleMeetWith(email, name);
     }
-
-    meetEmailInput.value = '';
 }
 
 const gridDays = computed<Date[]>(() => {
@@ -637,15 +631,7 @@ onBeforeUnmount(() => {
                         </span>
                     </div>
 
-                    <input
-                        v-model="meetEmailInput"
-                        type="email"
-                        autocapitalize="off"
-                        autocorrect="off"
-                        placeholder="Colleague's email…"
-                        class="h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
-                        @keydown.enter.prevent="addMeetEmail"
-                    />
+                    <DirectoryAutocomplete @add="addMeetPerson" />
 
                     <div v-if="colleagueSuggestions.length > 0">
                         <p class="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
