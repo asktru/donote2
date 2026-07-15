@@ -2,7 +2,7 @@
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ChevronLeft, ChevronRight, Globe, SlidersHorizontal } from '@lucide/vue';
 import { addDays, startOfDay } from 'date-fns';
-import { computed, onBeforeUnmount, onMounted } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 import EventDetailPanel from '@/components/calendar/EventDetailPanel.vue';
 import MonthView from '@/components/calendar/MonthView.vue';
@@ -17,7 +17,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { isMacDesktopShell } from '@/lib/platform';
+import { isMacDesktopShell, isNarrowViewport } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import {
     anchor,
@@ -58,6 +58,28 @@ const views: { value: 'day' | 'week' | 'month'; label: string }[] = [
     { value: 'week', label: 'Week' },
     { value: 'month', label: 'Month' },
 ];
+
+// A 7-column week grid is unusable at phone width, so Week is desktop/tablet
+// only; phones get Day (default) + Month.
+const isNarrow = ref(isNarrowViewport());
+
+function onResize(): void {
+    isNarrow.value = isNarrowViewport();
+}
+
+const availableViews = computed(() =>
+    isNarrow.value ? views.filter((view) => view.value !== 'week') : views,
+);
+
+watch(
+    isNarrow,
+    (narrow) => {
+        if (narrow && calendarView.value === 'week') {
+            setCalendarView('day');
+        }
+    },
+    { immediate: true },
+);
 
 const supported = (
     Intl as unknown as { supportedValuesOf?: (k: string) => string[] }
@@ -150,6 +172,7 @@ onMounted(async () => {
     initCalendarPrefs(props.workspace.teamSlug);
     watchCalendarRange();
     window.addEventListener('keydown', onKeydown);
+    window.addEventListener('resize', onResize);
 
     // Load cached notes and schedule reminder notifications even when the
     // Notes page was never opened this session (e.g. app launched here).
@@ -162,6 +185,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
     window.removeEventListener('keydown', onKeydown);
+    window.removeEventListener('resize', onResize);
 });
 </script>
 
@@ -174,7 +198,7 @@ onBeforeUnmount(() => {
         <header
             :class="
                 cn(
-                    'flex h-14 shrink-0 items-center gap-3 border-b border-border/60 px-4',
+                    'flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/60 px-3 py-1.5 sm:px-4',
                     // Clear the macOS traffic lights in the Electron shell.
                     isMacDesktopShell && 'pl-20',
                 )
@@ -183,16 +207,16 @@ onBeforeUnmount(() => {
             <nav class="flex items-center gap-1 text-sm">
                 <Link
                     :href="notesHref"
-                    class="rounded-md px-2.5 py-1 text-muted-foreground hover:bg-muted/60"
+                    class="rounded-md px-2 py-1 text-muted-foreground hover:bg-muted/60 sm:px-2.5"
                 >
                     Notes
                 </Link>
-                <span class="rounded-md bg-muted px-2.5 py-1 font-medium">
+                <span class="rounded-md bg-muted px-2 py-1 font-medium sm:px-2.5">
                     Calendar
                 </span>
             </nav>
 
-            <div class="mx-2 flex items-center gap-1">
+            <div class="flex items-center gap-0.5 sm:mx-2 sm:gap-1">
                 <Button
                     variant="ghost"
                     size="icon"
@@ -214,16 +238,18 @@ onBeforeUnmount(() => {
                 <Button
                     variant="outline"
                     size="sm"
-                    class="ml-1 h-8 px-3 text-xs"
+                    class="ml-1 h-8 px-2.5 text-xs sm:px-3"
                     @click="goToday"
                 >
                     Today
                 </Button>
             </div>
 
-            <h1 class="text-base font-semibold">{{ anchorLabel }}</h1>
+            <h1 class="min-w-0 flex-1 truncate text-sm font-semibold sm:text-base">
+                {{ anchorLabel }}
+            </h1>
 
-            <div class="ml-auto flex items-center gap-2">
+            <div class="ml-auto flex items-center gap-1.5 sm:gap-2">
                 <DropdownMenu>
                     <DropdownMenuTrigger as-child>
                         <Button
@@ -290,7 +316,7 @@ onBeforeUnmount(() => {
 
                 <label
                     v-if="calendarView !== 'month'"
-                    class="flex items-center gap-1 text-xs text-muted-foreground"
+                    class="hidden items-center gap-1 text-xs text-muted-foreground sm:flex"
                 >
                     <Globe class="size-3.5" />
                     <select
@@ -316,7 +342,7 @@ onBeforeUnmount(() => {
                     class="flex items-center rounded-lg border border-border/60 p-0.5"
                 >
                     <button
-                        v-for="view in views"
+                        v-for="view in availableViews"
                         :key="view.value"
                         type="button"
                         :class="
