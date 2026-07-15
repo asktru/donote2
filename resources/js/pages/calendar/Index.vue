@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
 import {
-    Check,
     ChevronLeft,
     ChevronRight,
     Globe,
     Plus,
     SlidersHorizontal,
     Users,
+    X,
 } from '@lucide/vue';
 import { addDays, startOfDay } from 'date-fns';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -132,6 +132,25 @@ function isMeeting(email: string): boolean {
 
 function personColor(email: string): string | null {
     return meetWith.value.find((person) => person.email === email)?.color ?? null;
+}
+
+/** Team members not yet selected — quick-adds under the email field. */
+const colleagueSuggestions = computed(() =>
+    colleagues.value.filter((member) => !isMeeting(member.email)),
+);
+
+const meetEmailInput = ref('');
+
+/** Add any Google Workspace colleague by email (not just Donote members). */
+function addMeetEmail(): void {
+    const email = meetEmailInput.value.trim().toLowerCase();
+
+    if (email.includes('@') && !isMeeting(email)) {
+        const member = teamMembers.value.find((entry) => entry.email === email);
+        toggleMeetWith(email, member?.name ?? email);
+    }
+
+    meetEmailInput.value = '';
 }
 
 const gridDays = computed<Date[]>(() => {
@@ -596,30 +615,54 @@ onBeforeUnmount(() => {
                         to schedule a meeting.
                     </DialogDescription>
                 </DialogHeader>
-                <div class="max-h-[60vh] space-y-1 overflow-y-auto px-3 pb-3">
-                    <button
-                        v-for="member in colleagues"
-                        :key="member.email"
-                        type="button"
-                        class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/60"
-                        @click="toggleMeetWith(member.email, member.name)"
-                    >
+                <div class="max-h-[60vh] space-y-3 overflow-y-auto px-4 pb-3">
+                    <div v-if="meetWith.length > 0" class="flex flex-wrap gap-1">
                         <span
-                            class="size-3 shrink-0 rounded-full border border-border"
-                            :style="{
-                                backgroundColor:
-                                    personColor(member.email) ?? 'transparent',
-                                borderColor: personColor(member.email) ?? undefined,
-                            }"
-                        />
-                        <span class="min-w-0 flex-1 truncate">{{
-                            member.name
-                        }}</span>
-                        <Check
-                            v-if="isMeeting(member.email)"
-                            class="size-4 shrink-0 text-primary"
-                        />
-                    </button>
+                            v-for="person in meetWith"
+                            :key="person.email"
+                            class="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs"
+                        >
+                            <span
+                                class="size-2 shrink-0 rounded-full"
+                                :style="{ backgroundColor: person.color }"
+                            />
+                            {{ person.name }}
+                            <button
+                                type="button"
+                                class="text-muted-foreground hover:text-foreground"
+                                @click="toggleMeetWith(person.email, person.name)"
+                            >
+                                <X class="size-3" />
+                            </button>
+                        </span>
+                    </div>
+
+                    <input
+                        v-model="meetEmailInput"
+                        type="email"
+                        autocapitalize="off"
+                        autocorrect="off"
+                        placeholder="Colleague's email…"
+                        class="h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
+                        @keydown.enter.prevent="addMeetEmail"
+                    />
+
+                    <div v-if="colleagueSuggestions.length > 0">
+                        <p class="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                            From your team
+                        </p>
+                        <div class="flex flex-wrap gap-1">
+                            <button
+                                v-for="member in colleagueSuggestions"
+                                :key="member.email"
+                                type="button"
+                                class="rounded-full border border-border/70 px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted/60"
+                                @click="toggleMeetWith(member.email, member.name)"
+                            >
+                                + {{ member.name }}
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 <div class="flex justify-end gap-2 border-t border-border/60 p-3">
                     <Button variant="ghost" size="sm" @click="clearMeetWith">
