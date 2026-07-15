@@ -9,6 +9,7 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class CalendarEventController extends Controller
 {
@@ -85,11 +86,26 @@ class CalendarEventController extends Controller
 
         abort_if($account === null, 422, 'Connect a Google account first.');
 
-        return response()->json([
-            'people' => (new GoogleCalendarClient($account))->searchDirectory(
-                $validated['q'],
-            ),
-        ]);
+        try {
+            return response()->json([
+                'people' => (new GoogleCalendarClient($account))->searchDirectory(
+                    $validated['q'],
+                ),
+            ]);
+        } catch (\Throwable $e) {
+            // Keep the field usable (raw emails still work) but tell the user
+            // why suggestions are empty — almost always the People API not
+            // being enabled, or the directory.readonly scope not granted.
+            Log::warning('Directory search failed', [
+                'account' => $account->email,
+                'reason' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'people' => [],
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

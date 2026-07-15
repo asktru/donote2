@@ -28,9 +28,13 @@ class GoogleCalendarClient
 
     /**
      * Search the Workspace directory for people (Meet-with autocomplete).
-     * Requires the directory.readonly scope; returns [] without it.
+     * Requires the directory.readonly scope and the People API enabled on
+     * the Google Cloud project.
      *
      * @return list<array{name: string, email: string}>
+     *
+     * @throws \RuntimeException when Google rejects the request (surfaces the
+     *                           real reason, e.g. People API disabled)
      */
     public function searchDirectory(string $query, int $limit = 8): array
     {
@@ -45,7 +49,10 @@ class GoogleCalendarClient
         );
 
         if ($response->failed()) {
-            return [];
+            throw new \RuntimeException(
+                $response->json('error.message')
+                    ?? 'Directory search failed ('.$response->status().').',
+            );
         }
 
         $people = [];

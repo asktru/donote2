@@ -14,6 +14,7 @@ const query = ref('');
 const suggestions = ref<DirectoryPerson[]>([]);
 const open = ref(false);
 const loading = ref(false);
+const error = ref<string | null>(null);
 
 let timer: ReturnType<typeof setTimeout> | null = null;
 let seq = 0;
@@ -28,6 +29,7 @@ watch(query, (value) => {
     if (q.length < 2) {
         suggestions.value = [];
         open.value = false;
+        error.value = null;
 
         return;
     }
@@ -35,10 +37,11 @@ watch(query, (value) => {
     loading.value = true;
     timer = setTimeout(async () => {
         const current = ++seq;
-        const people = await searchDirectory(q);
+        const result = await searchDirectory(q);
 
         if (current === seq) {
-            suggestions.value = people;
+            suggestions.value = result.people;
+            error.value = result.error;
             open.value = true;
             loading.value = false;
         }
@@ -71,6 +74,7 @@ function reset(): void {
     suggestions.value = [];
     open.value = false;
     loading.value = false;
+    error.value = null;
 }
 
 /** Delay close so a suggestion click (mousedown) registers first. */
@@ -115,6 +119,13 @@ function onBlur(): void {
             </li>
         </ul>
 
+        <p
+            v-else-if="open && !loading && error"
+            class="absolute z-50 mt-1 w-full rounded-md border border-amber-500/40 bg-popover px-2.5 py-2 text-xs text-amber-600 shadow-lg dark:text-amber-400"
+        >
+            Directory search unavailable: {{ error }} — you can still press
+            Enter to add a full email.
+        </p>
         <p
             v-else-if="open && !loading && query.trim().length >= 2"
             class="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover px-2.5 py-2 text-xs text-muted-foreground shadow-lg"

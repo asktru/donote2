@@ -45,6 +45,23 @@ test('directory search maps Workspace people to name + email', function () {
     ]);
 });
 
+test('directory search surfaces the Google error instead of hiding it', function () {
+    $user = User::factory()->create();
+    googleAccount($user);
+
+    Http::fake([
+        'people.googleapis.com/*' => Http::response([
+            'error' => ['message' => 'People API has not been used in project 123 before or it is disabled.'],
+        ], 403),
+    ]);
+
+    $this->actingAs($user)
+        ->getJson(route('google.directory', ['q' => 'ca']))
+        ->assertSuccessful()
+        ->assertJsonPath('people', [])
+        ->assertJsonPath('error', 'People API has not been used in project 123 before or it is disabled.');
+});
+
 test('directory search requires a query', function () {
     $user = User::factory()->create();
     googleAccount($user);

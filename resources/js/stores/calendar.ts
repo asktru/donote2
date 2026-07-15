@@ -446,18 +446,27 @@ export interface DirectoryPerson {
     email: string;
 }
 
+export interface DirectorySearchResult {
+    people: DirectoryPerson[];
+    error: string | null;
+}
+
 /** Search the Google Workspace directory (invitee autocomplete). */
 export async function searchDirectory(
     query: string,
-): Promise<DirectoryPerson[]> {
+): Promise<DirectorySearchResult> {
     try {
-        const res = await apiFetch<{ people: DirectoryPerson[] }>(
-            `/api/google/directory?q=${encodeURIComponent(query)}`,
-        );
+        const res = await apiFetch<{
+            people: DirectoryPerson[];
+            error?: string;
+        }>(`/api/google/directory?q=${encodeURIComponent(query)}`);
 
-        return res.people ?? [];
-    } catch {
-        return [];
+        return { people: res.people ?? [], error: res.error ?? null };
+    } catch (e) {
+        return {
+            people: [],
+            error: e instanceof Error ? e.message : 'Directory search failed.',
+        };
     }
 }
 

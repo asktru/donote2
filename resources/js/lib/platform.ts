@@ -1,11 +1,20 @@
+import { donoteDesktop } from '@/lib/desktop';
+
 /**
  * True when running inside the Donote Electron shell on macOS, where the
  * window uses hiddenInset traffic lights that overlap the top-left corner.
+ *
+ * Detected via the preload-injected `window.donoteDesktop` bridge rather
+ * than the user-agent: the shipped shell may present a stripped UA (a common
+ * workaround so Google OAuth doesn't reject an "Electron" agent), which would
+ * make a `userAgent.includes('Electron')` check silently fail. The shell is
+ * macOS-only, so the bridge's presence is a sufficient signal.
  */
 export const isMacDesktopShell =
-    typeof navigator !== 'undefined' &&
-    navigator.userAgent.includes('Electron') &&
-    navigator.platform.startsWith('Mac');
+    donoteDesktop !== null ||
+    (typeof navigator !== 'undefined' &&
+        navigator.userAgent.includes('Electron') &&
+        navigator.platform.startsWith('Mac'));
 
 /** True on touch-capable devices (phones, tablets) — gates swipe gestures. */
 export const isTouchDevice =

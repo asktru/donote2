@@ -20,17 +20,9 @@ import TimeGridView from '@/components/calendar/TimeGridView.vue';
 import RecordingIndicator from '@/components/notes/RecordingIndicator.vue';
 import { Button } from '@/components/ui/button';
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
-import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
     DropdownMenuContent,
-    DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
@@ -131,10 +123,6 @@ function isMeeting(email: string): boolean {
     return meetWith.value.some((person) => person.email === email);
 }
 
-function personColor(email: string): string | null {
-    return meetWith.value.find((person) => person.email === email)?.color ?? null;
-}
-
 /** Team members not yet selected — quick-adds under the email field. */
 const colleagueSuggestions = computed(() =>
     colleagues.value.filter((member) => !isMeeting(member.email)),
@@ -230,6 +218,23 @@ useSwipe((swipe) => {
 });
 
 function onKeydown(event: KeyboardEvent): void {
+    // ⌘J — toggle the Meet-with panel (Vimcal parity).
+    if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.shiftKey &&
+        !event.altKey &&
+        event.key.toLowerCase() === 'j'
+    ) {
+        event.preventDefault();
+
+        if (colleagues.value.length > 0 || meetWith.value.length > 0) {
+            fabOpen.value = false;
+            meetPickerOpen.value = !meetPickerOpen.value;
+        }
+
+        return;
+    }
+
     // ⌘⌃1 Notes / ⌘⌃2 Calendar — switch top-level section.
     if (event.metaKey && event.ctrlKey && (event.key === '1' || event.key === '2')) {
         event.preventDefault();
@@ -358,61 +363,24 @@ onBeforeUnmount(() => {
             </h1>
 
             <div class="ml-auto flex items-center gap-1.5 sm:gap-2">
-                <DropdownMenu v-if="colleagues.length > 0">
-                    <DropdownMenuTrigger as-child>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            :class="
-                                cn(
-                                    'size-8',
-                                    meetWith.length > 0
-                                        ? 'text-primary'
-                                        : 'text-muted-foreground',
-                                )
-                            "
-                            aria-label="Meet with"
-                            title="Meet with — overlay a colleague's schedule"
-                        >
-                            <Users class="size-4" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="w-64">
-                        <DropdownMenuLabel
-                            class="text-[11px] tracking-wide text-muted-foreground uppercase"
-                        >
-                            Meet with
-                        </DropdownMenuLabel>
-                        <DropdownMenuCheckboxItem
-                            v-for="member in colleagues"
-                            :key="member.email"
-                            :model-value="isMeeting(member.email)"
-                            @select.prevent
-                            @update:model-value="
-                                toggleMeetWith(member.email, member.name)
-                            "
-                        >
-                            <span
-                                class="mr-1.5 inline-block size-2 shrink-0 rounded-full border border-border"
-                                :style="{
-                                    backgroundColor:
-                                        personColor(member.email) ??
-                                        'transparent',
-                                    borderColor: personColor(member.email) ?? undefined,
-                                }"
-                            />
-                            <span class="min-w-0 flex-1 truncate">{{
-                                member.name
-                            }}</span>
-                        </DropdownMenuCheckboxItem>
-                        <template v-if="meetWith.length > 0">
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem @select="clearMeetWith">
-                                Clear meet-with
-                            </DropdownMenuItem>
-                        </template>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                <Button
+                    v-if="googleConnected"
+                    variant="ghost"
+                    size="icon"
+                    :class="
+                        cn(
+                            'size-8',
+                            meetWith.length > 0 || meetPickerOpen
+                                ? 'text-primary'
+                                : 'text-muted-foreground',
+                        )
+                    "
+                    aria-label="Meet with"
+                    title="Meet with — overlay a colleague's schedule (⌘J)"
+                    @click="meetPickerOpen = !meetPickerOpen"
+                >
+                    <Users class="size-4" />
+                </Button>
 
                 <DropdownMenu>
                     <DropdownMenuTrigger as-child>
@@ -566,7 +534,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div
-            v-if="googleConnected"
+            v-if="googleConnected && !meetPickerOpen"
             class="fixed right-5 bottom-[calc(1.25rem+env(safe-area-inset-bottom))] z-40 flex flex-col items-end gap-2"
         >
             <template v-if="fabOpen">
@@ -600,64 +568,84 @@ onBeforeUnmount(() => {
             </button>
         </div>
 
-        <Dialog v-model:open="meetPickerOpen">
-            <DialogContent class="max-w-xs gap-0 p-0">
-                <DialogHeader class="px-5 pt-5 pb-2">
-                    <DialogTitle>Meet with</DialogTitle>
-                    <DialogDescription class="text-xs">
-                        Their schedule overlays the calendar — tap a time slot
-                        to schedule a meeting.
-                    </DialogDescription>
-                </DialogHeader>
-                <div class="max-h-[60vh] space-y-3 overflow-y-auto px-4 pb-3">
-                    <div v-if="meetWith.length > 0" class="flex flex-wrap gap-1">
+        <!--
+            Meet-with is a non-blocking docked panel (not a modal): overlaid
+            schedules stay visible so people can be added/removed while
+            reading availability, then a slot tap schedules the meeting.
+        -->
+        <div
+            v-if="meetPickerOpen"
+            class="fixed inset-x-2 bottom-[calc(0.5rem+env(safe-area-inset-bottom))] z-40 rounded-xl border border-border/60 bg-background/95 shadow-2xl backdrop-blur sm:inset-x-auto sm:left-1/2 sm:w-[26rem] sm:-translate-x-1/2"
+        >
+            <div class="flex items-center justify-between px-3.5 pt-3 pb-1">
+                <div class="flex items-center gap-1.5 text-sm font-semibold">
+                    <Users class="size-4" /> Meet with
+                </div>
+                <button
+                    type="button"
+                    class="rounded-md p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                    aria-label="Close meet-with"
+                    @click="meetPickerOpen = false"
+                >
+                    <X class="size-4" />
+                </button>
+            </div>
+            <p class="px-3.5 pb-2 text-xs text-muted-foreground">
+                Their schedule overlays the grid — tap a time slot to schedule.
+            </p>
+
+            <div class="space-y-3 px-3.5 pb-3">
+                <div v-if="meetWith.length > 0" class="flex flex-wrap gap-1">
+                    <span
+                        v-for="person in meetWith"
+                        :key="person.email"
+                        class="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs"
+                    >
                         <span
-                            v-for="person in meetWith"
-                            :key="person.email"
-                            class="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs"
+                            class="size-2 shrink-0 rounded-full"
+                            :style="{ backgroundColor: person.color }"
+                        />
+                        {{ person.name }}
+                        <button
+                            type="button"
+                            class="text-muted-foreground hover:text-foreground"
+                            aria-label="Remove"
+                            @click="toggleMeetWith(person.email, person.name)"
                         >
-                            <span
-                                class="size-2 shrink-0 rounded-full"
-                                :style="{ backgroundColor: person.color }"
-                            />
-                            {{ person.name }}
-                            <button
-                                type="button"
-                                class="text-muted-foreground hover:text-foreground"
-                                @click="toggleMeetWith(person.email, person.name)"
-                            >
-                                <X class="size-3" />
-                            </button>
-                        </span>
-                    </div>
+                            <X class="size-3" />
+                        </button>
+                    </span>
+                </div>
 
-                    <DirectoryAutocomplete @add="addMeetPerson" />
+                <DirectoryAutocomplete @add="addMeetPerson" />
 
-                    <div v-if="colleagueSuggestions.length > 0">
-                        <p class="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-                            From your team
-                        </p>
-                        <div class="flex flex-wrap gap-1">
-                            <button
-                                v-for="member in colleagueSuggestions"
-                                :key="member.email"
-                                type="button"
-                                class="rounded-full border border-border/70 px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted/60"
-                                @click="toggleMeetWith(member.email, member.name)"
-                            >
-                                + {{ member.name }}
-                            </button>
-                        </div>
+                <div v-if="colleagueSuggestions.length > 0">
+                    <p class="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                        From your team
+                    </p>
+                    <div class="flex flex-wrap gap-1">
+                        <button
+                            v-for="member in colleagueSuggestions"
+                            :key="member.email"
+                            type="button"
+                            class="rounded-full border border-border/70 px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted/60"
+                            @click="toggleMeetWith(member.email, member.name)"
+                        >
+                            + {{ member.name }}
+                        </button>
                     </div>
                 </div>
-                <div class="flex justify-end gap-2 border-t border-border/60 p-3">
-                    <Button variant="ghost" size="sm" @click="clearMeetWith">
-                        Clear
-                    </Button>
-                    <Button size="sm" @click="meetPickerOpen = false">Done</Button>
-                </div>
-            </DialogContent>
-        </Dialog>
+            </div>
+
+            <div
+                v-if="meetWith.length > 0"
+                class="flex justify-end border-t border-border/60 px-3 py-2"
+            >
+                <Button variant="ghost" size="sm" @click="clearMeetWith">
+                    Clear everyone
+                </Button>
+            </div>
+        </div>
 
         <EventDetailPanel />
         <EventEditor />
