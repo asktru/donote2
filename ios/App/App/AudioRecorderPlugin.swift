@@ -249,7 +249,7 @@ public class AudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin {
             guard
                 let path = call.getString("path"),
                 let dir = Self.segmentsDir(),
-                path.hasPrefix(dir.path)
+                NativeFileReader.isInside(path, dir: dir)
             else {
                 call.resolve()
 

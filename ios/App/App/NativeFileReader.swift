@@ -6,13 +6,25 @@ import Foundation
 /// unavailable — container files (recording segments, shared payloads) reach
 /// JS through this instead.
 enum NativeFileReader {
+    /// Same file, same string: on iOS /var is a symlink to /private/var, and
+    /// APIs disagree about which spelling they return (directory enumeration
+    /// says /private/var, FileManager.urls says /var). Resolve before any
+    /// prefix comparison or the containment check fails for real files.
+    static func canonical(_ path: String) -> String {
+        URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+    }
+
+    static func isInside(_ path: String, dir: URL) -> Bool {
+        canonical(path).hasPrefix(canonical(dir.path))
+    }
+
     /// Handle a readFile({ path, offset?, length? }) call, restricted to
     /// files inside `allowedDir`. Resolves { base64, size }.
     static func handle(_ call: CAPPluginCall, allowedDir: URL?) {
         guard
             let path = call.getString("path"),
             let dir = allowedDir,
-            path.hasPrefix(dir.path),
+            isInside(path, dir: dir),
             let handle = FileHandle(forReadingAtPath: path)
         else {
             call.reject("File is not readable.")
