@@ -2,10 +2,33 @@ import { describe, expect, it } from 'vitest';
 
 import {
     appendLine,
+    itemsForTeam,
     sharedAttachmentLine,
     sharedNoteContent,
     sharedNoteTitle,
 } from './shareInbox';
+import type { ShareInboxItem } from './shareInbox';
+
+describe('itemsForTeam', () => {
+    const item = (id: string, teamSlug?: string): ShareInboxItem => ({
+        id,
+        kind: 'url',
+        teamSlug,
+    });
+
+    it('keeps items routed to the open team and untagged legacy items', () => {
+        expect(
+            itemsForTeam(
+                [item('a', 'alpha'), item('b', 'beta'), item('c')],
+                'alpha',
+            ).map((entry) => entry.id),
+        ).toEqual(['a', 'c']);
+    });
+
+    it('leaves other teams’ shares queued', () => {
+        expect(itemsForTeam([item('b', 'beta')], 'alpha')).toEqual([]);
+    });
+});
 
 describe('sharedNoteTitle', () => {
     it('uses the page title when present', () => {

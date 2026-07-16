@@ -13,6 +13,22 @@ import UniformTypeIdentifiers
 class ShareViewController: SLComposeServiceViewController {
     private static let appGroupId = "group.io.air.donote"
     private static let queueFolder = "ShareInbox"
+    private static let teamsFile = "share-teams.json"
+    private static let lastTeamKey = "donote-share-last-team"
+
+    private struct Team {
+        let slug: String
+        let name: String
+    }
+
+    /** Team workspaces the app published for routing (see publishTeams). */
+    private var teams: [Team] = []
+    private var selectedTeamSlug = ""
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        loadTeams()
+    }
 
     override func presentationAnimationDidFinish() {
         super.presentationAnimationDidFinish()
@@ -21,6 +37,44 @@ class ShareViewController: SLComposeServiceViewController {
 
     override func isContentValid() -> Bool {
         true
+    }
+
+    // MARK: - Team routing
+
+    /// Read the team list the main app published into the shared container:
+    /// `{ "current": slug, "teams": [{ "slug", "name" }] }`. Default to the
+    /// last team shared to (if still valid), else the app's current team.
+    private func loadTeams() {
+        guard
+            let container = FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: Self.appGroupId
+            ),
+            let data = try? Data(contentsOf: container.appendingPathComponent(Self.teamsFile)),
+            let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return
+        }
+
+        teams = ((parsed["teams"] as? [[String: String]]) ?? []).compactMap { entry in
+            guard let slug = entry["slug"], let name = entry["name"] else {
+                return nil
+            }
+
+            return Team(slug: slug, name: name)
+        }
+
+        let remembered = UserDefaults(suiteName: Self.appGroupId)?
+            .string(forKey: Self.lastTeamKey)
+
+        if let remembered, teams.contains(where: { $0.slug == remembered }) {
+            selectedTeamSlug = remembered
+        } else {
+            selectedTeamSlug = parsed["current"] as? String ?? teams.first?.slug ?? ""
+        }
+    }
+
+    private var selectedTeamName: String {
+        teams.first(where: { $0.slug == selectedTeamSlug })?.name ?? ""
     }
 
     override func didSelectPost() {
@@ -45,7 +99,36 @@ class ShareViewController: SLComposeServiceViewController {
     }
 
     override func configurationItems() -> [Any]! {
-        []
+        guard teams.count > 1, let item = SLComposeSheetConfigurationItem() else {
+            return []
+        }
+
+        item.title = "Team"
+        item.value = selectedTeamName
+        item.tapHandler = { [weak self] in
+            guard let self else {
+                return
+            }
+
+            let picker = TeamPickerViewController(
+                teams: self.teams.map { ($0.slug, $0.name) },
+                selectedSlug: self.selectedTeamSlug
+            ) { [weak self] slug in
+                guard let self else {
+                    return
+                }
+
+                self.selectedTeamSlug = slug
+                UserDefaults(suiteName: Self.appGroupId)?
+                    .set(slug, forKey: Self.lastTeamKey)
+                item.value = self.selectedTeamName
+                self.popConfigurationViewController()
+            }
+
+            self.pushConfigurationViewController(picker)
+        }
+
+        return [item]
     }
 
     // MARK: - Provider routing
@@ -191,6 +274,10 @@ class ShareViewController: SLComposeServiceViewController {
         var entry = fields
         entry["id"] = id
         entry["createdAt"] = ISO8601DateFormatter().string(from: Date())
+
+        if !selectedTeamSlug.isEmpty {
+            entry["teamSlug"] = selectedTeamSlug
+        }
 
         if let data = try? JSONSerialization.data(withJSONObject: entry) {
             try? data.write(to: folder.appendingPathComponent("\(id).json"))

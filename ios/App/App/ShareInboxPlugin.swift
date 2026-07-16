@@ -7,10 +7,12 @@ import Foundation
 /// note (see `resources/js/lib/shareInbox.ts`).
 ///
 /// JS name: `ShareInbox`.
-///   list()           -> { items: [{ id, kind, createdAt, title?, url?,
-///                                   description?, comment?, fileName?,
+///   list()           -> { items: [{ id, kind, createdAt, teamSlug?, title?,
+///                                   url?, description?, comment?, fileName?,
 ///                                   mimeType?, filePath? }] }
 ///   remove({ id })   -> {}    (deletes the JSON entry + its payload file)
+///   publishTeams({ current, teams: [{ slug, name }] }) -> {}
+///                       (writes share-teams.json for the extension's picker)
 @objc(ShareInboxPlugin)
 public class ShareInboxPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "ShareInboxPlugin"
@@ -18,10 +20,12 @@ public class ShareInboxPlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "list", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "remove", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "publishTeams", returnType: CAPPluginReturnPromise),
     ]
 
     private static let appGroupId = "group.io.air.donote"
     private static let queueFolder = "ShareInbox"
+    private static let teamsFile = "share-teams.json"
 
     @objc func list(_ call: CAPPluginCall) {
         guard let folder = Self.queueUrl() else {
@@ -86,6 +90,32 @@ public class ShareInboxPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         try? FileManager.default.removeItem(at: json)
+        call.resolve()
+    }
+
+    /// Publish the team list for the extension's "Team" picker.
+    @objc func publishTeams(_ call: CAPPluginCall) {
+        guard
+            let container = FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: Self.appGroupId
+            )
+        else {
+            call.resolve()
+
+            return
+        }
+
+        let teams = (call.getArray("teams") as? [[String: String]] ?? [])
+            .filter { $0["slug"] != nil && $0["name"] != nil }
+        let payload: [String: Any] = [
+            "current": call.getString("current") ?? "",
+            "teams": teams,
+        ]
+
+        if let data = try? JSONSerialization.data(withJSONObject: payload) {
+            try? data.write(to: container.appendingPathComponent(Self.teamsFile))
+        }
+
         call.resolve()
     }
 

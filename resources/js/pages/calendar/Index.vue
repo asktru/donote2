@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import {
     ChevronLeft,
     ChevronRight,
@@ -29,7 +29,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useSwipe } from '@/composables/useSwipe';
 import { isMacDesktopShell, isNarrowViewport } from '@/lib/platform';
-import { startShareInboxWatcher } from '@/lib/shareInbox';
+import {
+    publishShareTargets,
+    startShareInboxWatcher,
+} from '@/lib/shareInbox';
 import { cn } from '@/lib/utils';
 import {
     anchor,
@@ -295,6 +298,7 @@ onMounted(async () => {
         userId: props.workspace.userId,
     });
     startReminderScheduler();
+    publishShareTargets(usePage().props.teams ?? [], props.workspace.teamSlug);
     startShareInboxWatcher();
 });
 

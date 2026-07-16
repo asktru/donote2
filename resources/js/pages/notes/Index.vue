@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import AiPromptDialog from '@/components/notes/AiPromptDialog.vue';
@@ -33,7 +33,10 @@ import { kindOfKey, todayDailyKey, todayKey } from '@/core/dates';
 import type { CalendarKind } from '@/core/dates';
 import { SNOOZE_MINUTES } from '@/lib/notifications';
 import { isMacDesktopShell, isNarrowViewport } from '@/lib/platform';
-import { startShareInboxWatcher } from '@/lib/shareInbox';
+import {
+    publishShareTargets,
+    startShareInboxWatcher,
+} from '@/lib/shareInbox';
 import { resolveSwipeAction } from '@/lib/swipeActions';
 import { aiDialogOpen } from '@/stores/aiPrompts';
 import { startMemoUploader, toggleRecording } from '@/stores/memos';
@@ -378,6 +381,7 @@ onMounted(async () => {
     void hideNativeAccessoryBar();
     startMemoUploader();
     startReminderScheduler();
+    publishShareTargets(usePage().props.teams ?? [], props.workspace.teamSlug);
     startShareInboxWatcher();
     await startSync();
 });

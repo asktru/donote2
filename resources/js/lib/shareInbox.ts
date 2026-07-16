@@ -24,6 +24,8 @@ export interface ShareInboxItem {
     id: string;
     kind: 'url' | 'text' | 'file';
     createdAt?: string;
+    /** Team workspace picked in the share sheet; absent on legacy items. */
+    teamSlug?: string;
     title?: string;
     url?: string;
     description?: string;
@@ -36,6 +38,25 @@ export interface ShareInboxItem {
 interface ShareInboxPlugin {
     list: () => Promise<{ items: ShareInboxItem[] }>;
     remove: (options: { id: string }) => Promise<void>;
+    publishTeams: (options: {
+        current: string;
+        teams: { slug: string; name: string }[];
+    }) => Promise<void>;
+}
+
+/**
+ * Items the open workspace may ingest: ones routed to it in the share sheet,
+ * plus untagged legacy items. Shares aimed at other teams stay queued until
+ * that team is opened — notes and daily-note appends only exist in the
+ * active workspace's local store.
+ */
+export function itemsForTeam(
+    items: ShareInboxItem[],
+    teamSlug: string,
+): ShareInboxItem[] {
+    return items.filter(
+        (item) => !item.teamSlug || item.teamSlug === teamSlug,
+    );
 }
 
 /** Folder shared pages land in — easy to triage, out of the notes tree root. */
@@ -153,7 +174,9 @@ async function ingestFile(item: ShareInboxItem): Promise<void> {
  * queue entries for the next run.
  */
 export async function processShareInbox(): Promise<void> {
-    if (plugin === null || processing || !workspaceConfig()) {
+    const config = workspaceConfig();
+
+    if (plugin === null || processing || !config) {
         return;
     }
 
@@ -162,7 +185,7 @@ export async function processShareInbox(): Promise<void> {
     try {
         const { items } = await plugin.list();
 
-        for (const item of items) {
+        for (const item of itemsForTeam(items, config.teamSlug)) {
             try {
                 if (item.kind === 'file') {
                     await ingestFile(item);
@@ -180,6 +203,29 @@ export async function processShareInbox(): Promise<void> {
     } finally {
         processing = false;
     }
+}
+
+/**
+ * Publish the team list into the shared container so the share sheet can
+ * offer a "Team" picker. Fire-and-forget, refreshed on every page boot.
+ */
+export function publishShareTargets(
+    teams: { slug: string; name: string }[],
+    current: string,
+): void {
+    if (plugin === null || teams.length === 0) {
+        return;
+    }
+
+    void plugin
+        .publishTeams({
+            current,
+            teams: teams.map(({ slug, name }) => ({ slug, name })),
+        })
+        .catch(() => {
+            // Older installed app without the method — the picker just
+            // won't appear until the native app is updated.
+        });
 }
 
 /**
