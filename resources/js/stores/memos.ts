@@ -1,9 +1,14 @@
 import { computed, ref } from 'vue';
 
-import { todayDailyKey } from '@/core/dates';
+import { dateKeyFor, todayDailyKey } from '@/core/dates';
 import { appendLine, appendUnderAudioMemo } from '@/core/memoNote';
 import { apiUpload } from '@/lib/api';
 import { donoteDesktop } from '@/lib/desktop';
+import { nativeRecorder, readSegmentBlob } from '@/lib/nativeRecorder';
+import type {
+    NativeSegmentEvent,
+    NativeStoppedEvent,
+} from '@/lib/nativeRecorder';
 import type { MemoRecord, WorkspaceDb } from '@/stores/db';
 import { openWorkspaceDb } from '@/stores/db';
 import {
@@ -62,6 +67,17 @@ interface ActiveRecording {
 let active: ActiveRecording | null = null;
 /** Guards against re-entrant rotation (size trigger racing the time timer). */
 let rotating = false;
+/**
+ * The in-flight native (iOS) recording. Capture and rotation live in
+ * AudioRecorderPlugin; this only tracks identity for queue bookkeeping.
+ */
+let nativeSession: {
+    groupId: string;
+    dateKey: string;
+    startedAt: number;
+} | null = null;
+/** Serializes native segment/stopped events so parts persist in order. */
+let nativeChain: Promise<void> = Promise.resolve();
 let db: WorkspaceDb | null = null;
 let uploaderTimer: ReturnType<typeof setInterval> | null = null;
 let elapsedTimer: ReturnType<typeof setInterval> | null = null;
@@ -330,7 +346,216 @@ async function rotateSegment(): Promise<void> {
     void processQueue();
 }
 
+/* ------------------------------------------------------------------ */
+/* Native iOS capture (AudioRecorderPlugin)                            */
+/* ------------------------------------------------------------------ */
+
+/** Fold a finished native segment file into the same offline memo queue. */
+async function persistNativeSegment(event: NativeSegmentEvent): Promise<void> {
+    const database = workspaceDb();
+
+    if (!database || !nativeRecorder) {
+        return;
+    }
+
+    const blob = await readSegmentBlob(event.path);
+    const session =
+        nativeSession?.groupId === event.groupId ? nativeSession : null;
+
+    await database.memos.put({
+        id: crypto.randomUUID(),
+        groupId: event.groupId,
+        part: event.part,
+        partsTotal: null,
+        dateKey: session?.dateKey ?? todayDailyKey(),
+        blob,
+        mimeType: event.mimeType || 'audio/mp4',
+        durationSec: event.durationSec,
+        status: 'pending',
+        transcript: null,
+        error: null,
+        attempts: 0,
+        createdAt: new Date(
+            Date.now() - event.durationSec * 1000,
+        ).toISOString(),
+    });
+
+    await nativeRecorder.removeSegment({ path: event.path });
+    await refreshQueue();
+}
+
+/**
+ * The recording finished — whether via the in-app button, the Live
+ * Activity's Stop, or an unrecoverable interruption. Runs after all segment
+ * events on the serialized chain, so every part is already persisted.
+ */
+async function handleNativeStopped(event: NativeStoppedEvent): Promise<void> {
+    nativeSession = null;
+    isRecording.value = false;
+    recordingHasSystemAudio.value = false;
+
+    if (elapsedTimer !== null) {
+        clearInterval(elapsedTimer);
+        elapsedTimer = null;
+    }
+
+    const database = workspaceDb();
+
+    if (database) {
+        const parts = await database.memos
+            .where('groupId')
+            .equals(event.groupId)
+            .toArray();
+
+        for (const part of parts) {
+            await database.memos.update(part.id, { partsTotal: event.parts });
+        }
+
+        await refreshQueue();
+    }
+
+    if (event.durationSec >= LONG_RECORDING_SEC) {
+        heldGroups.add(event.groupId);
+        pendingDestination.value = {
+            groupId: event.groupId,
+            durationSec: event.durationSec,
+        };
+    }
+
+    void processQueue();
+}
+
+function registerNativeRecorderEvents(): void {
+    if (!nativeRecorder) {
+        return;
+    }
+
+    void nativeRecorder.addListener('segment', (event) => {
+        nativeChain = nativeChain
+            .then(() => persistNativeSegment(event))
+            .catch((error) =>
+                console.warn('[donote] native segment persist failed', error),
+            );
+    });
+
+    void nativeRecorder.addListener('stopped', (event) => {
+        nativeChain = nativeChain
+            .then(() => handleNativeStopped(event))
+            .catch((error) =>
+                console.warn('[donote] native stop handling failed', error),
+            );
+    });
+
+    // JS timers freeze while the app is backgrounded — the recording doesn't.
+    // Resync the visible elapsed counter whenever the app comes back.
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && nativeSession) {
+            recordingSeconds.value = Math.round(
+                (Date.now() - nativeSession.startedAt) / 1000,
+            );
+        }
+    });
+}
+
+/** A relaunch mid-recording: pick the running native session back up. */
+async function resumeNativeRecordingState(): Promise<void> {
+    if (!nativeRecorder) {
+        return;
+    }
+
+    try {
+        const status = await nativeRecorder.isRecording();
+
+        if (status.recording && status.groupId && status.startedAt) {
+            nativeSession = {
+                groupId: status.groupId,
+                dateKey: dateKeyFor('daily', new Date(status.startedAt)),
+                startedAt: status.startedAt,
+            };
+            isRecording.value = true;
+            recordingSeconds.value = Math.round(
+                (Date.now() - status.startedAt) / 1000,
+            );
+
+            if (elapsedTimer === null) {
+                elapsedTimer = setInterval(() => {
+                    recordingSeconds.value += 1;
+                }, 1000);
+            }
+        }
+    } catch {
+        // Older native shell without the recorder plugin.
+    }
+}
+
+/** Segment files a killed app left in the native container — rescue them. */
+async function adoptNativePending(): Promise<void> {
+    if (!nativeRecorder) {
+        return;
+    }
+
+    try {
+        const { items } = await nativeRecorder.pendingSegments();
+        const database = workspaceDb();
+
+        if (!database || items.length === 0) {
+            return;
+        }
+
+        for (const item of items) {
+            try {
+                const blob = await readSegmentBlob(item.path);
+
+                await database.memos.put({
+                    id: crypto.randomUUID(),
+                    groupId: item.groupId,
+                    part: item.part,
+                    partsTotal: null,
+                    dateKey: dateKeyFor('daily', new Date(item.createdAt)),
+                    blob,
+                    mimeType: 'audio/mp4',
+                    // 32 kbps AAC ≈ 4 KB/s — close enough for display.
+                    durationSec: Math.round(item.sizeBytes / 4000),
+                    status: 'pending',
+                    transcript: null,
+                    error: null,
+                    attempts: 0,
+                    createdAt: item.createdAt,
+                });
+
+                await nativeRecorder.removeSegment({ path: item.path });
+            } catch (error) {
+                console.warn('[donote] orphaned segment rescue failed', error);
+            }
+        }
+
+        await refreshQueue();
+    } catch {
+        // Older native shell without the recorder plugin.
+    }
+}
+
 export async function startRecording(): Promise<void> {
+    // iOS records natively: capture survives backgrounding/locking, and the
+    // plugin runs the Live Activity. Segments come back via events.
+    if (nativeRecorder !== null) {
+        if (nativeSession !== null || isRecording.value) {
+            return;
+        }
+
+        const { groupId, startedAt } = await nativeRecorder.start();
+
+        nativeSession = { groupId, dateKey: todayDailyKey(), startedAt };
+        isRecording.value = true;
+        recordingHasSystemAudio.value = false;
+        recordingSeconds.value = 0;
+        elapsedTimer = setInterval(() => {
+            recordingSeconds.value += 1;
+        }, 1000);
+
+        return;
+    }
+
     if (active !== null) {
         return;
     }
@@ -391,6 +616,15 @@ function teardownRecording(): ActiveRecording | null {
 
 /** Stop, persist the final part, and queue the group for transcription. */
 export async function stopRecording(): Promise<void> {
+    if (nativeRecorder !== null && nativeSession !== null) {
+        // Bookkeeping (partsTotal, destination prompt, uploads) runs in the
+        // 'stopped' event handler — the same path the Live Activity's Stop
+        // button and interruption endings take.
+        await nativeRecorder.stop();
+
+        return;
+    }
+
     const current = active;
 
     if (current === null) {
@@ -476,6 +710,28 @@ export async function toggleRecording(): Promise<void> {
 
 /** Discard the in-progress recording, including already-saved parts. */
 export async function discardRecording(): Promise<void> {
+    if (nativeRecorder !== null && nativeSession !== null) {
+        const groupId = nativeSession.groupId;
+        nativeSession = null;
+        isRecording.value = false;
+
+        if (elapsedTimer !== null) {
+            clearInterval(elapsedTimer);
+            elapsedTimer = null;
+        }
+
+        await nativeRecorder.discard();
+
+        const database = workspaceDb();
+
+        if (database) {
+            await database.memos.where('groupId').equals(groupId).delete();
+            await refreshQueue();
+        }
+
+        return;
+    }
+
     const current = active;
 
     if (current) {
@@ -674,6 +930,12 @@ async function adoptOrphanedGroups(): Promise<void> {
     const openGroups = new Map<string, number>();
 
     for (const memo of all) {
+        // A native recording that survived a web-view reload is still open —
+        // its parts get partsTotal from the 'stopped' event, not from here.
+        if (memo.groupId === nativeSession?.groupId) {
+            continue;
+        }
+
         if (memo.partsTotal === null) {
             openGroups.set(
                 memo.groupId,
@@ -701,6 +963,12 @@ async function adoptOrphanedGroups(): Promise<void> {
  * visits, which is what makes recording persistent everywhere in the app.
  */
 function handlePageHide(): void {
+    // Native recordings live outside the web view and survive reloads — the
+    // resumed page picks the session back up via resumeNativeRecordingState.
+    if (nativeSession !== null) {
+        return;
+    }
+
     if (active !== null) {
         active.recorder.onstop = null;
         active.recorder.stop();
@@ -720,7 +988,15 @@ export function startMemoUploader(): void {
 
     booted = true;
 
-    void adoptOrphanedGroups().then(refreshQueue).then(processQueue);
+    registerNativeRecorderEvents();
+
+    // Resume a still-running native recording BEFORE closing orphaned
+    // groups, so its open parts aren't finalized out from under it.
+    void resumeNativeRecordingState()
+        .then(adoptNativePending)
+        .then(adoptOrphanedGroups)
+        .then(refreshQueue)
+        .then(processQueue);
 
     window.addEventListener('online', () => void processQueue());
     window.addEventListener('pagehide', handlePageHide);

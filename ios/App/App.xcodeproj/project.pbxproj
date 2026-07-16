@@ -7,11 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		09FFD49A8C365FC1A9C18CF9 /* DonoteWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 9699B9E7A1FA2EACAE5BAB4D /* DonoteWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0D2C6659810A25EDEBFAF74D /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 89A7CF771AEE206F90D29CE0 /* Foundation.framework */; };
 		1038C2A1E7E7C08614A3B391 /* ShareInboxPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 745AC563F25E28993D9FACF9 /* ShareInboxPlugin.swift */; };
 		13386DF6FB240DC37CE2BCB7 /* DonoteShare.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 6E41DCDB4C022FCCCB833209 /* DonoteShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1F325BBC70317BA25B3CCA69 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 138B0A9D9763E8AFFA6C86E7 /* ShareViewController.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
+		32F85CB59EDEB0D9C2463716 /* RecordingActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = C044D1B584D935B569EFD308 /* RecordingActivity.swift */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
@@ -19,9 +21,14 @@
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
+		9E80520BEDB9888D6EB06BE4 /* DonoteWidgetsBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E509D776120C1CAAB08881D /* DonoteWidgetsBundle.swift */; };
 		BBE59E4A2CECE634166389A4 /* GetPageInfo.js in Resources */ = {isa = PBXBuildFile; fileRef = B9EBE1FCDC05AE823830C58A /* GetPageInfo.js */; };
+		BD98A941BBFBCD60E3B570E1 /* RecordingActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = C044D1B584D935B569EFD308 /* RecordingActivity.swift */; };
 		CA1EDA700000000000000001 /* AppleCalendarPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1EDA700000000000000002 /* AppleCalendarPlugin.swift */; };
 		CA1EDA700000000000000003 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1EDA700000000000000004 /* MainViewController.swift */; };
+		CB0EA6D0B2ECAF959C889322 /* AudioRecorderPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3484BB6240B7EBA9CEEBE8D3 /* AudioRecorderPlugin.swift */; };
+		F6941CE0DFBE8167D75F9C61 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 89A7CF771AEE206F90D29CE0 /* Foundation.framework */; };
+		FFD4735AA7A15CC9832DAEA1 /* RecordingLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAB5E6928F35776F8FFF404C /* RecordingLiveActivity.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -31,6 +38,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = F46A7B6EDEEE9998D373C3E8;
 			remoteInfo = DonoteShare;
+		};
+		12B8092C2FED49B124A00690 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EEE20C8BC904335F3FCD05EE;
+			remoteInfo = DonoteWidgets;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -42,6 +56,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				13386DF6FB240DC37CE2BCB7 /* DonoteShare.appex in Embed App Extensions */,
+				09FFD49A8C365FC1A9C18CF9 /* DonoteWidgets.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -51,7 +66,10 @@
 /* Begin PBXFileReference section */
 		138B0A9D9763E8AFFA6C86E7 /* ShareViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		18FAC0C3FB4F72F51F9AA721 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		1E509D776120C1CAAB08881D /* DonoteWidgetsBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DonoteWidgetsBundle.swift; sourceTree = "<group>"; };
+		28EFF7B40BA543993E5BDE4B /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
+		3484BB6240B7EBA9CEEBE8D3 /* AudioRecorderPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AudioRecorderPlugin.swift; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -64,7 +82,10 @@
 		745AC563F25E28993D9FACF9 /* ShareInboxPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareInboxPlugin.swift; sourceTree = "<group>"; };
 		89A7CF771AEE206F90D29CE0 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		9699B9E7A1FA2EACAE5BAB4D /* DonoteWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DonoteWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AAB5E6928F35776F8FFF404C /* RecordingLiveActivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecordingLiveActivity.swift; sourceTree = "<group>"; };
 		B9EBE1FCDC05AE823830C58A /* GetPageInfo.js */ = {isa = PBXFileReference; includeInIndex = 1; path = GetPageInfo.js; sourceTree = "<group>"; };
+		C044D1B584D935B569EFD308 /* RecordingActivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecordingActivity.swift; sourceTree = "<group>"; };
 		CA1EDA700000000000000002 /* AppleCalendarPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleCalendarPlugin.swift; sourceTree = "<group>"; };
 		CA1EDA700000000000000004 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		E9AA55D3D873637A3582E689 /* DonoteShare.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = DonoteShare.entitlements; sourceTree = "<group>"; };
@@ -87,9 +108,28 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B6301A30400C2A6A1BF715AB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F6941CE0DFBE8167D75F9C61 /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		18A9B46C479731DD14A10643 /* DonoteWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				1E509D776120C1CAAB08881D /* DonoteWidgetsBundle.swift */,
+				AAB5E6928F35776F8FFF404C /* RecordingLiveActivity.swift */,
+				28EFF7B40BA543993E5BDE4B /* Info.plist */,
+			);
+			name = DonoteWidgets;
+			path = DonoteWidgets;
+			sourceTree = "<group>";
+		};
 		504EC2FB1FED79650016851F = {
 			isa = PBXGroup;
 			children = (
@@ -98,6 +138,8 @@
 				504EC3051FED79650016851F /* Products */,
 				CC8351BF60885011455A7A63 /* Frameworks */,
 				674B42976B61813B7944C39B /* DonoteShare */,
+				CB2B0223BF4F35473C57FA8A /* Shared */,
+				18A9B46C479731DD14A10643 /* DonoteWidgets */,
 			);
 			sourceTree = "<group>";
 		};
@@ -106,6 +148,7 @@
 			children = (
 				504EC3041FED79650016851F /* App.app */,
 				6E41DCDB4C022FCCCB833209 /* DonoteShare.appex */,
+				9699B9E7A1FA2EACAE5BAB4D /* DonoteWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -124,6 +167,7 @@
 				2FAD9762203C412B000D30F8 /* config.xml */,
 				50B271D01FEDC1A000F3C39B /* public */,
 				745AC563F25E28993D9FACF9 /* ShareInboxPlugin.swift */,
+				3484BB6240B7EBA9CEEBE8D3 /* AudioRecorderPlugin.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -146,6 +190,15 @@
 				89A7CF771AEE206F90D29CE0 /* Foundation.framework */,
 			);
 			name = iOS;
+			sourceTree = "<group>";
+		};
+		CB2B0223BF4F35473C57FA8A /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				C044D1B584D935B569EFD308 /* RecordingActivity.swift */,
+			);
+			name = Shared;
+			path = Shared;
 			sourceTree = "<group>";
 		};
 		CC8351BF60885011455A7A63 /* Frameworks */ = {
@@ -172,6 +225,7 @@
 			);
 			dependencies = (
 				DFD722421C12423A5C73A16F /* PBXTargetDependency */,
+				6C6761C8F8E260B98DE3341C /* PBXTargetDependency */,
 			);
 			name = App;
 			packageProductDependencies = (
@@ -180,6 +234,23 @@
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
 			productType = "com.apple.product-type.application";
+		};
+		EEE20C8BC904335F3FCD05EE /* DonoteWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 02A73467B78AAC73FD0E3F3E /* Build configuration list for PBXNativeTarget "DonoteWidgets" */;
+			buildPhases = (
+				F15BAA767CCE23C1A6B88669 /* Sources */,
+				B6301A30400C2A6A1BF715AB /* Frameworks */,
+				F1D027D4835D4584419B6280 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DonoteWidgets;
+			productName = DonoteWidgets;
+			productReference = 9699B9E7A1FA2EACAE5BAB4D /* DonoteWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		F46A7B6EDEEE9998D373C3E8 /* DonoteShare */ = {
 			isa = PBXNativeTarget;
@@ -232,6 +303,7 @@
 			targets = (
 				504EC3031FED79650016851F /* App */,
 				F46A7B6EDEEE9998D373C3E8 /* DonoteShare */,
+				EEE20C8BC904335F3FCD05EE /* DonoteWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -258,6 +330,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F1D027D4835D4584419B6280 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -269,6 +348,8 @@
 				CA1EDA700000000000000001 /* AppleCalendarPlugin.swift in Sources */,
 				CA1EDA700000000000000003 /* MainViewController.swift in Sources */,
 				1038C2A1E7E7C08614A3B391 /* ShareInboxPlugin.swift in Sources */,
+				CB0EA6D0B2ECAF959C889322 /* AudioRecorderPlugin.swift in Sources */,
+				32F85CB59EDEB0D9C2463716 /* RecordingActivity.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -280,9 +361,25 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F15BAA767CCE23C1A6B88669 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9E80520BEDB9888D6EB06BE4 /* DonoteWidgetsBundle.swift in Sources */,
+				FFD4735AA7A15CC9832DAEA1 /* RecordingLiveActivity.swift in Sources */,
+				BD98A941BBFBCD60E3B570E1 /* RecordingActivity.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		6C6761C8F8E260B98DE3341C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = DonoteWidgets;
+			target = EEE20C8BC904335F3FCD05EE /* DonoteWidgets */;
+			targetProxy = 12B8092C2FED49B124A00690 /* PBXContainerItemProxy */;
+		};
 		DFD722421C12423A5C73A16F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = DonoteShare;
@@ -311,6 +408,26 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		28D8FFC537ED885E366DDE7E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 829FBSMGNV;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DonoteWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.air.donote.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		44D180690EE78339722312A9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -511,9 +628,39 @@
 			};
 			name = Debug;
 		};
+		9292CB4E075F6FF8CA765500 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 829FBSMGNV;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DonoteWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.air.donote.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		02A73467B78AAC73FD0E3F3E /* Build configuration list for PBXNativeTarget "DonoteWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9292CB4E075F6FF8CA765500 /* Release */,
+				28D8FFC537ED885E366DDE7E /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		3B0AB67CA62CFB2A51375A2A /* Build configuration list for PBXNativeTarget "DonoteShare" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

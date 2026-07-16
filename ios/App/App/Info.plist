@@ -30,6 +30,12 @@
 	<string>Donote shows your calendar events alongside your daily notes.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Donote records voice memos that are transcribed into your notes.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
