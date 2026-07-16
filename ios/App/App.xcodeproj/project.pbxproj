@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		0D2C6659810A25EDEBFAF74D /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 89A7CF771AEE206F90D29CE0 /* Foundation.framework */; };
 		1038C2A1E7E7C08614A3B391 /* ShareInboxPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 745AC563F25E28993D9FACF9 /* ShareInboxPlugin.swift */; };
-		12CBD1B2957E2EA310CBF63E /* TitleEditorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 348DA7CCF32666A514A02FC0 /* TitleEditorViewController.swift */; };
 		13386DF6FB240DC37CE2BCB7 /* DonoteShare.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 6E41DCDB4C022FCCCB833209 /* DonoteShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1F325BBC70317BA25B3CCA69 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 138B0A9D9763E8AFFA6C86E7 /* ShareViewController.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
@@ -23,7 +22,6 @@
 		BBE59E4A2CECE634166389A4 /* GetPageInfo.js in Resources */ = {isa = PBXBuildFile; fileRef = B9EBE1FCDC05AE823830C58A /* GetPageInfo.js */; };
 		CA1EDA700000000000000001 /* AppleCalendarPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1EDA700000000000000002 /* AppleCalendarPlugin.swift */; };
 		CA1EDA700000000000000003 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1EDA700000000000000004 /* MainViewController.swift */; };
-		E0EC83C11847E5AC5F4656DB /* TeamPickerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17F85F5906A3F069562DD5CC /* TeamPickerViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -52,10 +50,8 @@
 
 /* Begin PBXFileReference section */
 		138B0A9D9763E8AFFA6C86E7 /* ShareViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
-		17F85F5906A3F069562DD5CC /* TeamPickerViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TeamPickerViewController.swift; sourceTree = "<group>"; };
 		18FAC0C3FB4F72F51F9AA721 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
-		348DA7CCF32666A514A02FC0 /* TitleEditorViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TitleEditorViewController.swift; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -139,8 +135,6 @@
 				B9EBE1FCDC05AE823830C58A /* GetPageInfo.js */,
 				18FAC0C3FB4F72F51F9AA721 /* Info.plist */,
 				E9AA55D3D873637A3582E689 /* DonoteShare.entitlements */,
-				17F85F5906A3F069562DD5CC /* TeamPickerViewController.swift */,
-				348DA7CCF32666A514A02FC0 /* TitleEditorViewController.swift */,
 			);
 			name = DonoteShare;
 			path = DonoteShare;
@@ -283,8 +277,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				1F325BBC70317BA25B3CCA69 /* ShareViewController.swift in Sources */,
-				E0EC83C11847E5AC5F4656DB /* TeamPickerViewController.swift in Sources */,
-				12CBD1B2957E2EA310CBF63E /* TitleEditorViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
