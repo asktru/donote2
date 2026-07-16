@@ -1,6 +1,7 @@
 import AVFoundation
 import Capacitor
 import Foundation
+import UIKit
 
 /// Native voice-memo capture for iOS. WKWebView's getUserMedia is suspended
 /// the moment the app backgrounds, so on iOS the web recorder is replaced by
@@ -51,6 +52,16 @@ public class AudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin {
     private var segmentStartedAt = Date()
     private var rotationTimer: Timer?
     private var observersInstalled = false
+
+    /// Observers must exist from registration, not from start(): the Live
+    /// Activity's stop intent can relaunch the app in the background, and
+    /// the web view's DOM visibility events are unreliable on resume — the
+    /// JS sweep is driven by didBecomeActive from here instead.
+    public override func load() {
+        DispatchQueue.main.async { [weak self] in
+            self?.installObservers()
+        }
+    }
 
     // MARK: - Controls
 
@@ -364,7 +375,20 @@ public class AudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin {
 
         observersInstalled = true
 
+        // Drives the JS-side reconcile sweep: DOM visibilitychange is not a
+        // reliable foreground signal inside WKWebView, this is.
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.notifyListeners("foreground", data: [:])
+        }
+
         // The Live Activity's Stop button (LiveActivityIntent runs in-process).
+        // The app is backgrounded here — its only execution entitlement is
+        // the audio session this very handler tears down, so the finalize +
+        // event emission is shielded by an explicit background task.
         NotificationCenter.default.addObserver(
             forName: Notification.Name("donote.stopRecording"),
             object: nil,
@@ -374,7 +398,15 @@ public class AudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
 
+            let task = UIApplication.shared.beginBackgroundTask(
+                expirationHandler: nil
+            )
+
             self.finishRecording()
+
+            if task != .invalid {
+                UIApplication.shared.endBackgroundTask(task)
+            }
         }
 
         // Phone calls, Siri, other apps grabbing the session: close the

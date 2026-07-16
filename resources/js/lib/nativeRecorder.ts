@@ -58,6 +58,10 @@ export interface NativeAudioRecorder {
         event: 'stopped',
         callback: (data: NativeStoppedEvent) => void,
     ): Promise<{ remove: () => Promise<void> }>;
+    addListener(
+        event: 'foreground',
+        callback: () => void,
+    ): Promise<{ remove: () => Promise<void> }>;
 }
 
 export const nativeRecorder: NativeAudioRecorder | null = isNativeIos()

@@ -14,7 +14,7 @@ struct RecordingActivityAttributes: ActivityAttributes {
 }
 #endif
 
-#if canImport(AppIntents)
+#if canImport(AppIntents) && canImport(ActivityKit)
 import AppIntents
 
 /// The Live Activity's Stop button. LiveActivityIntents run inside the app's
@@ -30,6 +30,13 @@ struct StopRecordingIntent: LiveActivityIntent {
             name: Notification.Name("donote.stopRecording"),
             object: nil
         )
+
+        // End the card here too: if the recording's process died earlier
+        // (jetsam mid-recording), the plugin has nothing to stop, but the
+        // stale card must still dismiss.
+        for activity in Activity<RecordingActivityAttributes>.activities {
+            await activity.end(nil, dismissalPolicy: .immediate)
+        }
 
         return .result()
     }

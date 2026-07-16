@@ -478,16 +478,25 @@ function registerNativeRecorderEvents(): void {
     // rotated segments) may never have been delivered. Reconcile against
     // native truth on every foreground — after any retained events, which
     // consume ahead of this on the same chain.
+    const scheduleSync = () => {
+        nativeChain = nativeChain
+            .then(syncNativeRecorder)
+            .catch((error) =>
+                console.warn(
+                    '[donote] native recorder sync failed:',
+                    error instanceof Error ? error.message : String(error),
+                ),
+            );
+    };
+
+    // The plugin emits 'foreground' from UIApplication.didBecomeActive —
+    // the DOM visibilitychange event is NOT a reliable resume signal inside
+    // WKWebView, which is exactly how Live Activity stops went missing.
+    void nativeRecorder.addListener('foreground', scheduleSync);
+
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
-            nativeChain = nativeChain
-                .then(syncNativeRecorder)
-                .catch((error) =>
-                    console.warn(
-                        '[donote] native recorder sync failed:',
-                        error instanceof Error ? error.message : String(error),
-                    ),
-                );
+            scheduleSync();
         }
     });
 }
