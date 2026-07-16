@@ -307,14 +307,21 @@ public class AudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin {
         current.stop()
         recorder = nil
 
-        notifyListeners("segment", data: [
-            "path": url.path,
-            "groupId": groupId,
-            "part": part,
-            "mimeType": "audio/mp4",
-            "durationSec": Int(Date().timeIntervalSince(segmentStartedAt).rounded()),
-            "last": last,
-        ])
+        // retainUntilConsumed: a Live Activity stop runs while the web view
+        // is suspended — without retention these events evaporate and the
+        // recording is only rescued by the foreground sweep.
+        notifyListeners(
+            "segment",
+            data: [
+                "path": url.path,
+                "groupId": groupId,
+                "part": part,
+                "mimeType": "audio/mp4",
+                "durationSec": Int(Date().timeIntervalSince(segmentStartedAt).rounded()),
+                "last": last,
+            ],
+            retainUntilConsumed: true
+        )
     }
 
     /// Finalize everything (called by stop(), the Live Activity intent, and
@@ -334,7 +341,7 @@ public class AudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin {
             "durationSec": Int(Date().timeIntervalSince(startedAt).rounded()),
         ]
 
-        notifyListeners("stopped", data: summary)
+        notifyListeners("stopped", data: summary, retainUntilConsumed: true)
         groupId = ""
         part = 0
 

@@ -350,11 +350,32 @@ async function rotateSegment(): Promise<void> {
 /* Native iOS capture (AudioRecorderPlugin)                            */
 /* ------------------------------------------------------------------ */
 
+/** A part can arrive twice — retained event + foreground sweep. Keep one. */
+async function nativePartExists(
+    database: WorkspaceDb,
+    groupId: string,
+    part: number,
+): Promise<boolean> {
+    const existing = await database.memos
+        .where('groupId')
+        .equals(groupId)
+        .and((memo) => memo.part === part)
+        .first();
+
+    return existing !== undefined;
+}
+
 /** Fold a finished native segment file into the same offline memo queue. */
 async function persistNativeSegment(event: NativeSegmentEvent): Promise<void> {
     const database = workspaceDb();
 
     if (!database || !nativeRecorder) {
+        return;
+    }
+
+    if (await nativePartExists(database, event.groupId, event.part)) {
+        await nativeRecorder.removeSegment({ path: event.path });
+
         return;
     }
 
@@ -452,46 +473,81 @@ function registerNativeRecorderEvents(): void {
             );
     });
 
-    // JS timers freeze while the app is backgrounded — the recording doesn't.
-    // Resync the visible elapsed counter whenever the app comes back.
+    // The web view is suspended while the app is backgrounded: JS timers
+    // freeze, and anything that happened out there (a Live Activity stop,
+    // rotated segments) may never have been delivered. Reconcile against
+    // native truth on every foreground — after any retained events, which
+    // consume ahead of this on the same chain.
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible' && nativeSession) {
-            recordingSeconds.value = Math.round(
-                (Date.now() - nativeSession.startedAt) / 1000,
-            );
+        if (document.visibilityState === 'visible') {
+            nativeChain = nativeChain
+                .then(syncNativeRecorder)
+                .catch((error) =>
+                    console.warn(
+                        '[donote] native recorder sync failed:',
+                        error instanceof Error ? error.message : String(error),
+                    ),
+                );
         }
     });
 }
 
-/** A relaunch mid-recording: pick the running native session back up. */
-async function resumeNativeRecordingState(): Promise<void> {
+/**
+ * Reconcile JS state with the native recorder: resume a still-running
+ * session (relaunch mid-recording), or — when the recording was stopped
+ * outside the web view (Live Activity Stop while suspended) — clear the
+ * stale "recording" UI and rescue any segments whose events never arrived.
+ */
+async function syncNativeRecorder(): Promise<void> {
     if (!nativeRecorder) {
         return;
     }
 
+    let status: { recording: boolean; startedAt?: number; groupId?: string };
+
     try {
-        const status = await nativeRecorder.isRecording();
-
-        if (status.recording && status.groupId && status.startedAt) {
-            nativeSession = {
-                groupId: status.groupId,
-                dateKey: dateKeyFor('daily', new Date(status.startedAt)),
-                startedAt: status.startedAt,
-            };
-            isRecording.value = true;
-            recordingSeconds.value = Math.round(
-                (Date.now() - status.startedAt) / 1000,
-            );
-
-            if (elapsedTimer === null) {
-                elapsedTimer = setInterval(() => {
-                    recordingSeconds.value += 1;
-                }, 1000);
-            }
-        }
+        status = await nativeRecorder.isRecording();
     } catch {
-        // Older native shell without the recorder plugin.
+        return; // Older native shell without the recorder plugin.
     }
+
+    if (status.recording && status.groupId && status.startedAt) {
+        nativeSession = {
+            groupId: status.groupId,
+            dateKey: dateKeyFor('daily', new Date(status.startedAt)),
+            startedAt: status.startedAt,
+        };
+        isRecording.value = true;
+        recordingSeconds.value = Math.round(
+            (Date.now() - status.startedAt) / 1000,
+        );
+
+        if (elapsedTimer === null) {
+            elapsedTimer = setInterval(() => {
+                recordingSeconds.value += 1;
+            }, 1000);
+        }
+
+        return;
+    }
+
+    // Not recording natively. If JS still thinks it is, the stop happened
+    // while we were suspended — the 'stopped' event may or may not have
+    // been retained; the sweep below recovers the parts either way.
+    if (nativeSession !== null) {
+        nativeSession = null;
+        isRecording.value = false;
+
+        if (elapsedTimer !== null) {
+            clearInterval(elapsedTimer);
+            elapsedTimer = null;
+        }
+    }
+
+    await adoptNativePending();
+    await adoptOrphanedGroups();
+    await refreshQueue();
+    void processQueue();
 }
 
 /** Segment files a killed app left in the native container — rescue them. */
@@ -510,6 +566,11 @@ async function adoptNativePending(): Promise<void> {
 
         for (const item of items) {
             try {
+                if (await nativePartExists(database, item.groupId, item.part)) {
+                    await nativeRecorder.removeSegment({ path: item.path });
+                    continue;
+                }
+
                 const blob = await readSegmentBlob(item.path);
 
                 await database.memos.put({
@@ -996,10 +1057,10 @@ export function startMemoUploader(): void {
 
     registerNativeRecorderEvents();
 
-    // Resume a still-running native recording BEFORE closing orphaned
-    // groups, so its open parts aren't finalized out from under it.
-    void resumeNativeRecordingState()
-        .then(adoptNativePending)
+    // Reconcile with the native recorder BEFORE closing orphaned groups:
+    // a still-running recording's open parts must not be finalized, and a
+    // recording stopped while suspended needs its segments swept in.
+    void syncNativeRecorder()
         .then(adoptOrphanedGroups)
         .then(refreshQueue)
         .then(processQueue);
