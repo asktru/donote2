@@ -336,18 +336,14 @@ class ShareViewController: UIViewController {
                         as? NSDictionary
                 let title = results?["title"] as? String ?? ""
 
-                self?.setPageInfo(PageInfo(
+                self?.mergePageInfo(PageInfo(
                     url: results?["url"] as? String ?? "",
                     title: title.isEmpty ? fallback : title,
                     description: results?["description"] as? String ?? "",
                     pageText: results?["pageText"] as? String ?? ""
                 ))
             }
-
-            return
-        }
-
-        if let provider = providers.first(where: {
+        } else if let provider = providers.first(where: {
             !$0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
                 && $0.hasItemConformingToTypeIdentifier(UTType.url.identifier)
         }) {
@@ -357,18 +353,63 @@ class ShareViewController: UIViewController {
                     return
                 }
 
-                self?.setPageInfo(PageInfo(
+                self?.mergePageInfo(PageInfo(
                     url: url.absoluteString,
                     title: fallback
                 ))
             }
         }
+
+        // App shares (IMDb, YouTube, …) often send the page title as a
+        // separate plain-text provider next to the URL — use it as a title
+        // candidate when nothing better arrives.
+        if isUrlShare,
+           let textProvider = providers.first(where: {
+               $0.hasItemConformingToTypeIdentifier(UTType.plainText.identifier)
+           }) {
+            textProvider.loadItem(forTypeIdentifier: UTType.plainText.identifier) {
+                [weak self] item, _ in
+                guard
+                    let text = (item as? String)?
+                        .trimmingCharacters(in: .whitespacesAndNewlines),
+                    !text.isEmpty,
+                    text.count <= 200,
+                    !text.contains("\n"),
+                    !text.hasPrefix("http")
+                else {
+                    return
+                }
+
+                self?.mergePageInfo(PageInfo(title: text))
+            }
+        }
     }
 
-    private func setPageInfo(_ info: PageInfo) {
+    /// Fold newly loaded page details into the current state — the property
+    /// list, the plain-text title, and the network fetch all race, and each
+    /// may know something the others don't. Non-empty existing fields win.
+    private func mergePageInfo(_ incoming: PageInfo) {
         DispatchQueue.main.async { [weak self] in
             guard let self else {
                 return
+            }
+
+            var info = self.pageInfo ?? PageInfo()
+
+            if info.url.isEmpty {
+                info.url = incoming.url
+            }
+
+            if info.title.isEmpty {
+                info.title = incoming.title
+            }
+
+            if info.description.isEmpty {
+                info.description = incoming.description
+            }
+
+            if info.pageText.isEmpty {
+                info.pageText = incoming.pageText
             }
 
             self.pageInfo = info
@@ -383,7 +424,132 @@ class ShareViewController: UIViewController {
                     with: ""
                 ) + " → note in Web Clips"
             }
+
+            // Anything still missing (title outside Safari, page text for the
+            // AI summary) is fetched from the page itself — a native request
+            // has no CORS constraints.
+            if !info.url.isEmpty, info.title.isEmpty || info.pageText.isEmpty {
+                self.enrichFromNetwork(info.url)
+            }
         }
+    }
+
+    private var enriching = false
+
+    /// Fetch the shared page and scrape title / meta description / readable
+    /// text. Best-effort: silent on failure (offline, paywall, non-HTML).
+    private func enrichFromNetwork(_ urlString: String) {
+        guard !enriching, let url = URL(string: urlString) else {
+            return
+        }
+
+        enriching = true
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 6
+        request.setValue(
+            "Mozilla/5.0 (iPhone) DonoteShare/1.0",
+            forHTTPHeaderField: "User-Agent"
+        )
+
+        URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
+            guard
+                let data,
+                let html = String(data: data, encoding: .utf8)
+                    ?? String(data: data, encoding: .isoLatin1)
+            else {
+                return
+            }
+
+            self?.mergePageInfo(PageInfo(
+                title: Self.htmlTitle(html),
+                description: Self.htmlDescription(html),
+                pageText: Self.htmlText(html)
+            ))
+        }.resume()
+    }
+
+    // MARK: - HTML scraping (best-effort, regex-grade)
+
+    private static func firstMatch(_ pattern: String, in html: String) -> String? {
+        guard
+            let regex = try? NSRegularExpression(
+                pattern: pattern,
+                options: [.caseInsensitive, .dotMatchesLineSeparators]
+            ),
+            let match = regex.firstMatch(
+                in: html,
+                range: NSRange(html.startIndex..., in: html)
+            ),
+            match.numberOfRanges > 1,
+            let range = Range(match.range(at: 1), in: html)
+        else {
+            return nil
+        }
+
+        return String(html[range])
+    }
+
+    private static func decodeEntities(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&apos;", with: "'")
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "&mdash;", with: "—")
+            .replacingOccurrences(of: "&ndash;", with: "–")
+    }
+
+    private static func collapse(_ text: String) -> String {
+        text.replacingOccurrences(
+            of: "\\s+",
+            with: " ",
+            options: .regularExpression
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func htmlTitle(_ html: String) -> String {
+        let raw = firstMatch("<title[^>]*>(.*?)</title>", in: html)
+            ?? firstMatch(
+                "<meta[^>]*property\\s*=\\s*[\"']og:title[\"'][^>]*content\\s*=\\s*[\"']([^\"']*)[\"']",
+                in: html
+            )
+            ?? ""
+
+        return collapse(decodeEntities(raw))
+    }
+
+    private static func htmlDescription(_ html: String) -> String {
+        let raw =
+            firstMatch(
+                "<meta[^>]*(?:name|property)\\s*=\\s*[\"'](?:og:)?description[\"'][^>]*content\\s*=\\s*[\"']([^\"']*)[\"']",
+                in: html
+            )
+            ?? firstMatch(
+                "<meta[^>]*content\\s*=\\s*[\"']([^\"']*)[\"'][^>]*(?:name|property)\\s*=\\s*[\"'](?:og:)?description[\"']",
+                in: html
+            )
+            ?? ""
+
+        return collapse(decodeEntities(raw))
+    }
+
+    private static func htmlText(_ html: String) -> String {
+        var text = html.replacingOccurrences(
+            of: "<(script|style|noscript)[\\s\\S]*?</\\1>",
+            with: " ",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        text = text.replacingOccurrences(
+            of: "<[^>]+>",
+            with: " ",
+            options: .regularExpression
+        )
+
+        return String(collapse(decodeEntities(text)).prefix(15000))
     }
 
     private var noteTitle: String {
@@ -400,17 +566,47 @@ class ShareViewController: UIViewController {
         )
     }
 
+    /// One share = one intent. Apps frequently attach several providers for
+    /// a single share (IMDb: a URL provider AND a plain-text provider with
+    /// the title) — queueing per-provider produced duplicate notes, so the
+    /// share is classified once and exactly one route runs.
     @objc private func save() {
         saveButton.isEnabled = false
 
         let comment = commentView.text?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let providers = allProviders()
         let group = DispatchGroup()
 
-        for provider in allProviders() {
+        if isUrlShare {
             group.enter()
-            queue(provider: provider, comment: comment) {
+            queueUrlShare(providers: providers, comment: comment) {
                 group.leave()
+            }
+        } else {
+            let files = providers.filter { isFileLike($0) }
+
+            if !files.isEmpty {
+                for provider in files {
+                    group.enter()
+                    queueFile(provider: provider, comment: comment) {
+                        group.leave()
+                    }
+                }
+            } else if let text = providers.first(where: {
+                $0.hasItemConformingToTypeIdentifier(UTType.plainText.identifier)
+            }) {
+                group.enter()
+                text.loadItem(forTypeIdentifier: UTType.plainText.identifier) {
+                    [weak self] item, _ in
+                    self?.writeItem([
+                        "kind": "text",
+                        "title": self?.noteTitle ?? "",
+                        "description": item as? String ?? "",
+                        "comment": comment,
+                    ])
+                    group.leave()
+                }
             }
         }
 
@@ -421,99 +617,76 @@ class ShareViewController: UIViewController {
 
     // MARK: - Provider routing
 
-    private func queue(
-        provider: NSItemProvider,
+    private func isFileLike(_ provider: NSItemProvider) -> Bool {
+        provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
+            || provider.hasItemConformingToTypeIdentifier(UTType.image.identifier)
+            || provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier)
+            || (provider.hasItemConformingToTypeIdentifier(UTType.data.identifier)
+                && !provider.hasItemConformingToTypeIdentifier(UTType.url.identifier)
+                && !provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier))
+    }
+
+    /// Queue the single url item, from the merged page info when it's ready
+    /// or by resolving the bare URL if Save beat the metadata loads.
+    private func queueUrlShare(
+        providers: [NSItemProvider],
         comment: String,
         done: @escaping () -> Void
     ) {
-        // Safari runs GetPageInfo.js and hands its result as a property list —
-        // the richest form (title + meta description + page text). peekPageInfo
-        // already loaded it to prefill the title field; reuse that cache.
-        if provider.hasItemConformingToTypeIdentifier(UTType.propertyList.identifier)
-            || (!provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
-                && provider.hasItemConformingToTypeIdentifier(UTType.url.identifier)) {
-            if let info = pageInfo {
-                writeItem([
-                    "kind": "url",
-                    "url": info.url,
-                    "title": noteTitle,
-                    "description": info.description,
-                    "pageText": info.pageText,
-                    "comment": comment,
-                ])
-                done()
-
-                return
-            }
-
-            // Save tapped before peekPageInfo resolved — load the bare URL so
-            // the share is never dropped.
-            if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
-                let fallback = fallbackTitle
-
-                provider.loadItem(forTypeIdentifier: UTType.url.identifier) {
-                    [weak self] item, _ in
-                    self?.writeItem([
-                        "kind": "url",
-                        "url": (item as? URL)?.absoluteString ?? "",
-                        "title": self?.noteTitle.isEmpty == false
-                            ? (self?.noteTitle ?? fallback)
-                            : fallback,
-                        "description": "",
-                        "comment": comment,
-                    ])
-                    done()
-                }
-
-                return
-            }
-
+        if let info = pageInfo, !info.url.isEmpty {
+            writeItem([
+                "kind": "url",
+                "url": info.url,
+                "title": noteTitle,
+                "description": info.description,
+                "pageText": info.pageText,
+                "comment": comment,
+            ])
             done()
 
             return
         }
 
-        // Files app and document providers share file URLs — these conform to
-        // public.url too, but the fileURL check above already excluded them.
+        guard let provider = providers.first(where: {
+            !$0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
+                && $0.hasItemConformingToTypeIdentifier(UTType.url.identifier)
+        }) else {
+            done()
+
+            return
+        }
+
+        let fallback = fallbackTitle
+
+        provider.loadItem(forTypeIdentifier: UTType.url.identifier) {
+            [weak self] item, _ in
+            let typed = self?.noteTitle ?? ""
+
+            self?.writeItem([
+                "kind": "url",
+                "url": (item as? URL)?.absoluteString ?? "",
+                "title": typed.isEmpty ? fallback : typed,
+                "description": "",
+                "comment": comment,
+            ])
+            done()
+        }
+    }
+
+    private func queueFile(
+        provider: NSItemProvider,
+        comment: String,
+        done: @escaping () -> Void
+    ) {
         if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
             copyFile(provider: provider, type: UTType.fileURL.identifier, comment: comment, done: done)
-
-            return
-        }
-
-        if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+        } else if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
             copyFile(provider: provider, type: UTType.image.identifier, comment: comment, done: done)
-
-            return
-        }
-
-        if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
+        } else if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
             copyFile(provider: provider, type: UTType.movie.identifier, comment: comment, done: done)
-
-            return
-        }
-
-        if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
-            provider.loadItem(forTypeIdentifier: UTType.plainText.identifier) { [weak self] item, _ in
-                self?.writeItem([
-                    "kind": "text",
-                    "title": self?.noteTitle ?? "",
-                    "description": item as? String ?? "",
-                    "comment": comment,
-                ])
-                done()
-            }
-
-            return
-        }
-
-        if provider.hasItemConformingToTypeIdentifier(UTType.data.identifier) {
+        } else {
             copyFile(provider: provider, type: UTType.data.identifier, comment: comment, done: done)
-
-            return
         }
-
-        done()
     }
 
     // MARK: - Payload persistence
