@@ -246,12 +246,10 @@ export async function reconcileVisibility(): Promise<number> {
     }
 
     const visible = new Set(ids);
-    const dirty = new Set(dirtyNotes().map((note) => note.id));
-    const localIds = liveNotes.value.map((note) => note.id);
 
     let pruned = 0;
 
-    for (const id of notesToPrune(localIds, visible, dirty)) {
+    for (const id of notesToPrune(liveNotes.value, visible)) {
         await removeLocalNote(id);
         pruned += 1;
     }

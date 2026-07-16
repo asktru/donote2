@@ -25,13 +25,25 @@ export function canEditNote(access: NoteAccess, online: boolean): boolean {
     return access === 'owner' || (access === 'write' && online);
 }
 
-/** Ids in `localIds` that are no longer visible and safe to drop locally. */
+/**
+ * Ids of local notes that are no longer visible and safe to drop locally.
+ *
+ * Only notes the server has seen (version > 0) qualify: for those, absence
+ * from the visible set means remote deletion or an unshare. A version-0 note
+ * only exists locally — a not-yet-pushed draft (dirty) or a lazily created
+ * calendar placeholder (clean) — so the server not listing it proves nothing,
+ * and pruning it would yank the note out from under an open editor.
+ */
 export function notesToPrune(
-    localIds: string[],
+    localNotes: { id: string; version: number; dirty: number }[],
     visibleIds: Set<string>,
-    dirtyIds: Set<string>,
 ): string[] {
-    return localIds.filter(
-        (id) => !visibleIds.has(id) && !dirtyIds.has(id),
-    );
+    return localNotes
+        .filter(
+            (note) =>
+                !visibleIds.has(note.id) &&
+                note.dirty === 0 &&
+                note.version > 0,
+        )
+        .map((note) => note.id);
 }

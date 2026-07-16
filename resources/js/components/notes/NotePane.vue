@@ -95,21 +95,14 @@ function jumpToLine(line: number): void {
 
 watch(
     () => props.view,
-    async (view) => {
-        if (
-            view.kind === 'calendar' &&
-            !findCalendarNote(view.calKind, view.dateKey)
-        ) {
-            await openCalendarNote(view.calKind, view.dateKey);
-        }
-
+    () => {
         if (props.isMain && pendingScrollLine.value !== null) {
             const line = pendingScrollLine.value;
             pendingScrollLine.value = null;
             setTimeout(() => editor.value?.scrollToLine(line), 50);
         }
     },
-    { immediate: true, deep: true },
+    { deep: true },
 );
 
 /**
@@ -124,6 +117,33 @@ const note = computed<LocalNote | undefined>(() => {
 
     return findCalendarNote(props.view.calKind, props.view.dateKey);
 });
+
+// A calendar pane must always have a note to type into. This watches the
+// resolved note itself (not just the view), so the placeholder is recreated
+// even when the store drops it mid-view — e.g. a remote deletion of the
+// period's note, or a hard resync — instead of leaving a dead, editorless
+// pane until the user navigates away and back.
+let creatingCalendarNote = false;
+
+watch(
+    [() => props.view, note],
+    async () => {
+        const view = props.view;
+
+        if (view.kind !== 'calendar' || note.value || creatingCalendarNote) {
+            return;
+        }
+
+        creatingCalendarNote = true;
+
+        try {
+            await openCalendarNote(view.calKind, view.dateKey);
+        } finally {
+            creatingCalendarNote = false;
+        }
+    },
+    { immediate: true, deep: true },
+);
 
 const isCalendar = computed(() => props.view.kind === 'calendar');
 
