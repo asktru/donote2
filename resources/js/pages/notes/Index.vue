@@ -31,13 +31,17 @@ import { hideNativeAccessoryBar } from '@/composables/useKeyboardInset';
 import { useSwipe } from '@/composables/useSwipe';
 import { kindOfKey, todayDailyKey, todayKey } from '@/core/dates';
 import type { CalendarKind } from '@/core/dates';
+import { SNOOZE_MINUTES } from '@/lib/notifications';
 import { isMacDesktopShell, isNarrowViewport } from '@/lib/platform';
 import { resolveSwipeAction } from '@/lib/swipeActions';
 import { aiDialogOpen } from '@/stores/aiPrompts';
 import { startMemoUploader, toggleRecording } from '@/stores/memos';
 import { startMoveToNote } from '@/stores/move';
 import { promptText } from '@/stores/prompt';
-import { startReminderScheduler } from '@/stores/reminderScheduler';
+import {
+    snoozeReminder,
+    startReminderScheduler,
+} from '@/stores/reminderScheduler';
 import { startSync, stopSync } from '@/stores/sync';
 import { setTeamMembers } from '@/stores/team';
 import type { TeamMember } from '@/stores/team';
@@ -344,6 +348,14 @@ useSwipe((swipe) => {
 });
 
 onMounted(async () => {
+    // A cross-team reminder tap lands here with the target in query params
+    // (see crossTeamReminderUrl) — capture them before initViewFromUrl and
+    // openNote rewrite the URL.
+    const arriving = new URLSearchParams(window.location.search);
+    const reminderNote = arriving.get('reminder-note');
+    const reminderLine = Number(arriving.get('reminder-line') ?? '0');
+    const reminderSnooze = arriving.get('reminder-snooze') === '1';
+
     setTeamMembers(props.members);
     initSectionPrefs(props.workspace.teamSlug);
     await initWorkspace({
@@ -351,6 +363,15 @@ onMounted(async () => {
         userId: props.workspace.userId,
     });
     initViewFromUrl();
+
+    if (reminderNote !== null) {
+        if (reminderSnooze) {
+            await snoozeReminder(reminderNote, reminderLine, SNOOZE_MINUTES);
+        }
+
+        openNote(reminderNote, { line: reminderLine });
+    }
+
     booted.value = true;
     window.addEventListener('keydown', onKeydown);
     void hideNativeAccessoryBar();

@@ -13,6 +13,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { switchMethod } from '@/routes/teams';
+import { mobileSidebarOpen } from '@/stores/ui';
 import type { Team } from '@/types';
 
 const props = withDefaults(
@@ -50,6 +51,12 @@ const plusIconClass = computed(() => (props.inHeader ? 'size-4' : 'h-4 w-4'));
 
 const switchTeam = (team: Team) => {
     const previousTeamSlug = currentTeam.value?.slug;
+
+    // Close the off-canvas sidebar before the switch: `mobileSidebarOpen` is
+    // module state that survives Inertia visits, and switching teams visits
+    // twice (switch, then the slug-swapped URL) — a still-open Sheet would
+    // remount and replay its slide-in animation on each visit.
+    mobileSidebarOpen.value = false;
 
     router.visit(switchMethod(team.slug), {
         onFinish: () => {

@@ -72,11 +72,45 @@ export async function reconcileReminderNotifications(): Promise<void> {
                 body: note.title || 'Task reminder',
                 noteId: note.id,
                 line: candidate.line.index,
+                teamSlug: config.teamSlug,
             });
         }
     }
 
-    await reconcileNotifications(desired);
+    await reconcileNotifications(config.teamSlug, desired);
+}
+
+/**
+ * Deep-link for a reminder whose note lives in another team's workspace: a
+ * full navigation there, with the target note carried in query params that
+ * the notes page resolves once that workspace has booted.
+ */
+export function crossTeamReminderUrl(
+    teamSlug: string,
+    noteId: string,
+    line: number,
+    snooze = false,
+): string {
+    const params = new URLSearchParams({
+        'reminder-note': noteId,
+        'reminder-line': String(line),
+    });
+
+    if (snooze) {
+        params.set('reminder-snooze', '1');
+    }
+
+    return `/${teamSlug}/notes?${params}`;
+}
+
+/**
+ * Whether a reminder's team differs from the open workspace. An empty slug
+ * (legacy notification scheduled before team tagging) is trusted to be local.
+ */
+export function isForeignTeamReminder(teamSlug: string): boolean {
+    const current = workspaceConfig()?.teamSlug;
+
+    return teamSlug !== '' && current !== undefined && teamSlug !== current;
 }
 
 /**
@@ -84,7 +118,7 @@ export async function reconcileReminderNotifications(): Promise<void> {
  * now, so the note reflects the new time; the next reconcile then reschedules
  * the OS notification accordingly.
  */
-async function snoozeReminder(
+export async function snoozeReminder(
     noteId: string,
     lineIndex: number,
     minutes: number,
@@ -114,7 +148,20 @@ export function startReminderScheduler(): void {
     }
 
     started = true;
-    onNotificationSnooze((noteId, line, minutes) => {
+    onNotificationSnooze((noteId, line, teamSlug, minutes) => {
+        // The note lives in another team's workspace — the token rewrite has
+        // to happen there, so carry the snooze across a full navigation.
+        if (isForeignTeamReminder(teamSlug)) {
+            window.location.href = crossTeamReminderUrl(
+                teamSlug,
+                noteId,
+                line,
+                true,
+            );
+
+            return;
+        }
+
         void snoozeReminder(noteId, line, minutes);
     });
     void reconcileReminderNotifications();

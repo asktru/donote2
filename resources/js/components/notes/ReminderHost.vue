@@ -9,6 +9,10 @@ import { onNotificationTap } from '@/lib/notifications';
 import { openWorkspaceDb } from '@/stores/db';
 import type { WorkspaceDb } from '@/stores/db';
 import {
+    crossTeamReminderUrl,
+    isForeignTeamReminder,
+} from '@/stores/reminderScheduler';
+import {
     workspaceConfig,
     liveNotes,
     parsedNote,
@@ -133,7 +137,17 @@ onMounted(() => {
     }
 
     // Tapping a reminder notification opens the note at the task's line.
-    onNotificationTap((noteId, line) => emit('open-note', noteId, line));
+    // A reminder from another team's workspace can't be resolved here —
+    // navigate to that team and let its notes page open the target.
+    onNotificationTap((noteId, line, teamSlug) => {
+        if (isForeignTeamReminder(teamSlug)) {
+            window.location.href = crossTeamReminderUrl(teamSlug, noteId, line);
+
+            return;
+        }
+
+        emit('open-note', noteId, line);
+    });
 
     void scan();
     timer = setInterval(() => void scan(), 30000);

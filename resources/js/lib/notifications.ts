@@ -21,6 +21,8 @@ export interface DesiredNotification {
     /** Where tapping the notification should navigate. */
     noteId: string;
     line: number;
+    /** Team workspace the note lives in — reminders are scheduled per team. */
+    teamSlug: string;
 }
 
 /** How many minutes the notification's Snooze action defers a reminder. */
@@ -28,11 +30,16 @@ export const SNOOZE_MINUTES = 15;
 const ACTION_TYPE_ID = 'donote-reminder';
 const SNOOZE_ACTION_ID = 'snooze';
 
-type Target = { noteId: string; line: number };
+type Target = { noteId: string; line: number; teamSlug: string };
 /** Opens the note a tapped reminder points to. */
-type TapHandler = (noteId: string, line: number) => void;
+type TapHandler = (noteId: string, line: number, teamSlug: string) => void;
 /** Reschedules a reminder and rewrites its `@time` token in the note. */
-type SnoozeHandler = (noteId: string, line: number, minutes: number) => void;
+type SnoozeHandler = (
+    noteId: string,
+    line: number,
+    teamSlug: string,
+    minutes: number,
+) => void;
 
 let tapHandler: TapHandler | null = null;
 let snoozeHandler: SnoozeHandler | null = null;
@@ -41,19 +48,19 @@ let pendingTap: Target | null = null;
 let pendingSnooze: Target | null = null;
 let iosListenersReady = false;
 
-function deliverTap(noteId: string, line: number): void {
+function deliverTap(noteId: string, line: number, teamSlug: string): void {
     if (tapHandler) {
-        tapHandler(noteId, line);
+        tapHandler(noteId, line, teamSlug);
     } else {
-        pendingTap = { noteId, line };
+        pendingTap = { noteId, line, teamSlug };
     }
 }
 
-function deliverSnooze(noteId: string, line: number): void {
+function deliverSnooze(noteId: string, line: number, teamSlug: string): void {
     if (snoozeHandler) {
-        snoozeHandler(noteId, line, SNOOZE_MINUTES);
+        snoozeHandler(noteId, line, teamSlug, SNOOZE_MINUTES);
     } else {
-        pendingSnooze = { noteId, line };
+        pendingSnooze = { noteId, line, teamSlug };
     }
 }
 
@@ -62,7 +69,7 @@ export function onNotificationTap(handler: TapHandler): void {
     tapHandler = handler;
 
     if (pendingTap) {
-        handler(pendingTap.noteId, pendingTap.line);
+        handler(pendingTap.noteId, pendingTap.line, pendingTap.teamSlug);
         pendingTap = null;
     }
 
@@ -74,7 +81,12 @@ export function onNotificationSnooze(handler: SnoozeHandler): void {
     snoozeHandler = handler;
 
     if (pendingSnooze) {
-        handler(pendingSnooze.noteId, pendingSnooze.line, SNOOZE_MINUTES);
+        handler(
+            pendingSnooze.noteId,
+            pendingSnooze.line,
+            pendingSnooze.teamSlug,
+            SNOOZE_MINUTES,
+        );
         pendingSnooze = null;
     }
 
@@ -116,10 +128,14 @@ async function registerIosListeners(): Promise<void> {
                 return;
             }
 
+            // Legacy notifications (scheduled before team tagging) carry no
+            // teamSlug — '' means "assume the current workspace".
+            const teamSlug = extra.teamSlug ?? '';
+
             if (action.actionId === SNOOZE_ACTION_ID) {
-                deliverSnooze(extra.noteId, extra.line ?? 0);
+                deliverSnooze(extra.noteId, extra.line ?? 0, teamSlug);
             } else {
-                deliverTap(extra.noteId, extra.line ?? 0);
+                deliverTap(extra.noteId, extra.line ?? 0, teamSlug);
             }
         },
     );
@@ -141,6 +157,26 @@ export function notificationId(key: string): number {
 
 let permissionAsked = false;
 
+/**
+ * Pending notification ids that are safe to cancel: entries belonging to the
+ * given team (or legacy untagged ones) that are no longer desired. Other
+ * teams' reminders are left alone — each workspace only reconciles its own,
+ * otherwise opening team B would silently wipe team A's schedule.
+ */
+export function staleNotificationIds(
+    pending: { id: number; teamSlug: string | null }[],
+    desiredIds: Set<number>,
+    teamSlug: string,
+): number[] {
+    return pending
+        .filter(
+            (entry) =>
+                !desiredIds.has(entry.id) &&
+                (entry.teamSlug === null || entry.teamSlug === teamSlug),
+        )
+        .map((entry) => entry.id);
+}
+
 /** Trim to the soonest MAX_PENDING future notifications. */
 function prepare(desired: DesiredNotification[]): DesiredNotification[] {
     const now = Date.now();
@@ -161,7 +197,10 @@ function prepare(desired: DesiredNotification[]): DesiredNotification[] {
 /* iOS (Capacitor LocalNotifications)                                  */
 /* ------------------------------------------------------------------ */
 
-async function reconcileIos(desired: DesiredNotification[]): Promise<void> {
+async function reconcileIos(
+    teamSlug: string,
+    desired: DesiredNotification[],
+): Promise<void> {
     const { LocalNotifications } = await import('@capacitor/local-notifications');
 
     // Ask once, lazily — only reached when there's something to schedule.
@@ -180,9 +219,15 @@ async function reconcileIos(desired: DesiredNotification[]): Promise<void> {
     const pendingIds = new Set(pending.notifications.map((entry) => entry.id));
     const desiredIds = new Set(desired.map((entry) => entry.id));
 
-    const stale = pending.notifications
-        .filter((entry) => !desiredIds.has(entry.id))
-        .map((entry) => ({ id: entry.id }));
+    const stale = staleNotificationIds(
+        pending.notifications.map((entry) => ({
+            id: entry.id,
+            teamSlug:
+                (entry.extra as Partial<Target> | undefined)?.teamSlug ?? null,
+        })),
+        desiredIds,
+        teamSlug,
+    ).map((id) => ({ id }));
 
     if (stale.length > 0) {
         await LocalNotifications.cancel({ notifications: stale });
@@ -201,7 +246,11 @@ async function reconcileIos(desired: DesiredNotification[]): Promise<void> {
                 // Reminders are time-sensitive: break through Focus/DND and
                 // light the screen rather than sitting silently in the summary.
                 interruptionLevel: 'timeSensitive',
-                extra: { noteId: entry.noteId, line: entry.line },
+                extra: {
+                    noteId: entry.noteId,
+                    line: entry.line,
+                    teamSlug: entry.teamSlug,
+                },
             })),
         });
     }
@@ -211,13 +260,19 @@ async function reconcileIos(desired: DesiredNotification[]): Promise<void> {
 /* Electron / web (in-process timers + Notification API)               */
 /* ------------------------------------------------------------------ */
 
-const timers = new Map<number, ReturnType<typeof setTimeout>>();
+const timers = new Map<
+    number,
+    { timer: ReturnType<typeof setTimeout>; teamSlug: string }
+>();
 
 function notificationsSupported(): boolean {
     return typeof window !== 'undefined' && 'Notification' in window;
 }
 
-async function reconcileTimer(desired: DesiredNotification[]): Promise<void> {
+async function reconcileTimer(
+    teamSlug: string,
+    desired: DesiredNotification[],
+): Promise<void> {
     if (!notificationsSupported()) {
         return;
     }
@@ -233,10 +288,11 @@ async function reconcileTimer(desired: DesiredNotification[]): Promise<void> {
 
     const desiredIds = new Set(desired.map((entry) => entry.id));
 
-    // Drop timers for reminders that are no longer wanted.
-    for (const [id, timer] of timers) {
-        if (!desiredIds.has(id)) {
-            clearTimeout(timer);
+    // Drop this team's timers for reminders that are no longer wanted; other
+    // teams' timers keep running so switching workspaces doesn't silence them.
+    for (const [id, entry] of timers) {
+        if (!desiredIds.has(id) && entry.teamSlug === teamSlug) {
+            clearTimeout(entry.timer);
             timers.delete(id);
         }
     }
@@ -259,7 +315,7 @@ async function reconcileTimer(desired: DesiredNotification[]): Promise<void> {
 
                     notification.onclick = () => {
                         window.focus();
-                        deliverTap(entry.noteId, entry.line);
+                        deliverTap(entry.noteId, entry.line, entry.teamSlug);
                         notification.close();
                     };
                 } catch {
@@ -270,7 +326,7 @@ async function reconcileTimer(desired: DesiredNotification[]): Promise<void> {
             Math.max(0, entry.at - now),
         );
 
-        timers.set(entry.id, timer);
+        timers.set(entry.id, { timer, teamSlug: entry.teamSlug });
     }
 }
 
@@ -279,6 +335,7 @@ async function reconcileTimer(desired: DesiredNotification[]): Promise<void> {
  * repeatedly (e.g. after every sync) — it only diffs and applies changes.
  */
 export async function reconcileNotifications(
+    teamSlug: string,
     desired: DesiredNotification[],
 ): Promise<void> {
     const wanted = prepare(desired);
@@ -290,9 +347,9 @@ export async function reconcileNotifications(
 
     try {
         if (isNativeIos()) {
-            await reconcileIos(wanted);
+            await reconcileIos(teamSlug, wanted);
         } else {
-            await reconcileTimer(wanted);
+            await reconcileTimer(teamSlug, wanted);
         }
     } catch (error) {
         console.warn('[donote] reminder notification reconcile failed', error);
