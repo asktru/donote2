@@ -7,5 +7,6 @@ import UIKit
 class MainViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(AppleCalendarPlugin())
+        bridge?.registerPluginInstance(ShareInboxPlugin())
     }
 }

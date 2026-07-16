@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useSwipe } from '@/composables/useSwipe';
 import { isMacDesktopShell, isNarrowViewport } from '@/lib/platform';
+import { startShareInboxWatcher } from '@/lib/shareInbox';
 import { cn } from '@/lib/utils';
 import {
     anchor,
@@ -294,6 +295,7 @@ onMounted(async () => {
         userId: props.workspace.userId,
     });
     startReminderScheduler();
+    startShareInboxWatcher();
 });
 
 onBeforeUnmount(() => {
