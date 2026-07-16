@@ -21,13 +21,26 @@ class ShareViewController: SLComposeServiceViewController {
         let name: String
     }
 
+    private struct PageInfo {
+        var url = ""
+        var title = ""
+        var description = ""
+        var pageText = ""
+    }
+
     /** Team workspaces the app published for routing (see publishTeams). */
     private var teams: [Team] = []
     private var selectedTeamSlug = ""
 
+    /** Shared web page, loaded up-front so the Title row can prefill. */
+    private var pageInfo: PageInfo?
+    /** The user's customized note title (nil = keep the page title). */
+    private var editedTitle: String?
+
     override func viewDidLoad() {
         super.viewDidLoad()
         loadTeams()
+        peekPageInfo()
     }
 
     override func presentationAnimationDidFinish() {
@@ -77,6 +90,72 @@ class ShareViewController: SLComposeServiceViewController {
         teams.first(where: { $0.slug == selectedTeamSlug })?.name ?? ""
     }
 
+    // MARK: - Page info (title prefill)
+
+    /// Load the shared web page's metadata as soon as the sheet opens, so the
+    /// "Title" row can prefill with the page title and the queued item can
+    /// carry the description + page text for the app's AI summary.
+    private func peekPageInfo() {
+        let items = (extensionContext?.inputItems as? [NSExtensionItem]) ?? []
+        let providers = items.flatMap { $0.attachments ?? [] }
+        let fallbackTitle = items.first?.attributedTitle?.string ?? ""
+
+        if let provider = providers.first(where: {
+            $0.hasItemConformingToTypeIdentifier(UTType.propertyList.identifier)
+        }) {
+            provider.loadItem(forTypeIdentifier: UTType.propertyList.identifier) {
+                [weak self] item, _ in
+                let results =
+                    (item as? NSDictionary)?[NSExtensionJavaScriptPreprocessingResultsKey]
+                        as? NSDictionary
+                let title = results?["title"] as? String ?? ""
+
+                self?.setPageInfo(PageInfo(
+                    url: results?["url"] as? String ?? "",
+                    title: title.isEmpty ? fallbackTitle : title,
+                    description: results?["description"] as? String ?? "",
+                    pageText: results?["pageText"] as? String ?? ""
+                ))
+            }
+
+            return
+        }
+
+        if let provider = providers.first(where: {
+            !$0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
+                && $0.hasItemConformingToTypeIdentifier(UTType.url.identifier)
+        }) {
+            provider.loadItem(forTypeIdentifier: UTType.url.identifier) {
+                [weak self] item, _ in
+                guard let url = item as? URL else {
+                    return
+                }
+
+                self?.setPageInfo(PageInfo(
+                    url: url.absoluteString,
+                    title: fallbackTitle
+                ))
+            }
+        }
+    }
+
+    private func setPageInfo(_ info: PageInfo) {
+        DispatchQueue.main.async { [weak self] in
+            self?.pageInfo = info
+            self?.reloadConfigurationItems()
+        }
+    }
+
+    private var noteTitle: String {
+        let edited = editedTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let edited, !edited.isEmpty {
+            return edited
+        }
+
+        return pageInfo?.title ?? ""
+    }
+
     override func didSelectPost() {
         let comment = contentText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let providers = (extensionContext?.inputItems as? [NSExtensionItem])?
@@ -99,36 +178,59 @@ class ShareViewController: SLComposeServiceViewController {
     }
 
     override func configurationItems() -> [Any]! {
-        guard teams.count > 1, let item = SLComposeSheetConfigurationItem() else {
-            return []
-        }
+        var rows: [SLComposeSheetConfigurationItem] = []
 
-        item.title = "Team"
-        item.value = selectedTeamName
-        item.tapHandler = { [weak self] in
-            guard let self else {
-                return
-            }
-
-            let picker = TeamPickerViewController(
-                teams: self.teams.map { ($0.slug, $0.name) },
-                selectedSlug: self.selectedTeamSlug
-            ) { [weak self] slug in
+        // Web shares get an editable note title, prefilled with the page's.
+        if pageInfo != nil, let titleRow = SLComposeSheetConfigurationItem() {
+            titleRow.title = "Title"
+            titleRow.value = noteTitle
+            titleRow.tapHandler = { [weak self] in
                 guard let self else {
                     return
                 }
 
-                self.selectedTeamSlug = slug
-                UserDefaults(suiteName: Self.appGroupId)?
-                    .set(slug, forKey: Self.lastTeamKey)
-                item.value = self.selectedTeamName
-                self.popConfigurationViewController()
+                let editor = TitleEditorViewController(title: self.noteTitle) {
+                    [weak self, weak titleRow] text in
+                    self?.editedTitle = text
+                    titleRow?.value = self?.noteTitle
+                }
+
+                self.pushConfigurationViewController(editor)
             }
 
-            self.pushConfigurationViewController(picker)
+            rows.append(titleRow)
         }
 
-        return [item]
+        if teams.count > 1, let teamRow = SLComposeSheetConfigurationItem() {
+            teamRow.title = "Team"
+            teamRow.value = selectedTeamName
+            teamRow.tapHandler = { [weak self] in
+                guard let self else {
+                    return
+                }
+
+                let picker = TeamPickerViewController(
+                    teams: self.teams.map { ($0.slug, $0.name) },
+                    selectedSlug: self.selectedTeamSlug
+                ) { [weak self, weak teamRow] slug in
+                    guard let self else {
+                        return
+                    }
+
+                    self.selectedTeamSlug = slug
+                    UserDefaults(suiteName: Self.appGroupId)?
+                        .set(slug, forKey: Self.lastTeamKey)
+                    teamRow?.value = self.selectedTeamName
+                    self.popConfigurationViewController()
+                }
+
+                self.pushConfigurationViewController(picker)
+            }
+
+            rows.append(teamRow)
+        }
+
+        return rows
     }
 
     // MARK: - Provider routing
@@ -140,8 +242,24 @@ class ShareViewController: SLComposeServiceViewController {
         done: @escaping () -> Void
     ) {
         // Safari runs GetPageInfo.js and hands its result as a property list —
-        // the richest form (title + meta description). Checked first.
+        // the richest form (title + meta description + page text). peekPageInfo
+        // already loaded it to prefill the Title row; reuse that cache, which
+        // also carries any user-edited title.
         if provider.hasItemConformingToTypeIdentifier(UTType.propertyList.identifier) {
+            if let info = pageInfo {
+                writeItem([
+                    "kind": "url",
+                    "url": info.url,
+                    "title": noteTitle,
+                    "description": info.description,
+                    "pageText": info.pageText,
+                    "comment": comment,
+                ])
+                done()
+
+                return
+            }
+
             provider.loadItem(forTypeIdentifier: UTType.propertyList.identifier) {
                 [weak self] item, _ in
                 let results =
@@ -152,6 +270,7 @@ class ShareViewController: SLComposeServiceViewController {
                     "url": results?["url"] as? String ?? "",
                     "title": results?["title"] as? String ?? fallbackTitle,
                     "description": results?["description"] as? String ?? "",
+                    "pageText": results?["pageText"] as? String ?? "",
                     "comment": comment,
                 ])
                 done()
@@ -181,6 +300,20 @@ class ShareViewController: SLComposeServiceViewController {
         }
 
         if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+            if let info = pageInfo {
+                writeItem([
+                    "kind": "url",
+                    "url": info.url,
+                    "title": noteTitle,
+                    "description": info.description,
+                    "pageText": info.pageText,
+                    "comment": comment,
+                ])
+                done()
+
+                return
+            }
+
             provider.loadItem(forTypeIdentifier: UTType.url.identifier) { [weak self] item, _ in
                 self?.writeItem([
                     "kind": "url",

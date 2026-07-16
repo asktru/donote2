@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     appendLine,
+    appendUnderHeading,
     itemsForTeam,
     sharedAttachmentLine,
     sharedNoteContent,
@@ -61,34 +62,89 @@ describe('sharedNoteTitle', () => {
 });
 
 describe('sharedNoteContent', () => {
-    it('stacks link, quoted description, and comment as paragraphs', () => {
+    it('builds the structured web-clip layout with all sections', () => {
         expect(
-            sharedNoteContent({
-                id: '1',
-                kind: 'url',
-                url: 'https://example.com',
-                description: 'First line\nSecond line',
-                comment: 'Read this later',
-            }),
+            sharedNoteContent(
+                {
+                    id: '1',
+                    kind: 'url',
+                    url: 'https://example.com/post',
+                    description: 'Real CPM/RPM data\nby niche',
+                    comment: 'Read this later',
+                },
+                'This is a blog article explaining payouts.',
+            ),
         ).toBe(
-            'https://example.com\n\n> First line\n> Second line\n\nRead this later',
+            [
+                '- URL: https://example.com/post',
+                '- Description',
+                '    - Real CPM/RPM data by niche',
+                '- Summary',
+                '    - This is a blog article explaining payouts.',
+                '- Comment',
+                '    - Read this later',
+                '',
+                '#web',
+            ].join('\n'),
         );
     });
 
-    it('omits empty sections without leaving blank artifacts', () => {
+    it('omits missing sections but keeps the #web tag', () => {
         expect(
             sharedNoteContent({ id: '1', kind: 'url', url: 'https://a.io' }),
-        ).toBe('https://a.io');
+        ).toBe('- URL: https://a.io\n\n#web');
     });
 
-    it('keeps shared text unquoted', () => {
+    it('keeps shared plain text as a plain note', () => {
         expect(
             sharedNoteContent({
                 id: '1',
                 kind: 'text',
                 description: 'Copied paragraph',
+                comment: 'from a chat',
             }),
-        ).toBe('Copied paragraph');
+        ).toBe('Copied paragraph\n\nfrom a chat');
+    });
+});
+
+describe('sharedNoteTitle sanitization', () => {
+    it('strips wiki-hostile characters so the title works as a [[target]]', () => {
+        expect(
+            sharedNoteTitle({
+                id: '1',
+                kind: 'url',
+                title: 'A [Guide] | Part 2',
+                url: 'https://example.com',
+            }),
+        ).toBe('A Guide Part 2');
+    });
+});
+
+describe('appendUnderHeading', () => {
+    it('appends after the last item of an existing Links block', () => {
+        const daily = '# Tue\n\n## Links\n- [[First]]\n\n## Tasks\n- [ ] x\n';
+
+        expect(appendUnderHeading(daily, '## Links', '- [[Second]]')).toBe(
+            '# Tue\n\n## Links\n- [[First]]\n- [[Second]]\n\n## Tasks\n- [ ] x\n',
+        );
+    });
+
+    it('creates the heading at the bottom when missing', () => {
+        expect(
+            appendUnderHeading('- [ ] task\n', '## Links', '- [[Clip]]'),
+        ).toBe('- [ ] task\n\n## Links\n- [[Clip]]\n');
+    });
+
+    it('starts an empty daily note with the heading', () => {
+        expect(appendUnderHeading('', '## Links', '- [[Clip]]')).toBe(
+            '## Links\n- [[Clip]]\n',
+        );
+    });
+
+    it('inserts directly under a heading with no items yet', () => {
+        expect(
+            appendUnderHeading('## Links\n\n## Other\n', '## Links', '- [[A]]'),
+        ).toBe('## Links\n- [[A]]\n\n## Other\n');
     });
 });
 

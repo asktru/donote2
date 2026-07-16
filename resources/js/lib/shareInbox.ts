@@ -1,6 +1,7 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
 import { todayDailyKey } from '@/core/dates';
+import { apiFetch } from '@/lib/api';
 import { uploadAttachment, attachmentMarkdown } from '@/lib/attachments';
 import { isNativeIos } from '@/lib/platform';
 import {
@@ -29,6 +30,8 @@ export interface ShareInboxItem {
     title?: string;
     url?: string;
     description?: string;
+    /** Readable page text captured by Safari — feeds the AI summary. */
+    pageText?: string;
     comment?: string;
     fileName?: string;
     mimeType?: string;
@@ -60,11 +63,18 @@ export function itemsForTeam(
 }
 
 /** Folder shared pages land in — easy to triage, out of the notes tree root. */
-export const SHARE_INBOX_FOLDER = 'Inbox';
+export const WEB_CLIPS_FOLDER = 'Web Clips';
 
-/** Note title for a shared page/text: page title, else host, else a stub. */
+/**
+ * Note title for a shared page/text: page title (or the user's edited one),
+ * else host, else a stub. Sanitized so the title works verbatim as a
+ * `[[wiki link]]` target in the daily note.
+ */
 export function sharedNoteTitle(item: ShareInboxItem): string {
-    const title = item.title?.trim();
+    const title = item.title
+        ?.replace(/[[\]|]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 
     if (title) {
         return title;
@@ -81,32 +91,91 @@ export function sharedNoteTitle(item: ShareInboxItem): string {
     return item.kind === 'text' ? 'Shared text' : 'Shared link';
 }
 
-/** Note body for a shared page/text: link, quoted description, comment. */
-export function sharedNoteContent(item: ShareInboxItem): string {
-    const parts: string[] = [];
-    const description = item.description?.trim() ?? '';
-    const comment = item.comment?.trim() ?? '';
+/** Collapse text to one line so it fits a single nested bullet. */
+function oneLine(text: string): string {
+    return text.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Web-clip note body — structured reference bullets plus the #web tag:
+ *
+ *     - URL: https://…
+ *     - Description
+ *         - <meta description>
+ *     - Summary
+ *         - <AI summary of the page text>
+ *     - Comment
+ *         - <what the user typed in the share sheet>
+ *
+ *     #web
+ *
+ * Shared plain text stays a plain note (text + comment paragraphs).
+ */
+export function sharedNoteContent(
+    item: ShareInboxItem,
+    summary: string | null = null,
+): string {
+    const description = oneLine(item.description ?? '');
+    const comment = oneLine(item.comment ?? '');
+
+    if (item.kind === 'text') {
+        return [item.description?.trim() ?? '', comment]
+            .filter((part) => part !== '')
+            .join('\n\n');
+    }
+
+    const bullets: string[] = [];
 
     if (item.url) {
-        parts.push(item.url);
+        bullets.push(`- URL: ${item.url}`);
     }
 
     if (description !== '') {
-        parts.push(
-            item.kind === 'text'
-                ? description
-                : description
-                      .split('\n')
-                      .map((line) => `> ${line}`)
-                      .join('\n'),
-        );
+        bullets.push(`- Description\n    - ${description}`);
+    }
+
+    const cleanSummary = oneLine(summary ?? '');
+
+    if (cleanSummary !== '') {
+        bullets.push(`- Summary\n    - ${cleanSummary}`);
     }
 
     if (comment !== '') {
-        parts.push(comment);
+        bullets.push(`- Comment\n    - ${comment}`);
     }
 
-    return parts.join('\n\n');
+    return `${bullets.join('\n')}\n\n#web`;
+}
+
+/**
+ * Insert `line` at the end of the block under `heading`, creating the
+ * heading at the bottom of the note when it doesn't exist yet.
+ */
+export function appendUnderHeading(
+    content: string,
+    heading: string,
+    line: string,
+): string {
+    const lines = content.split('\n');
+    const at = lines.findIndex((entry) => entry.trim() === heading);
+
+    if (at === -1) {
+        const trimmed = content.replace(/\s+$/, '');
+
+        return trimmed === ''
+            ? `${heading}\n${line}\n`
+            : `${trimmed}\n\n${heading}\n${line}\n`;
+    }
+
+    let end = at + 1;
+
+    while (end < lines.length && lines[end].trim() !== '') {
+        end += 1;
+    }
+
+    lines.splice(end, 0, line);
+
+    return lines.join('\n');
 }
 
 /** The daily-note line for a shared attachment, comment inline after it. */
@@ -133,12 +202,64 @@ const plugin: ShareInboxPlugin | null = isNativeIos()
 let processing = false;
 let watcherRegistered = false;
 
-async function ingestUrlOrText(item: ShareInboxItem): Promise<void> {
+const SUMMARY_PROMPT =
+    'Summarize this web page for a reference note: one paragraph, 3–6 ' +
+    'sentences, stating what the page is and its key points. Return only ' +
+    'the paragraph.';
+
+/** AI summary of the captured page text; null when unavailable — optional. */
+async function fetchClipSummary(
+    teamSlug: string,
+    pageText: string,
+): Promise<string | null> {
+    if (!navigator.onLine) {
+        return null;
+    }
+
+    try {
+        const res = await apiFetch<{ text: string }>(
+            `/api/${teamSlug}/ai/completions`,
+            {
+                method: 'POST',
+                body: JSON.stringify({
+                    prompt: SUMMARY_PROMPT,
+                    text: pageText,
+                }),
+            },
+        );
+
+        return res.text || null;
+    } catch {
+        return null; // AI not configured / provider hiccup — skip the section.
+    }
+}
+
+async function ingestUrlOrText(
+    item: ShareInboxItem,
+    teamSlug: string,
+): Promise<void> {
+    const title = sharedNoteTitle(item);
+    const summary =
+        item.kind === 'url' && item.pageText
+            ? await fetchClipSummary(teamSlug, item.pageText)
+            : null;
+
     await createNote({
-        title: sharedNoteTitle(item),
-        folder: SHARE_INBOX_FOLDER,
-        content: sharedNoteContent(item),
+        title,
+        folder: WEB_CLIPS_FOLDER,
+        content: sharedNoteContent(item, summary),
     });
+
+    // A shared page also gets a wiki link under "## Links" in today's daily
+    // note, so the day keeps a trace of what was clipped.
+    if (item.kind === 'url') {
+        const daily = await openCalendarNote('daily', todayDailyKey());
+
+        await updateNoteContent(
+            daily.id,
+            appendUnderHeading(daily.content, '## Links', `- [[${title}]]`),
+        );
+    }
 }
 
 async function ingestFile(item: ShareInboxItem): Promise<void> {
@@ -190,7 +311,7 @@ export async function processShareInbox(): Promise<void> {
                 if (item.kind === 'file') {
                     await ingestFile(item);
                 } else {
-                    await ingestUrlOrText(item);
+                    await ingestUrlOrText(item, config.teamSlug);
                 }
 
                 await plugin.remove({ id: item.id });
