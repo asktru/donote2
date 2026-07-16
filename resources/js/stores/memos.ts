@@ -434,7 +434,10 @@ function registerNativeRecorderEvents(): void {
         nativeChain = nativeChain
             .then(() => persistNativeSegment(event))
             .catch((error) =>
-                console.warn('[donote] native segment persist failed', error),
+                console.warn(
+                    '[donote] native segment persist failed:',
+                    error instanceof Error ? error.message : String(error),
+                ),
             );
     });
 
@@ -442,7 +445,10 @@ function registerNativeRecorderEvents(): void {
         nativeChain = nativeChain
             .then(() => handleNativeStopped(event))
             .catch((error) =>
-                console.warn('[donote] native stop handling failed', error),
+                console.warn(
+                    '[donote] native stop handling failed:',
+                    error instanceof Error ? error.message : String(error),
+                ),
             );
     });
 

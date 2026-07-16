@@ -1,5 +1,6 @@
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { registerPlugin } from '@capacitor/core';
 
+import { readNativeFileBlob } from '@/lib/nativeFile';
 import { isNativeIos } from '@/lib/platform';
 
 /**
@@ -44,6 +45,11 @@ export interface NativeAudioRecorder {
     }>;
     pendingSegments: () => Promise<{ items: NativePendingSegment[] }>;
     removeSegment: (options: { path: string }) => Promise<void>;
+    readFile: (options: {
+        path: string;
+        offset: number;
+        length: number;
+    }) => Promise<{ base64: string; size: number }>;
     addListener(
         event: 'segment',
         callback: (data: NativeSegmentEvent) => void,
@@ -58,13 +64,21 @@ export const nativeRecorder: NativeAudioRecorder | null = isNativeIos()
     ? registerPlugin<NativeAudioRecorder>('AudioRecorder')
     : null;
 
-/** Read a finished segment file into a Blob (native path → web view fetch). */
-export async function readSegmentBlob(path: string): Promise<Blob> {
-    const response = await fetch(Capacitor.convertFileSrc(path));
-
-    if (!response.ok) {
-        throw new Error(`Could not read recording segment (${response.status}).`);
+/**
+ * Read a finished segment file into a Blob. Goes through the plugin bridge
+ * (chunked base64): the remote-loading shell can't fetch convertFileSrc URLs.
+ */
+export async function readSegmentBlob(
+    path: string,
+    mimeType = 'audio/mp4',
+): Promise<Blob> {
+    if (!nativeRecorder) {
+        throw new Error('Native recorder is unavailable.');
     }
 
-    return response.blob();
+    return readNativeFileBlob(
+        (options) => nativeRecorder.readFile(options),
+        path,
+        mimeType,
+    );
 }

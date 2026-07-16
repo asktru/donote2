@@ -1,8 +1,9 @@
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { registerPlugin } from '@capacitor/core';
 
 import { todayDailyKey } from '@/core/dates';
 import { apiFetch } from '@/lib/api';
 import { uploadAttachment, attachmentMarkdown } from '@/lib/attachments';
+import { readNativeFileBlob } from '@/lib/nativeFile';
 import { isNativeIos } from '@/lib/platform';
 import {
     createNote,
@@ -45,6 +46,11 @@ interface ShareInboxPlugin {
         current: string;
         teams: { slug: string; name: string }[];
     }) => Promise<void>;
+    readFile: (options: {
+        path: string;
+        offset: number;
+        length: number;
+    }) => Promise<{ base64: string; size: number }>;
 }
 
 /**
@@ -263,20 +269,19 @@ async function ingestUrlOrText(
 }
 
 async function ingestFile(item: ShareInboxItem): Promise<void> {
-    if (!item.filePath) {
+    if (!item.filePath || !plugin) {
         return; // Payload never made it into the container — nothing to save.
     }
 
-    const response = await fetch(Capacitor.convertFileSrc(item.filePath));
-
-    if (!response.ok) {
-        throw new Error(`Could not read shared file (${response.status}).`);
-    }
-
-    const blob = await response.blob();
-    const file = new File([blob], item.fileName || 'shared', {
-        type: item.mimeType || blob.type || 'application/octet-stream',
-    });
+    // Through the plugin bridge (chunked base64): the remote-loading shell
+    // can't fetch convertFileSrc URLs for container files.
+    const mime = item.mimeType || 'application/octet-stream';
+    const blob = await readNativeFileBlob(
+        (options) => plugin.readFile(options),
+        item.filePath,
+        mime,
+    );
+    const file = new File([blob], item.fileName || 'shared', { type: mime });
 
     const daily = await openCalendarNote('daily', todayDailyKey());
     const attachment = await uploadAttachment(file, daily.id);

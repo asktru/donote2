@@ -27,6 +27,7 @@
 		CA1EDA700000000000000001 /* AppleCalendarPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1EDA700000000000000002 /* AppleCalendarPlugin.swift */; };
 		CA1EDA700000000000000003 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1EDA700000000000000004 /* MainViewController.swift */; };
 		CB0EA6D0B2ECAF959C889322 /* AudioRecorderPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3484BB6240B7EBA9CEEBE8D3 /* AudioRecorderPlugin.swift */; };
+		CEA0EF79C8B7F332158E5692 /* NativeFileReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A09E1682FE6CEFB32A4D9486 /* NativeFileReader.swift */; };
 		F6941CE0DFBE8167D75F9C61 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 89A7CF771AEE206F90D29CE0 /* Foundation.framework */; };
 		FFD4735AA7A15CC9832DAEA1 /* RecordingLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAB5E6928F35776F8FFF404C /* RecordingLiveActivity.swift */; };
 /* End PBXBuildFile section */
@@ -83,6 +84,7 @@
 		89A7CF771AEE206F90D29CE0 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		9699B9E7A1FA2EACAE5BAB4D /* DonoteWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DonoteWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A09E1682FE6CEFB32A4D9486 /* NativeFileReader.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeFileReader.swift; sourceTree = "<group>"; };
 		AAB5E6928F35776F8FFF404C /* RecordingLiveActivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecordingLiveActivity.swift; sourceTree = "<group>"; };
 		B9EBE1FCDC05AE823830C58A /* GetPageInfo.js */ = {isa = PBXFileReference; includeInIndex = 1; path = GetPageInfo.js; sourceTree = "<group>"; };
 		C044D1B584D935B569EFD308 /* RecordingActivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecordingActivity.swift; sourceTree = "<group>"; };
@@ -168,6 +170,7 @@
 				50B271D01FEDC1A000F3C39B /* public */,
 				745AC563F25E28993D9FACF9 /* ShareInboxPlugin.swift */,
 				3484BB6240B7EBA9CEEBE8D3 /* AudioRecorderPlugin.swift */,
+				A09E1682FE6CEFB32A4D9486 /* NativeFileReader.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -350,6 +353,7 @@
 				1038C2A1E7E7C08614A3B391 /* ShareInboxPlugin.swift in Sources */,
 				CB0EA6D0B2ECAF959C889322 /* AudioRecorderPlugin.swift in Sources */,
 				32F85CB59EDEB0D9C2463716 /* RecordingActivity.swift in Sources */,
+				CEA0EF79C8B7F332158E5692 /* NativeFileReader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

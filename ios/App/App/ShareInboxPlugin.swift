@@ -21,6 +21,7 @@ public class ShareInboxPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "list", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "remove", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "publishTeams", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "readFile", returnType: CAPPluginReturnPromise),
     ]
 
     private static let appGroupId = "group.io.air.donote"
@@ -91,6 +92,14 @@ public class ShareInboxPlugin: CAPPlugin, CAPBridgedPlugin {
 
         try? FileManager.default.removeItem(at: json)
         call.resolve()
+    }
+
+    /// Chunked base64 read of a queued payload file — the remote-loading
+    /// shell has no convertFileSrc file serving (see NativeFileReader).
+    @objc func readFile(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            NativeFileReader.handle(call, allowedDir: Self.queueUrl())
+        }
     }
 
     /// Publish the team list for the extension's "Team" picker.

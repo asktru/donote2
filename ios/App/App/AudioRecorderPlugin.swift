@@ -39,6 +39,7 @@ public class AudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "isRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pendingSegments", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "removeSegment", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "readFile", returnType: CAPPluginReturnPromise),
     ]
 
     private static let segmentSeconds: TimeInterval = 90
@@ -221,6 +222,14 @@ public class AudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin {
             }
 
             call.resolve(["items": items])
+        }
+    }
+
+    /// Chunked base64 read of a segment file — the remote-loading shell has
+    /// no convertFileSrc file serving (see NativeFileReader).
+    @objc func readFile(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            NativeFileReader.handle(call, allowedDir: Self.segmentsDir())
         }
     }
 
