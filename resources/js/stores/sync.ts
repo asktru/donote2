@@ -2,7 +2,7 @@ import { ref } from 'vue';
 
 import { apiFetch } from '@/lib/api';
 import type { NoteAccess } from '@/lib/noteAccess';
-import { notesToPrune } from '@/lib/noteAccess';
+import { isMassPrune, notesToPrune } from '@/lib/noteAccess';
 import { openWorkspaceDb } from '@/stores/db';
 import type { WorkspaceDb } from '@/stores/db';
 import type { WorkspaceConfig } from '@/stores/workspace';
@@ -75,41 +75,71 @@ interface PushResponse {
     }[];
 }
 
-let db: WorkspaceDb | null = null;
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let pullTimer: ReturnType<typeof setInterval> | null = null;
 let syncing = false;
 let started = false;
+let listenersRegistered = false;
 
-function apiBase(): string {
-    const cfg = workspaceConfig();
-
-    if (!cfg) {
-        throw new Error('Workspace is not initialized.');
-    }
-
-    return `/api/${cfg.teamSlug}`;
+/**
+ * Everything one sync cycle needs, captured once at cycle start. Every URL,
+ * cursor read/write, and store mutation in the cycle goes through this pinned
+ * scope — never through the live workspace config, which can be repointed to
+ * another team mid-cycle (switching teams doesn't cancel in-flight requests).
+ */
+interface SyncScope {
+    teamSlug: string;
+    userId: number;
+    base: string;
+    db: WorkspaceDb;
 }
 
-async function getCursor(): Promise<number> {
-    const entry = await db!.meta.get('sync-cursor');
+/** Thrown when the workspace changes under an in-flight cycle — benign. */
+class SyncAborted extends Error {}
+
+function captureScope(): SyncScope {
+    const cfg = requireConfig();
+
+    return {
+        teamSlug: cfg.teamSlug,
+        userId: cfg.userId,
+        base: `/api/${cfg.teamSlug}`,
+        db: openWorkspaceDb(cfg.teamSlug, cfg.userId),
+    };
+}
+
+/**
+ * Bail out of the cycle if the open workspace is no longer the one this
+ * cycle started in. Called after every await and before every store write:
+ * an in-flight cycle from team A must never touch team B's notes, cursor,
+ * or visibility — that mixing wiped whole workspaces and stranded cursors
+ * past the server's ceiling.
+ */
+function assertScope(scope: SyncScope): void {
+    const cfg = workspaceConfig();
+
+    if (
+        !cfg ||
+        cfg.teamSlug !== scope.teamSlug ||
+        cfg.userId !== scope.userId
+    ) {
+        throw new SyncAborted(
+            `Workspace changed mid-sync (${scope.teamSlug} → ${cfg?.teamSlug ?? 'none'}).`,
+        );
+    }
+}
+
+async function getCursor(scope: SyncScope): Promise<number> {
+    const entry = await scope.db.meta.get('sync-cursor');
     const cursor = typeof entry?.value === 'number' ? entry.value : 0;
     syncCursor.value = cursor;
 
     return cursor;
 }
 
-async function setCursor(cursor: number): Promise<void> {
+async function setCursor(scope: SyncScope, cursor: number): Promise<void> {
     syncCursor.value = cursor;
-    await db!.meta.put({ key: 'sync-cursor', value: cursor });
-}
-
-function requireDb(): WorkspaceDb {
-    if (!db) {
-        db = openWorkspaceDb(requireConfig().teamSlug, requireConfig().userId);
-    }
-
-    return db;
+    await scope.db.meta.put({ key: 'sync-cursor', value: cursor });
 }
 
 function requireConfig(): WorkspaceConfig {
@@ -143,30 +173,32 @@ async function absorb(server: ServerNote): Promise<void> {
     await pruneCalendarDuplicates(server.id);
 }
 
-async function pull(): Promise<number> {
-    let cursor = await getCursor();
+async function pull(scope: SyncScope): Promise<number> {
+    let cursor = await getCursor(scope);
     let hasMore = true;
     let received = 0;
 
     while (hasMore) {
         const page = await apiFetch<PullResponse>(
-            `${apiBase()}/notes/sync?since=${cursor}`,
+            `${scope.base}/notes/sync?since=${cursor}`,
         );
 
         for (const note of page.notes) {
+            assertScope(scope);
             await absorb(note);
         }
 
         received += page.notes.length;
         cursor = page.cursor;
         hasMore = page.has_more;
-        await setCursor(cursor);
+        assertScope(scope);
+        await setCursor(scope, cursor);
     }
 
     return received;
 }
 
-async function push(): Promise<void> {
+async function push(scope: SyncScope): Promise<void> {
     // Read-only shared notes must never be pushed back to the server.
     const dirty = dirtyNotes()
         .filter((note) => note.access !== 'read')
@@ -179,7 +211,7 @@ async function push(): Promise<void> {
 
     const snapshots = new Map(dirty.map((note) => [note.id, note.updatedAt]));
 
-    const response = await apiFetch<PushResponse>(`${apiBase()}/notes/sync`, {
+    const response = await apiFetch<PushResponse>(`${scope.base}/notes/sync`, {
         method: 'POST',
         body: JSON.stringify({
             changes: dirty.map((note) => ({
@@ -198,6 +230,8 @@ async function push(): Promise<void> {
     });
 
     for (const result of response.results) {
+        assertScope(scope);
+
         if (result.status === 'remapped' && result.note.id !== result.id) {
             // A duplicate calendar note was merged into the canonical server
             // copy — drop the local duplicate and adopt the server note.
@@ -225,11 +259,20 @@ async function push(): Promise<void> {
  * Drop local notes the server no longer shares with this user (a revoked
  * share, a note flipped back to private, a departed collaborator). Own notes
  * and dirty notes are always kept.
+ *
+ * `allowMass` lets a user-initiated resync apply implausibly large prunes
+ * (e.g. actually leaving a team); the automatic cycle refuses them — every
+ * mass-wipe we've seen was a bug, never a real revocation.
  */
-export async function reconcileVisibility(): Promise<number> {
+async function reconcileVisibility(
+    scope: SyncScope,
+    allowMass = false,
+): Promise<number> {
     const { ids } = await apiFetch<{ ids: string[] }>(
-        `${apiBase()}/notes/visible-ids`,
+        `${scope.base}/notes/visible-ids`,
     );
+
+    assertScope(scope);
 
     // A transient empty/short response would otherwise wipe real notes that
     // the cursor can never re-fetch. Never prune against an empty set — a
@@ -246,10 +289,21 @@ export async function reconcileVisibility(): Promise<number> {
     }
 
     const visible = new Set(ids);
+    const toPrune = notesToPrune(liveNotes.value, visible);
+
+    if (!allowMass && isMassPrune(toPrune.length, liveNotes.value.length)) {
+        logSync(
+            'warn',
+            `Skipped visibility prune: server response would remove ${toPrune.length} of ${liveNotes.value.length} notes. Run Force Full Resync if this persists.`,
+        );
+
+        return 0;
+    }
 
     let pruned = 0;
 
-    for (const id of notesToPrune(liveNotes.value, visible)) {
+    for (const id of toPrune) {
+        assertScope(scope);
         await removeLocalNote(id);
         pruned += 1;
     }
@@ -273,9 +327,11 @@ export async function syncNow(): Promise<void> {
     syncStatus.value = 'syncing';
 
     try {
-        await push();
-        const received = await pull();
-        const pruned = await reconcileVisibility();
+        const scope = captureScope();
+
+        await push(scope);
+        const received = await pull(scope);
+        const pruned = await reconcileVisibility(scope);
 
         syncStatus.value = 'synced';
         lastSyncAt.value = Date.now();
@@ -288,6 +344,15 @@ export async function syncNow(): Promise<void> {
             );
         }
     } catch (error) {
+        if (error instanceof SyncAborted) {
+            // Not a failure — the user switched teams while a cycle was in
+            // flight; the new workspace runs its own cycle from scratch.
+            logSync('info', error.message);
+            syncStatus.value = 'synced';
+
+            return;
+        }
+
         syncStatus.value = navigator.onLine ? 'error' : 'offline';
         lastSyncError.value = error instanceof Error ? error.message : String(error);
         logSync('error', `Sync failed: ${lastSyncError.value}`);
@@ -305,8 +370,9 @@ export interface ServerStats {
 
 /** Ask the server how many notes the caller can see and its cursor ceiling. */
 export async function fetchServerStats(): Promise<ServerStats> {
+    const cfg = requireConfig();
     const stats = await apiFetch<{ visible_count: number; max_seq: number }>(
-        `${apiBase()}/notes/sync-stats`,
+        `/api/${cfg.teamSlug}/notes/sync-stats`,
     );
 
     return { visibleCount: stats.visible_count, maxSeq: stats.max_seq };
@@ -322,16 +388,18 @@ export async function forceFullResync(): Promise<void> {
         return;
     }
 
-    db = requireDb();
     syncing = true;
     syncStatus.value = 'syncing';
     logSync('info', 'Force full resync started (cursor reset to 0).');
 
     try {
-        await push();
-        await setCursor(0);
-        const received = await pull();
-        const pruned = await reconcileVisibility();
+        const scope = captureScope();
+
+        await push(scope);
+        await setCursor(scope, 0);
+        const received = await pull(scope);
+        // User-initiated: a mass prune here is deliberate (e.g. left a team).
+        const pruned = await reconcileVisibility(scope, true);
 
         syncStatus.value = 'synced';
         lastSyncAt.value = Date.now();
@@ -359,17 +427,18 @@ export async function rebuildLocalCopy(): Promise<void> {
         return;
     }
 
-    db = requireDb();
     syncing = true;
     syncStatus.value = 'syncing';
     logSync('warn', 'Rebuilding local copy from the server…');
 
     try {
-        await push();
+        const scope = captureScope();
+
+        await push(scope);
         const removed = await clearCleanLocalNotes();
-        await setCursor(0);
-        const received = await pull();
-        await reconcileVisibility();
+        await setCursor(scope, 0);
+        const received = await pull(scope);
+        await reconcileVisibility(scope, true);
 
         syncStatus.value = 'synced';
         lastSyncAt.value = Date.now();
@@ -393,6 +462,10 @@ export async function rebuildLocalCopy(): Promise<void> {
 function schedulePush(): void {
     pendingChanges.value = dirtyNotes().length;
 
+    if (!started) {
+        return;
+    }
+
     if (pushTimer !== null) {
         clearTimeout(pushTimer);
     }
@@ -412,25 +485,34 @@ export async function startSync(): Promise<void> {
     }
 
     started = true;
-    const cfg = workspaceConfig();
 
-    if (!cfg) {
+    if (!workspaceConfig()) {
         return;
     }
 
-    db = openWorkspaceDb(cfg.teamSlug, cfg.userId);
+    // Global listeners are registered exactly once per session — a second
+    // startSync (after a team switch) must not stack duplicates. They gate on
+    // `started` so a backgrounded/offline event can't kick off a cycle while
+    // sync is stopped (e.g. mid team-switch).
+    if (!listenersRegistered) {
+        listenersRegistered = true;
 
-    onWorkspaceMutation(schedulePush);
+        onWorkspaceMutation(schedulePush);
 
-    window.addEventListener('online', () => void syncNow());
-    window.addEventListener('offline', () => {
-        syncStatus.value = 'offline';
-    });
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            void syncNow();
-        }
-    });
+        window.addEventListener('online', () => {
+            if (started) {
+                void syncNow();
+            }
+        });
+        window.addEventListener('offline', () => {
+            syncStatus.value = 'offline';
+        });
+        document.addEventListener('visibilitychange', () => {
+            if (started && document.visibilityState === 'visible') {
+                void syncNow();
+            }
+        });
+    }
 
     pullTimer = setInterval(() => void syncNow(), 30000);
 
@@ -441,6 +523,11 @@ export function stopSync(): void {
     if (pullTimer !== null) {
         clearInterval(pullTimer);
         pullTimer = null;
+    }
+
+    if (pushTimer !== null) {
+        clearTimeout(pushTimer);
+        pushTimer = null;
     }
 
     started = false;

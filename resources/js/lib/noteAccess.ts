@@ -26,6 +26,17 @@ export function canEditNote(access: NoteAccess, online: boolean): boolean {
 }
 
 /**
+ * Whether a visibility prune is implausibly large — most of a workspace
+ * vanishing at once is a bug (a cross-team race, a bad server response),
+ * not a real revocation. Automatic sync skips such prunes; only an explicit
+ * user-initiated resync may apply them. Small workspaces are exempt: there,
+ * even a full clear is cheap to recover and can be legitimate.
+ */
+export function isMassPrune(pruneCount: number, localCount: number): boolean {
+    return pruneCount > 25 && pruneCount * 2 > localCount;
+}
+
+/**
  * Ids of local notes that are no longer visible and safe to drop locally.
  *
  * Only notes the server has seen (version > 0) qualify: for those, absence

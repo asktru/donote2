@@ -1,6 +1,25 @@
 import { describe, expect, it } from 'vitest';
 
-import { canEditNote, notesToPrune } from './noteAccess';
+import { canEditNote, isMassPrune, notesToPrune } from './noteAccess';
+
+describe('isMassPrune', () => {
+    it('flags a prune that would remove most of the workspace', () => {
+        expect(isMassPrune(1580, 1580)).toBe(true);
+        expect(isMassPrune(800, 1000)).toBe(true);
+    });
+
+    it('allows ordinary revocation-sized prunes', () => {
+        expect(isMassPrune(1, 1580)).toBe(false);
+        expect(isMassPrune(25, 1580)).toBe(false);
+        expect(isMassPrune(100, 1580)).toBe(false);
+    });
+
+    it('allows clearing out a tiny workspace', () => {
+        // Small absolute counts are never a catastrophe — don't block them.
+        expect(isMassPrune(5, 5)).toBe(false);
+        expect(isMassPrune(25, 30)).toBe(false);
+    });
+});
 
 describe('canEditNote', () => {
     it('lets owners edit online or offline', () => {
