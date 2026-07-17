@@ -2823,13 +2823,26 @@ const hangingIndents = ViewPlugin.fromClass(
         decorations: DecorationSet = Decoration.none;
         widths = new Map<string, number>();
         scheduled = false;
+        charWidth = 0;
 
         constructor(readonly view: EditorView) {
+            this.charWidth = view.defaultCharacterWidth;
             this.decorations = this.build(view);
             this.measure(view);
         }
 
         update(update: ViewUpdate) {
+            // A font swap (webfont finishing, dynamic type) invalidates every
+            // cached pixel width — measurements taken under the old metrics
+            // would stick forever otherwise.
+            if (
+                update.geometryChanged &&
+                update.view.defaultCharacterWidth !== this.charWidth
+            ) {
+                this.charWidth = update.view.defaultCharacterWidth;
+                this.widths.clear();
+            }
+
             // Rebuild on every update: the width-measurement pass finishes
             // with an empty transaction, which carries none of the usual
             // change flags but must still re-apply decorations.
@@ -2870,6 +2883,16 @@ const hangingIndents = ViewPlugin.fromClass(
                         styles.push(
                             `text-indent:-${width}px`,
                             `padding-left:${width + 4}px`,
+                        );
+                    } else if (prefix !== '') {
+                        // The exact width isn't measured (yet — or the DOM
+                        // measurement never succeeds on this engine, seen on
+                        // iOS WKWebView). Approximate with font-relative ch
+                        // so wrapped lines never collapse to column 0; the
+                        // measured pixel pair replaces this when available.
+                        styles.push(
+                            `text-indent:-${prefix.length}ch`,
+                            `padding-left:calc(${prefix.length}ch + 4px)`,
                         );
                     }
 
