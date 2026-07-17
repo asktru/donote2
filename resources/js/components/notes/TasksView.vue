@@ -73,12 +73,9 @@ function matchesPrefix(values: string[], filter: string): boolean {
 
 const filtered = computed<WorkspaceTask[]>(() =>
     workspaceTasks.value.filter((task) => {
-        if (
-            task.line.kind === 'checklist' &&
-            !includeChecklists.value &&
-            !selectedTag.value &&
-            !selectedMention.value
-        ) {
+        // Checklists appear only via the explicit "+ Checklists" toggle —
+        // including in tag/mention views, which used to bypass the gate.
+        if (task.line.kind === 'checklist' && !includeChecklists.value) {
             return false;
         }
 
