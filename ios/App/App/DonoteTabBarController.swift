@@ -158,58 +158,35 @@ class DonoteTabBarController: UITabBarController, UITabBarControllerDelegate {
         }
 
         let current = parsed["current"] as? String ?? ""
-        let sheet = UIAlertController(
-            title: "Switch team",
-            message: nil,
-            preferredStyle: .actionSheet
-        )
-
-        for team in teams {
+        let entries: [(slug: String, name: String)] = teams.compactMap { team in
             guard let slug = team["slug"], let name = team["name"] else {
-                continue
+                return nil
             }
 
-            let action = UIAlertAction(
-                title: slug == current ? "\(name) ✓" : name,
-                style: .default
-            ) { _ in
-                guard slug != current else {
-                    return
-                }
-
-                NotificationCenter.default.post(
-                    name: Notification.Name("donote.teamSelected"),
-                    object: nil,
-                    userInfo: ["slug": slug]
-                )
-            }
-
-            sheet.addAction(action)
+            return (slug, name)
         }
 
-        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        // A compact detent sheet (the account-switcher idiom) — an
+        // action-sheet popover looked out of place against the glass bar.
+        let picker = TeamSwitchSheetController(teams: entries, current: current)
 
-        // Anchor the popover to the Team button itself (the right-most tab
-        // control), not the whole bar — otherwise the arrow points at
-        // whichever tab happens to sit at the bar's center.
-        let teamButton = tabBar.subviews
-            .filter { $0 is UIControl }
-            .max(by: { $0.frame.minX < $1.frame.minX })
+        if let presentation = picker.sheetPresentationController {
+            if #available(iOS 16.0, *) {
+                presentation.detents = [
+                    .custom { _ in CGFloat(84 + entries.count * 52) },
+                ]
+            } else {
+                presentation.detents = [.medium()]
+            }
 
-        sheet.popoverPresentationController?.sourceView = tabBar
-        sheet.popoverPresentationController?.sourceRect = teamButton?.frame
-            ?? CGRect(
-                x: tabBar.bounds.maxX - 44,
-                y: 0,
-                width: 44,
-                height: tabBar.bounds.height
-            )
-        sheet.popoverPresentationController?.permittedArrowDirections = .down
+            presentation.prefersGrabberVisible = true
+        }
 
-        present(sheet, animated: true)
+        present(picker, animated: true)
     }
 
     // MARK: - Contextual FAB
+
 
     private func setupFab() {
         var config: UIButton.Configuration
@@ -269,5 +246,74 @@ class DonoteTabBarController: UITabBarController, UITabBarControllerDelegate {
                 )
             }
         })
+    }
+}
+
+/// The Team tab's picker: a small grabber sheet listing the user's teams
+/// with a checkmark on the current one. Selection posts donote.teamSelected,
+/// which flows through NativeTabsPlugin to the web layer's switch flow.
+private final class TeamSwitchSheetController: UITableViewController {
+    private let teams: [(slug: String, name: String)]
+    private let current: String
+
+    init(teams: [(slug: String, name: String)], current: String) {
+        self.teams = teams
+        self.current = current
+        super.init(style: .insetGrouped)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override func numberOfSections(in tableView: UITableView) -> Int {
+        1
+    }
+
+    override func tableView(
+        _ tableView: UITableView,
+        titleForHeaderInSection section: Int
+    ) -> String? {
+        "Switch team"
+    }
+
+    override func tableView(
+        _ tableView: UITableView,
+        numberOfRowsInSection section: Int
+    ) -> Int {
+        teams.count
+    }
+
+    override func tableView(
+        _ tableView: UITableView,
+        cellForRowAt indexPath: IndexPath
+    ) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "team")
+            ?? UITableViewCell(style: .default, reuseIdentifier: "team")
+        let team = teams[indexPath.row]
+
+        cell.textLabel?.text = team.name
+        cell.accessoryType = team.slug == current ? .checkmark : .none
+
+        return cell
+    }
+
+    override func tableView(
+        _ tableView: UITableView,
+        didSelectRowAt indexPath: IndexPath
+    ) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        let team = teams[indexPath.row]
+
+        if team.slug != current {
+            NotificationCenter.default.post(
+                name: Notification.Name("donote.teamSelected"),
+                object: nil,
+                userInfo: ["slug": team.slug]
+            )
+        }
+
+        dismiss(animated: true)
     }
 }
