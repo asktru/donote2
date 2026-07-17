@@ -229,3 +229,26 @@
         @apply bg-background text-foreground;
     }
 }
+
+/* ------------------------------------------------------------------ */
+/* Native iOS tab bar (lib/nativeTabs.ts)                              */
+/* ------------------------------------------------------------------ */
+
+/*
+ * --bottom-chrome: how much bottom space app chrome occupies. Defaults to
+ * the device safe area; when the native tab bar is present it becomes the
+ * bar's covered height (which already includes the safe area). Fixed
+ * bottom-anchored elements offset by this variable instead of env().
+ */
+:root {
+    --bottom-chrome: env(safe-area-inset-bottom);
+}
+
+html.native-tabs {
+    --bottom-chrome: var(--native-tabs-height, 0px);
+}
+
+/* Page roots opt in via the attribute; replaces their env() bottom pad. */
+html.native-tabs [data-native-tabs-pad] {
+    padding-bottom: var(--native-tabs-height, 0px);
+}

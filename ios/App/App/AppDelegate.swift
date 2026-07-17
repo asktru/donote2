@@ -7,7 +7,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Wrap the storyboard's Capacitor bridge in the native tab bar; the
+        // web view is reparented across tabs, never reloaded.
+        if let bridge = window?.rootViewController as? MainViewController {
+            window?.rootViewController = DonoteTabBarController(bridge: bridge)
+        }
+
         return true
     }
 

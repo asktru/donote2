@@ -8,11 +8,13 @@ import {
     Search,
     Sparkles,
 } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { toast } from 'vue-sonner';
 
 import { parseAgendaConfig } from '@/lib/agenda';
 import { insertAttachments } from '@/lib/attachments';
+import { nativeTabsActive } from '@/lib/nativeTabs';
+import type { NativeFabAction } from '@/lib/nativeTabs';
 import { isTouchDevice } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import { aiDialogOpen } from '@/stores/aiPrompts';
@@ -113,15 +115,44 @@ async function newRecording(): Promise<void> {
     }
 }
 
+/** The native tab bar's FAB menu routes its note actions here. */
+function onNativeAction(event: Event): void {
+    const action = (event as CustomEvent<{ id: NativeFabAction }>).detail.id;
+
+    if (action === 'new-note') {
+        void newNote();
+    } else if (action === 'record') {
+        void newRecording();
+    } else if (action === 'attach') {
+        pickFiles();
+    } else if (action === 'ai-prompt') {
+        openAiPrompt();
+    }
+}
+
+onMounted(() => {
+    window.addEventListener('donote:native-action', onNativeAction);
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('donote:native-action', onNativeAction);
+});
 </script>
 
 <template>
+    <!-- With the native tab bar, its glass FAB owns quick capture: only the
+         search bubble remains here, lifted above the bar. -->
     <div
         v-show="!hidden"
-        class="pointer-events-none absolute right-5 bottom-5 z-40"
+        class="pointer-events-none absolute right-5 z-40"
+        :style="{
+            bottom: nativeTabsActive
+                ? 'calc(1.25rem + var(--native-tabs-height, 0px))'
+                : '1.25rem',
+        }"
     >
         <div class="pointer-events-auto flex flex-col items-end gap-2">
-            <template v-if="expanded && !isRecording">
+            <template v-if="expanded && !isRecording && !nativeTabsActive">
                 <button
                     type="button"
                     class="flex items-center gap-2 rounded-full border border-border/60 bg-background px-3.5 py-2 text-sm font-medium shadow-lg hover:bg-muted/60"
@@ -182,7 +213,7 @@ async function newRecording(): Promise<void> {
             </button>
 
             <button
-                v-if="!isRecording"
+                v-if="!isRecording && !nativeTabsActive"
                 type="button"
                 :class="
                     cn(

@@ -9,5 +9,6 @@ class MainViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(AppleCalendarPlugin())
         bridge?.registerPluginInstance(ShareInboxPlugin())
         bridge?.registerPluginInstance(AudioRecorderPlugin())
+        bridge?.registerPluginInstance(NativeTabsPlugin())
     }
 }

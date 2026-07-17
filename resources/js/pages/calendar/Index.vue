@@ -28,6 +28,12 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useSwipe } from '@/composables/useSwipe';
+import {
+    initNativeTabs,
+    nativeTabsActive,
+    reportNativeTab,
+} from '@/lib/nativeTabs';
+import type { NativeFabAction } from '@/lib/nativeTabs';
 import { isMacDesktopShell, isNarrowViewport } from '@/lib/platform';
 import {
     publishShareTargets,
@@ -208,6 +214,17 @@ function startMeetWith(): void {
     meetPickerOpen.value = true;
 }
 
+/** The native tab bar's FAB menu routes its calendar actions here. */
+function onNativeAction(event: Event): void {
+    const action = (event as CustomEvent<{ id: NativeFabAction }>).detail.id;
+
+    if (action === 'meet-with') {
+        startMeetWith();
+    } else if (action === 'timeblock') {
+        newTimeblock();
+    }
+}
+
 // Swipe left/right over the calendar body to step periods (phones).
 useSwipe((swipe) => {
     if (swipe.direction !== 'left' && swipe.direction !== 'right') {
@@ -300,11 +317,15 @@ onMounted(async () => {
     startReminderScheduler();
     publishShareTargets(usePage().props.teams ?? [], props.workspace.teamSlug);
     startShareInboxWatcher();
+    initNativeTabs({ teamSlug: props.workspace.teamSlug, page: 'calendar' });
+    reportNativeTab('calendar');
+    window.addEventListener('donote:native-action', onNativeAction);
 });
 
 onBeforeUnmount(() => {
     window.removeEventListener('keydown', onKeydown);
     window.removeEventListener('resize', onResize);
+    window.removeEventListener('donote:native-action', onNativeAction);
 });
 </script>
 
@@ -312,6 +333,7 @@ onBeforeUnmount(() => {
     <Head title="Calendar" />
 
     <div
+        data-native-tabs-pad
         class="flex h-dvh min-h-0 flex-col bg-background text-foreground pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
     >
         <header
@@ -544,8 +566,8 @@ onBeforeUnmount(() => {
         </div>
 
         <div
-            v-if="googleConnected && !meetPickerOpen"
-            class="fixed right-5 bottom-[calc(1.25rem+env(safe-area-inset-bottom))] z-40 flex flex-col items-end gap-2"
+            v-if="googleConnected && !meetPickerOpen && !nativeTabsActive"
+            class="fixed right-5 bottom-[calc(1.25rem+var(--bottom-chrome))] z-40 flex flex-col items-end gap-2"
         >
             <template v-if="fabOpen">
                 <button
@@ -585,7 +607,7 @@ onBeforeUnmount(() => {
         -->
         <div
             v-if="meetPickerOpen"
-            class="fixed inset-x-2 bottom-[calc(0.5rem+env(safe-area-inset-bottom))] z-40 rounded-xl border border-border/60 bg-background/95 shadow-2xl backdrop-blur sm:inset-x-auto sm:left-1/2 sm:w-[26rem] sm:-translate-x-1/2"
+            class="fixed inset-x-2 bottom-[calc(0.5rem+var(--bottom-chrome))] z-40 rounded-xl border border-border/60 bg-background/95 shadow-2xl backdrop-blur sm:inset-x-auto sm:left-1/2 sm:w-[26rem] sm:-translate-x-1/2"
         >
             <div class="flex items-center justify-between px-3.5 pt-3 pb-1">
                 <div class="flex items-center gap-1.5 text-sm font-semibold">

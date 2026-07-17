@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 import AiPromptDialog from '@/components/notes/AiPromptDialog.vue';
 import DatePickerDialog from '@/components/notes/DatePickerDialog.vue';
@@ -31,6 +31,7 @@ import { hideNativeAccessoryBar } from '@/composables/useKeyboardInset';
 import { useSwipe } from '@/composables/useSwipe';
 import { kindOfKey, todayDailyKey, todayKey } from '@/core/dates';
 import type { CalendarKind } from '@/core/dates';
+import { initNativeTabs, reportNativeTab } from '@/lib/nativeTabs';
 import { SNOOZE_MINUTES } from '@/lib/notifications';
 import { isMacDesktopShell, isNarrowViewport } from '@/lib/platform';
 import {
@@ -383,8 +384,28 @@ onMounted(async () => {
     startReminderScheduler();
     publishShareTargets(usePage().props.teams ?? [], props.workspace.teamSlug);
     startShareInboxWatcher();
+    initNativeTabs({ teamSlug: props.workspace.teamSlug, page: 'notes' });
     await startSync();
 });
+
+// Keep the native tab bar's highlight in sync with in-app navigation:
+// today's daily note is Journal, the Tasks/Reminders views their tabs.
+// Other views (a project note, a tag) keep whatever tab was active.
+watch(
+    currentView,
+    (view) => {
+        if (view.kind === 'tasks' || view.kind === 'reminders') {
+            reportNativeTab(view.kind);
+        } else if (
+            view.kind === 'calendar' &&
+            view.calKind === 'daily' &&
+            view.dateKey === todayDailyKey()
+        ) {
+            reportNativeTab('journal');
+        }
+    },
+    { immediate: true, deep: true },
+);
 
 onBeforeUnmount(() => {
     window.removeEventListener('keydown', onKeydown);
@@ -397,6 +418,7 @@ onBeforeUnmount(() => {
 
     <TooltipProvider :delay-duration="300">
         <div
+            data-native-tabs-pad
             class="flex h-dvh w-full overflow-hidden bg-background text-foreground pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
         >
             <template v-if="ready && booted">

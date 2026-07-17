@@ -15,6 +15,7 @@
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		32F85CB59EDEB0D9C2463716 /* RecordingActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = C044D1B584D935B569EFD308 /* RecordingActivity.swift */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
+		5024FAF2366188065430AB86 /* NativeTabsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E656EF1DCE6FDECF76692C1 /* NativeTabsPlugin.swift */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
@@ -22,6 +23,7 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9E80520BEDB9888D6EB06BE4 /* DonoteWidgetsBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E509D776120C1CAAB08881D /* DonoteWidgetsBundle.swift */; };
+		A5CDE64794BC1C3FD4B3BFEF /* DonoteTabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0667964390F9D42F2CB7465D /* DonoteTabBarController.swift */; };
 		BBE59E4A2CECE634166389A4 /* GetPageInfo.js in Resources */ = {isa = PBXBuildFile; fileRef = B9EBE1FCDC05AE823830C58A /* GetPageInfo.js */; };
 		BD98A941BBFBCD60E3B570E1 /* RecordingActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = C044D1B584D935B569EFD308 /* RecordingActivity.swift */; };
 		CA1EDA700000000000000001 /* AppleCalendarPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1EDA700000000000000002 /* AppleCalendarPlugin.swift */; };
@@ -65,6 +67,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0667964390F9D42F2CB7465D /* DonoteTabBarController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DonoteTabBarController.swift; sourceTree = "<group>"; };
 		138B0A9D9763E8AFFA6C86E7 /* ShareViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		18FAC0C3FB4F72F51F9AA721 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		1E509D776120C1CAAB08881D /* DonoteWidgetsBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DonoteWidgetsBundle.swift; sourceTree = "<group>"; };
@@ -82,6 +85,7 @@
 		6E41DCDB4C022FCCCB833209 /* DonoteShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DonoteShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		745AC563F25E28993D9FACF9 /* ShareInboxPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareInboxPlugin.swift; sourceTree = "<group>"; };
 		89A7CF771AEE206F90D29CE0 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		8E656EF1DCE6FDECF76692C1 /* NativeTabsPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeTabsPlugin.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		9699B9E7A1FA2EACAE5BAB4D /* DonoteWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DonoteWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A09E1682FE6CEFB32A4D9486 /* NativeFileReader.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeFileReader.swift; sourceTree = "<group>"; };
@@ -171,6 +175,8 @@
 				745AC563F25E28993D9FACF9 /* ShareInboxPlugin.swift */,
 				3484BB6240B7EBA9CEEBE8D3 /* AudioRecorderPlugin.swift */,
 				A09E1682FE6CEFB32A4D9486 /* NativeFileReader.swift */,
+				0667964390F9D42F2CB7465D /* DonoteTabBarController.swift */,
+				8E656EF1DCE6FDECF76692C1 /* NativeTabsPlugin.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -354,6 +360,8 @@
 				CB0EA6D0B2ECAF959C889322 /* AudioRecorderPlugin.swift in Sources */,
 				32F85CB59EDEB0D9C2463716 /* RecordingActivity.swift in Sources */,
 				CEA0EF79C8B7F332158E5692 /* NativeFileReader.swift in Sources */,
+				A5CDE64794BC1C3FD4B3BFEF /* DonoteTabBarController.swift in Sources */,
+				5024FAF2366188065430AB86 /* NativeTabsPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
