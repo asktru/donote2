@@ -34,8 +34,11 @@ class DonoteTabBarController: UITabBarController, UITabBarControllerDelegate {
         let tabs: [(String, String)] = [
             ("Journal", "book.closed"),
             ("Reminders", "bell"),
-            ("Tasks", "checklist"),
+            ("Tasks", "checkmark.circle"),
             ("Calendar", "calendar"),
+            // Not a destination: tapping presents the team picker instead
+            // of selecting (see shouldSelect below).
+            ("Team", "person.2"),
         ]
 
         viewControllers = tabs.enumerated().map { index, tab in
@@ -85,6 +88,21 @@ class DonoteTabBarController: UITabBarController, UITabBarControllerDelegate {
 
     func tabBarController(
         _ tabBarController: UITabBarController,
+        shouldSelect viewController: UIViewController
+    ) -> Bool {
+        // The Team item acts, it doesn't navigate: show the picker and keep
+        // the current tab selected.
+        if viewController.tabBarItem.tag >= Self.tabIds.count {
+            showTeamPicker()
+
+            return false
+        }
+
+        return true
+    }
+
+    func tabBarController(
+        _ tabBarController: UITabBarController,
         didSelect viewController: UIViewController
     ) {
         embedBridge(in: viewController)
@@ -117,6 +135,65 @@ class DonoteTabBarController: UITabBarController, UITabBarControllerDelegate {
         bridge.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         container.view.addSubview(bridge.view)
         bridge.didMove(toParent: container)
+    }
+
+    // MARK: - Team picker
+
+    /// Present the team list (published into the App Group by the web app —
+    /// the same share-teams.json the share extension uses). Picking a team
+    /// is forwarded to the web layer, which performs the actual switch.
+    private func showTeamPicker() {
+        guard
+            let container = FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: "group.io.air.donote"
+            ),
+            let data = try? Data(
+                contentsOf: container.appendingPathComponent("share-teams.json")
+            ),
+            let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let teams = parsed["teams"] as? [[String: String]],
+            !teams.isEmpty
+        else {
+            return
+        }
+
+        let current = parsed["current"] as? String ?? ""
+        let sheet = UIAlertController(
+            title: "Switch team",
+            message: nil,
+            preferredStyle: .actionSheet
+        )
+
+        for team in teams {
+            guard let slug = team["slug"], let name = team["name"] else {
+                continue
+            }
+
+            let action = UIAlertAction(
+                title: slug == current ? "\(name) ✓" : name,
+                style: .default
+            ) { _ in
+                guard slug != current else {
+                    return
+                }
+
+                NotificationCenter.default.post(
+                    name: Notification.Name("donote.teamSelected"),
+                    object: nil,
+                    userInfo: ["slug": slug]
+                )
+            }
+
+            sheet.addAction(action)
+        }
+
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        // iPad presents action sheets as popovers and needs an anchor.
+        sheet.popoverPresentationController?.sourceView = tabBar
+        sheet.popoverPresentationController?.sourceRect = tabBar.bounds
+
+        present(sheet, animated: true)
     }
 
     // MARK: - Contextual FAB

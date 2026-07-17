@@ -607,7 +607,7 @@ onBeforeUnmount(() => {
         -->
         <div
             v-if="meetPickerOpen"
-            class="fixed inset-x-2 bottom-[calc(0.5rem+var(--bottom-chrome))] z-40 rounded-xl border border-border/60 bg-background/95 shadow-2xl backdrop-blur sm:inset-x-auto sm:left-1/2 sm:w-[26rem] sm:-translate-x-1/2"
+            class="fixed inset-x-2 top-[calc(env(safe-area-inset-top)+0.5rem)] z-40 rounded-xl border border-border/60 bg-background/95 shadow-2xl backdrop-blur sm:inset-x-auto sm:top-auto sm:bottom-[calc(0.5rem+var(--bottom-chrome))] sm:left-1/2 sm:w-[26rem] sm:-translate-x-1/2"
         >
             <div class="flex items-center justify-between px-3.5 pt-3 pb-1">
                 <div class="flex items-center gap-1.5 text-sm font-semibold">

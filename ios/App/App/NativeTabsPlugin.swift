@@ -46,6 +46,18 @@ public class NativeTabsPlugin: CAPPlugin, CAPBridgedPlugin {
 
             self?.notifyListeners("action", data: ["id": id])
         }
+
+        NotificationCenter.default.addObserver(
+            forName: Notification.Name("donote.teamSelected"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let slug = notification.userInfo?["slug"] as? String else {
+                return
+            }
+
+            self?.notifyListeners("team", data: ["slug": slug])
+        }
     }
 
     @objc func setActive(_ call: CAPPluginCall) {

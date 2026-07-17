@@ -4,6 +4,7 @@ import { ref } from 'vue';
 
 import { todayDailyKey } from '@/core/dates';
 import { isNativeIos } from '@/lib/platform';
+import { switchMethod } from '@/routes/teams';
 import { openCalendar, openView } from '@/stores/ui';
 
 /**
@@ -35,6 +36,10 @@ interface NativeTabsPlugin {
     addListener(
         event: 'action',
         callback: (data: { id: NativeFabAction }) => void,
+    ): Promise<{ remove: () => Promise<void> }>;
+    addListener(
+        event: 'team',
+        callback: (data: { slug: string }) => void,
     ): Promise<{ remove: () => Promise<void> }>;
 }
 
@@ -116,6 +121,18 @@ export function initNativeTabs(options: {
                 detail: { id },
             }),
         );
+    });
+    // The Team tab's native picker: switch the session's team, then land on
+    // the new team's notes (the pages re-publish the team list on mount, so
+    // the picker's "current" marker follows).
+    void plugin.addListener('team', ({ slug }) => {
+        if (slug === teamSlug) {
+            return;
+        }
+
+        router.visit(switchMethod(slug), {
+            onFinish: () => router.visit(`/${slug}/notes`),
+        });
     });
 }
 
