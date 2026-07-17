@@ -16,7 +16,12 @@ const {
  */
 const APP_URL = process.env.DONOTE_URL || 'https://donote.on-forge.com';
 
+/** Reload (skipping cache) when refocused after this long — keeps the
+ *  long-running shell from pinning a week-old deploy. */
+const STALE_RELOAD_MS = 12 * 60 * 60 * 1000;
+
 let mainWindow = null;
+let lastLoadAt = Date.now();
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -67,6 +72,20 @@ function createWindow() {
     );
 
     mainWindow.loadURL(APP_URL);
+    lastLoadAt = Date.now();
+
+    mainWindow.webContents.on('did-finish-load', () => {
+        lastLoadAt = Date.now();
+    });
+
+    // The app runs for weeks; without this it would keep serving whatever
+    // bundle was current at launch. When focus returns after half a day,
+    // pull fresh assets — local notes and the last view survive reloads.
+    mainWindow.on('focus', () => {
+        if (Date.now() - lastLoadAt > STALE_RELOAD_MS) {
+            mainWindow?.webContents.reloadIgnoringCache();
+        }
+    });
 
     mainWindow.on('closed', () => {
         mainWindow = null;
@@ -111,6 +130,21 @@ function buildMenu() {
                         label: 'Reload',
                         accelerator: 'CmdOrCtrl+R',
                         click: () => mainWindow?.webContents.reload(),
+                    },
+                    {
+                        // ⌘⇧R belongs to voice recording in the app, so the
+                        // conventional force-reload chord is shifted to ⌥.
+                        label: 'Force Reload (Skip Cache)',
+                        accelerator: 'CmdOrCtrl+Alt+R',
+                        click: () =>
+                            mainWindow?.webContents.reloadIgnoringCache(),
+                    },
+                    {
+                        label: 'Clear Cache and Reload',
+                        click: async () => {
+                            await mainWindow?.webContents.session.clearCache();
+                            mainWindow?.webContents.reloadIgnoringCache();
+                        },
                     },
                     { role: 'toggleDevTools' },
                     { type: 'separator' },
