@@ -48,7 +48,7 @@ const roots = computed<TagNode[]>(() => {
 
     const finalize = (map: Map<string, BuildNode>): TagNode[] =>
         [...map.values()]
-            .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
+            .sort((a, b) => a.name.localeCompare(b.name))
             .map((node) => ({
                 name: node.name,
                 full: node.full,
