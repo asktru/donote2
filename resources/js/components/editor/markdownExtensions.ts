@@ -57,6 +57,7 @@ import type { ParsedLine, Priority, TaskState } from '@/core/parser';
 import { PRIORITY_COLORS } from '@/core/priority';
 import { buildNextOccurrenceLine } from '@/core/repeat';
 import { generateSyncId } from '@/core/syncedLines';
+import { pasteAsMarkdownLink } from '@/lib/pasteLinks';
 import { openDatePicker } from '@/stores/datePicker';
 import { filePreview, lightboxImage, syncedLinePanel } from '@/stores/ui';
 
@@ -1765,7 +1766,8 @@ const cancelTaskCommand = (view: EditorView): boolean => {
 
 /** Rewrite the current line with a different marker, keeping its body. */
 function rewriteLineMarker(view: EditorView, marker: string): boolean {
-    const line = view.state.doc.lineAt(view.state.selection.main.head);
+    const head = view.state.selection.main.head;
+    const line = view.state.doc.lineAt(head);
     const indent = line.text.match(/^\s*/)?.[0] ?? '';
     const taskMatch = line.text.match(MARKER_RE);
     const bulletMatch = line.text.match(/^(\s*)([-*+])\s(.*)$/);
@@ -1778,12 +1780,23 @@ function rewriteLineMarker(view: EditorView, marker: string): boolean {
             // converting a heading to a task/bullet doesn't keep the `#`.
             line.text.trimStart().replace(/^#{1,6}\s+/, '');
 
+    // Keep the caret at its spot WITHIN the body — and when it sat in the
+    // old prefix (start of an empty line being turned into a task), land it
+    // right after the new marker so typing the title needs no extra move.
+    const bodyOffset = Math.max(0, head - (line.to - body.length));
+    const anchor =
+        line.from +
+        indent.length +
+        marker.length +
+        Math.min(bodyOffset, body.length);
+
     view.dispatch({
         changes: {
             from: line.from,
             to: line.to,
             insert: `${indent}${marker}${body}`,
         },
+        selection: { anchor },
     });
 
     return true;
@@ -1812,7 +1825,8 @@ const makeBulletCommand = (view: EditorView): boolean => {
 
 /** Cycle the current line's heading level: none → # → ## → ### → none. */
 const cycleHeadingCommand = (view: EditorView): boolean => {
-    const line = view.state.doc.lineAt(view.state.selection.main.head);
+    const head = view.state.selection.main.head;
+    const line = view.state.doc.lineAt(head);
     const indent = line.text.match(/^\s*/)?.[0] ?? '';
     const rest = line.text.slice(indent.length);
     const level = rest.match(/^(#{1,6})\s/)?.[1].length ?? 0;
@@ -1822,8 +1836,16 @@ const cycleHeadingCommand = (view: EditorView): boolean => {
         .replace(/^[-*+]\s/, '');
     const prefix = level === 0 ? '# ' : level === 1 ? '## ' : level === 2 ? '### ' : '';
 
+    const bodyOffset = Math.max(0, head - (line.to - body.length));
+    const anchor =
+        line.from +
+        indent.length +
+        prefix.length +
+        Math.min(bodyOffset, body.length);
+
     view.dispatch({
         changes: { from: line.from, to: line.to, insert: `${indent}${prefix}${body}` },
+        selection: { anchor },
     });
 
     return true;
@@ -2808,6 +2830,32 @@ const editorTheme = EditorView.theme({
 /* Assembly                                                            */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Paste-time link niceties: a URL pasted over selected text becomes
+ * `[selection](url)`, and bare URLs from known services (ClickUp) get
+ * readable titles (see lib/pasteLinks).
+ */
+const linkPasteHandlers = EditorView.domEventHandlers({
+    paste(event, view) {
+        const pasted = event.clipboardData?.getData('text/plain') ?? '';
+        const range = view.state.selection.main;
+        const selection = view.state.sliceDoc(range.from, range.to);
+        const insert = pasteAsMarkdownLink(pasted, selection);
+
+        if (insert === null) {
+            return false;
+        }
+
+        event.preventDefault();
+        view.dispatch({
+            changes: { from: range.from, to: range.to, insert },
+            selection: { anchor: range.from + insert.length },
+        });
+
+        return true;
+    },
+});
+
 /** Leading indent + list/task/quote marker of a line (the hanging prefix). */
 const HANGING_PREFIX_RE = /^(\s*)(?:[-+*] \[.\] |[-+*] |> |\d+[.)] )?/;
 
@@ -3021,6 +3069,7 @@ export function donoteMarkdown(callbacks: EditorCallbacks): Extension {
         }),
         EditorView.lineWrapping,
         hangingIndents,
+        linkPasteHandlers,
         editorTheme,
         keymap.of([
             {
