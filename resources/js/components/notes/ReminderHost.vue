@@ -164,7 +164,7 @@ onBeforeUnmount(() => {
     <Teleport to="body">
         <div
             v-if="active.length > 0"
-            class="fixed right-4 bottom-4 z-50 flex w-80 flex-col gap-2"
+            class="fixed bottom-[calc(1rem+var(--bottom-chrome,0px))] left-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
         >
             <div
                 v-for="candidate in active"
