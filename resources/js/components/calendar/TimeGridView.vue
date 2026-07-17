@@ -55,6 +55,30 @@ function isStripped(event: GridEvent): boolean {
 }
 
 /** RSVP-derived styling: dim declined, soften tentative, outline pending. */
+/** Fill = the event's custom color when set, else its calendar's color. */
+function fillOf(event: CalendarEvent): string | null {
+    return event.eventColor ?? event.color;
+}
+
+/**
+ * Google's idiom for custom-colored events: the block fills with the event
+ * color and keeps a calendar-colored left edge, so the source calendar
+ * stays readable at a glance.
+ */
+function eventStyles(event: CalendarEvent): Record<string, string> {
+    const fill = fillOf(event) ?? 'var(--primary)';
+    const styles: Record<string, string> = {
+        backgroundColor: fill,
+        color: readableTextColor(fillOf(event)),
+    };
+
+    if (event.eventColor && event.color && event.eventColor !== event.color) {
+        styles.borderLeft = `3px solid ${event.color}`;
+    }
+
+    return styles;
+}
+
 function rsvpClass(event: GridEvent): string {
     switch (event.responseStatus) {
         case 'declined':
@@ -287,10 +311,7 @@ onMounted(() => {
                             rsvpClass(event),
                         )
                     "
-                    :style="{
-                        backgroundColor: event.color ?? 'var(--primary)',
-                        color: readableTextColor(event.color),
-                    }"
+                    :style="eventStyles(event)"
                     @click="emit('open-event', event)"
                 >
                     {{ event.title }}
@@ -374,7 +395,8 @@ onMounted(() => {
                             top: `${strip.top}px`,
                             height: `${strip.height}px`,
                             left: `${strip.offset * 5}px`,
-                            backgroundColor: strip.event.color ?? 'var(--primary)',
+                            backgroundColor:
+                                fillOf(strip.event) ?? 'var(--primary)',
                         }"
                         :title="strip.event.title"
                         @click="emit('open-event', strip.event)"
@@ -395,8 +417,7 @@ onMounted(() => {
                             height: `${pos.height}px`,
                             left: `calc(${pos.leftPct}% + 1px)`,
                             width: `calc(${pos.widthPct}% - 2px)`,
-                            backgroundColor: pos.event.color ?? 'var(--primary)',
-                            color: readableTextColor(pos.event.color),
+                            ...eventStyles(pos.event),
                         }"
                         @click="emit('open-event', pos.event)"
                     >

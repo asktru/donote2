@@ -51,6 +51,7 @@ interface GoogleEvent {
     location: string | null;
     html_link: string | null;
     color: string | null;
+    event_color?: string | null;
     all_day: boolean;
     start: string | null;
     end: string | null;
@@ -131,7 +132,7 @@ async function loadGoogle(): Promise<void> {
         source: 'google' as const,
         title: event.summary,
         location: event.location,
-        color: event.color,
+        color: event.event_color ?? event.color,
         allDay: event.all_day,
         start: event.start,
         end: event.end,

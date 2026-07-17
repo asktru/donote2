@@ -136,7 +136,10 @@ const cells = computed(() =>
                     >
                         <span
                             class="size-1.5 shrink-0 rounded-full"
-                            :style="{ backgroundColor: event.color ?? 'var(--primary)' }"
+                            :style="{
+                                backgroundColor:
+                                    event.eventColor ?? event.color ?? 'var(--primary)',
+                            }"
                         />
                         <span class="truncate">{{ event.title }}</span>
                     </button>

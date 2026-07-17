@@ -83,6 +83,7 @@ test('events are fetched from selected calendars only and normalized', function 
                     'id' => 'evt-1',
                     'summary' => 'Preply lesson - Elamine M.',
                     'status' => 'confirmed',
+                    'colorId' => '11',
                     'start' => ['dateTime' => '2026-07-11T07:00:00+02:00'],
                     'end' => ['dateTime' => '2026-07-11T08:00:00+02:00'],
                 ],
@@ -106,7 +107,11 @@ test('events are fetched from selected calendars only and normalized', function 
 
     expect($response->json('events'))->toHaveCount(2)
         ->and($response->json('events.0.all_day'))->toBeTrue()
-        ->and($response->json('events.1.summary'))->toBe('Preply lesson - Elamine M.');
+        ->and($response->json('events.1.summary'))->toBe('Preply lesson - Elamine M.')
+        // A custom event color (colorId 11 = Tomato) rides along; events
+        // without one fall back to the calendar color (event_color null).
+        ->and($response->json('events.1.event_color'))->toBe('#D50000')
+        ->and($response->json('events.0.event_color'))->toBeNull();
 
     Http::assertNotSent(fn ($request) => str_contains($request->url(), 'work%40group.calendar.google.com'));
 });

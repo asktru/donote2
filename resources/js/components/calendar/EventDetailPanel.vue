@@ -100,7 +100,12 @@ const RSVP_CLASS: Record<RsvpStatus, string> = {
             <header class="flex items-start gap-2 border-b border-border/60 p-4">
                 <span
                     class="mt-1.5 size-3 shrink-0 rounded-full"
-                    :style="{ backgroundColor: selectedEvent.color ?? 'var(--primary)' }"
+                    :style="{
+                        backgroundColor:
+                            selectedEvent.eventColor ??
+                            selectedEvent.color ??
+                            'var(--primary)',
+                    }"
                 />
                 <h2 class="min-w-0 flex-1 text-lg leading-snug font-semibold">
                     {{ selectedEvent.title }}

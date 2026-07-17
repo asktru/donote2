@@ -12,6 +12,29 @@ use Illuminate\Support\Facades\Http;
 class FetchGoogleEvents
 {
     /**
+     * Google's fixed per-event palette (event.colorId 1–11), in the modern
+     * hues the Calendar UI itself renders. Events without a custom color
+     * carry no colorId and fall back to their calendar's color. (The API
+     * sends colorId as a string; PHP coerces the numeric keys to ints, and
+     * numeric-string lookups coerce the same way.)
+     *
+     * @var array<int, string>
+     */
+    public const EVENT_COLORS = [
+        '1' => '#7986CB',  // Lavender
+        '2' => '#33B679',  // Sage
+        '3' => '#8E24AA',  // Grape
+        '4' => '#E67C73',  // Flamingo
+        '5' => '#F6BF26',  // Banana
+        '6' => '#F4511E',  // Tangerine
+        '7' => '#039BE5',  // Peacock
+        '8' => '#616161',  // Graphite
+        '9' => '#3F51B5',  // Blueberry
+        '10' => '#0B8043', // Basil
+        '11' => '#D50000', // Tomato
+    ];
+
+    /**
      * Fetch events for the given range across all of the user's Google accounts.
      *
      * @return array<int, array<string, mixed>>
@@ -101,6 +124,7 @@ class FetchGoogleEvents
             'html_link' => $item['htmlLink'] ?? null,
             'hangout_link' => $item['hangoutLink'] ?? null,
             'color' => $calendar['color'] ?? null,
+            'event_color' => self::EVENT_COLORS[$item['colorId'] ?? ''] ?? null,
             'all_day' => $allDay,
             'start' => $allDay ? $item['start']['date'] : ($item['start']['dateTime'] ?? null),
             'end' => $allDay ? $item['end']['date'] : ($item['end']['dateTime'] ?? null),

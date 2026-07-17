@@ -28,6 +28,8 @@ export interface CalendarEvent {
     description: string | null;
     location: string | null;
     color: string | null;
+    /** A per-event custom color (Google's event palette); null = calendar's. */
+    eventColor: string | null;
     allDay: boolean;
     /** ISO start; for all-day events a bare YYYY-MM-DD. */
     start: string;
@@ -53,6 +55,7 @@ interface GoogleEventDto {
     html_link: string | null;
     hangout_link: string | null;
     color: string | null;
+    event_color?: string | null;
     all_day: boolean;
     start: string | null;
     end: string | null;
@@ -177,6 +180,7 @@ function mapGoogle(dto: GoogleEventDto): CalendarEvent | null {
         description: dto.description,
         location: dto.location,
         color: dto.color,
+        eventColor: dto.event_color ?? null,
         allDay: dto.all_day,
         start: dto.start,
         end: dto.end,
@@ -214,6 +218,7 @@ async function fetchApple(startIso: string, endIso: string): Promise<CalendarEve
             description: null,
             location: event.location,
             color: colorById.get(event.calendarId) ?? null,
+            eventColor: null,
             allDay: event.allDay,
             start: event.start,
             end: event.end,
