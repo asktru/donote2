@@ -1,15 +1,27 @@
 <script setup lang="ts">
-import { FileOutput, FilePlus, FileText, History, Search } from '@lucide/vue';
+import {
+    AtSign,
+    CalendarDays,
+    FileOutput,
+    FilePlus,
+    FileText,
+    Hash,
+    History,
+    Search,
+} from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { humanizeKey } from '@/core/dates';
+import { parseNaturalDate } from '@/core/parseNaturalDate';
 import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { LocalNote } from '@/stores/db';
 import { cancelMove, completeMoveToNote, pendingMove } from '@/stores/move';
-import { searchOpen } from '@/stores/ui';
+import { openMentionView, openTagView, searchOpen } from '@/stores/ui';
 import {
+    allMentions,
+    allTags,
     createNote,
     findCalendarNote,
     getNote,
@@ -174,6 +186,77 @@ const displayRows = computed<ResultRow[]>(() =>
     showingHistory.value ? historyRows.value : rows.value,
 );
 
+/**
+ * Direct jumps for the query: a calendar period (natural language or a
+ * date key — "tomorrow", "aug 12", "2026-W30", "q4"), and matching tags/
+ * mentions. Prefixing with # or @ narrows to that token kind.
+ */
+type JumpRow =
+    | { kind: 'period'; dateKey: string; label: string }
+    | { kind: 'tag'; token: string }
+    | { kind: 'mention'; token: string };
+
+const jumpRows = computed<JumpRow[]>(() => {
+    const needle = query.value.trim();
+
+    if (needle === '' || pendingMove.value) {
+        return [];
+    }
+
+    const jumps: JumpRow[] = [];
+    const dateKey = parseNaturalDate(needle);
+
+    if (dateKey !== null) {
+        jumps.push({
+            kind: 'period',
+            dateKey,
+            label: humanizeKey(dateKey),
+        });
+    }
+
+    const token = needle.replace(/^[#@]/, '').toLowerCase();
+
+    if (token !== '') {
+        if (!needle.startsWith('@')) {
+            for (const tag of allTags.value) {
+                if (tag.toLowerCase().includes(token)) {
+                    jumps.push({ kind: 'tag', token: tag });
+                }
+
+                if (jumps.length >= 7) {
+                    break;
+                }
+            }
+        }
+
+        if (!needle.startsWith('#')) {
+            for (const mention of allMentions.value) {
+                if (mention.toLowerCase().includes(token)) {
+                    jumps.push({ kind: 'mention', token: mention });
+                }
+
+                if (jumps.length >= 7) {
+                    break;
+                }
+            }
+        }
+    }
+
+    return jumps.slice(0, 7);
+});
+
+function pickJump(row: JumpRow): void {
+    if (row.kind === 'period') {
+        emit('open-calendar', row.dateKey);
+    } else if (row.kind === 'tag') {
+        openTagView(row.token);
+    } else {
+        openMentionView(row.token);
+    }
+
+    searchOpen.value = false;
+}
+
 const showCreate = computed(() => query.value.trim() !== '');
 
 function pick(row: ResultRow): void {
@@ -208,7 +291,9 @@ async function createFromQuery(): Promise<void> {
 }
 
 function onKeydown(event: KeyboardEvent): void {
-    const total = displayRows.value.length + (showCreate.value ? 1 : 0);
+    const jumps = jumpRows.value.length;
+    const total =
+        jumps + displayRows.value.length + (showCreate.value ? 1 : 0);
 
     if (event.key === 'ArrowDown') {
         highlighted.value = (highlighted.value + 1) % Math.max(total, 1);
@@ -220,8 +305,10 @@ function onKeydown(event: KeyboardEvent): void {
     } else if (event.key === 'Enter') {
         event.preventDefault();
 
-        if (highlighted.value < displayRows.value.length) {
-            const row = displayRows.value[highlighted.value];
+        if (highlighted.value < jumps) {
+            pickJump(jumpRows.value[highlighted.value]);
+        } else if (highlighted.value - jumps < displayRows.value.length) {
+            const row = displayRows.value[highlighted.value - jumps];
 
             if (row) {
                 pick(row);
@@ -267,6 +354,47 @@ function onKeydown(event: KeyboardEvent): void {
             </div>
 
             <div class="max-h-80 overflow-y-auto p-1.5">
+                <button
+                    v-for="(jump, index) in jumpRows"
+                    :key="`jump:${jump.kind}:${'dateKey' in jump ? jump.dateKey : jump.token}`"
+                    type="button"
+                    :class="
+                        cn(
+                            'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm',
+                            index === highlighted
+                                ? 'bg-muted'
+                                : 'hover:bg-muted/60',
+                        )
+                    "
+                    @mouseenter="highlighted = index"
+                    @click="pickJump(jump)"
+                >
+                    <CalendarDays
+                        v-if="jump.kind === 'period'"
+                        class="size-4 shrink-0 text-primary"
+                    />
+                    <Hash
+                        v-else-if="jump.kind === 'tag'"
+                        class="size-4 shrink-0 text-[var(--token-tag)]"
+                    />
+                    <AtSign
+                        v-else
+                        class="size-4 shrink-0 text-[var(--token-mention)]"
+                    />
+                    <span class="truncate font-medium">
+                        {{ jump.kind === 'period' ? jump.label : jump.token }}
+                    </span>
+                    <span class="ml-auto text-xs text-muted-foreground">
+                        {{
+                            jump.kind === 'period'
+                                ? 'Open period'
+                                : jump.kind === 'tag'
+                                  ? 'Tag'
+                                  : 'Mention'
+                        }}
+                    </span>
+                </button>
+
                 <p
                     v-if="showingHistory && displayRows.length > 0"
                     class="flex items-center gap-1.5 px-2.5 pt-1 pb-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
@@ -280,12 +408,12 @@ function onKeydown(event: KeyboardEvent): void {
                     :class="
                         cn(
                             'flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left',
-                            index === highlighted
+                            jumpRows.length + index === highlighted
                                 ? 'bg-muted'
                                 : 'hover:bg-muted/60',
                         )
                     "
-                    @mouseenter="highlighted = index"
+                    @mouseenter="highlighted = jumpRows.length + index"
                     @click="pick(row)"
                 >
                     <FileText
@@ -311,12 +439,12 @@ function onKeydown(event: KeyboardEvent): void {
                     :class="
                         cn(
                             'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm',
-                            highlighted === displayRows.length
+                            highlighted === jumpRows.length + displayRows.length
                                 ? 'bg-muted'
                                 : 'hover:bg-muted/60',
                         )
                     "
-                    @mouseenter="highlighted = displayRows.length"
+                    @mouseenter="highlighted = jumpRows.length + displayRows.length"
                     @click="createFromQuery"
                 >
                     <FilePlus class="size-4 shrink-0 text-primary" />

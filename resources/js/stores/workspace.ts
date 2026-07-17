@@ -587,35 +587,76 @@ export const workspaceTasks = computed<WorkspaceTask[]>(() => {
     return tasks;
 });
 
-/** Tag -> occurrence count across live notes. */
-export const tagCounts = computed<Map<string, number>>(() => {
+/** Whether a parsed line is an incomplete task/checklist item. */
+function isOpenItem(line: ParsedLine): boolean {
+    return (
+        (line.kind === 'task' || line.kind === 'checklist') &&
+        line.state !== 'done' &&
+        line.state !== 'cancelled'
+    );
+}
+
+/**
+ * Open-item counts per token, alphabetical. Only incomplete tasks/checklists
+ * count, so completing work updates the sidebar immediately and tokens with
+ * nothing left to do (including NotePlan's @done bookkeeping mention, which
+ * only ever appears on completed lines) drop out of the sidebar entirely.
+ * Every token — prose-only ones included — stays reachable through ⌘K.
+ */
+function openItemCounts(
+    extract: (line: ParsedLine) => string[],
+): Map<string, number> {
     const counts = new Map<string, number>();
 
     for (const note of liveNotes.value) {
         for (const line of parsedNote(note.id)) {
-            for (const tag of line.tags) {
-                counts.set(tag, (counts.get(tag) ?? 0) + 1);
+            if (!isOpenItem(line)) {
+                continue;
+            }
+
+            for (const token of extract(line)) {
+                counts.set(token, (counts.get(token) ?? 0) + 1);
             }
         }
     }
 
-    return new Map([...counts.entries()].sort((a, b) => b[1] - a[1]));
-});
+    return new Map(
+        [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+    );
+}
 
-/** Mention -> occurrence count across live notes. */
-export const mentionCounts = computed<Map<string, number>>(() => {
-    const counts = new Map<string, number>();
+/** Every distinct token across live notes (any line kind), alphabetical. */
+function allTokens(extract: (line: ParsedLine) => string[]): string[] {
+    const tokens = new Set<string>();
 
     for (const note of liveNotes.value) {
         for (const line of parsedNote(note.id)) {
-            for (const mention of line.mentions) {
-                counts.set(mention, (counts.get(mention) ?? 0) + 1);
+            for (const token of extract(line)) {
+                tokens.add(token);
             }
         }
     }
 
-    return new Map([...counts.entries()].sort((a, b) => b[1] - a[1]));
-});
+    return [...tokens].sort((a, b) => a.localeCompare(b));
+}
+
+/** Tag -> open-item count (sidebar). */
+export const tagCounts = computed<Map<string, number>>(() =>
+    openItemCounts((line) => line.tags),
+);
+
+/** Mention -> open-item count (sidebar). */
+export const mentionCounts = computed<Map<string, number>>(() =>
+    openItemCounts((line) => line.mentions),
+);
+
+/** Every tag in the workspace, for search/jump (prose-only ones included). */
+export const allTags = computed<string[]>(() => allTokens((line) => line.tags));
+
+/** Every mention in the workspace, for search/jump. */
+export const allMentions = computed<string[]>(() =>
+    allTokens((line) => line.mentions),
+);
 
 /** The effective daily key a task belongs to (schedule, else its daily note's day). */
 export function taskDayKey(task: WorkspaceTask): string | null {
