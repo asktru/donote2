@@ -189,9 +189,22 @@ class DonoteTabBarController: UITabBarController, UITabBarControllerDelegate {
 
         sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
 
-        // iPad presents action sheets as popovers and needs an anchor.
+        // Anchor the popover to the Team button itself (the right-most tab
+        // control), not the whole bar — otherwise the arrow points at
+        // whichever tab happens to sit at the bar's center.
+        let teamButton = tabBar.subviews
+            .filter { $0 is UIControl }
+            .max(by: { $0.frame.minX < $1.frame.minX })
+
         sheet.popoverPresentationController?.sourceView = tabBar
-        sheet.popoverPresentationController?.sourceRect = tabBar.bounds
+        sheet.popoverPresentationController?.sourceRect = teamButton?.frame
+            ?? CGRect(
+                x: tabBar.bounds.maxX - 44,
+                y: 0,
+                width: 44,
+                height: tabBar.bounds.height
+            )
+        sheet.popoverPresentationController?.permittedArrowDirections = .down
 
         present(sheet, animated: true)
     }
