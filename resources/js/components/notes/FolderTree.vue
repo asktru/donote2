@@ -34,10 +34,12 @@ import {
 } from '@/components/ui/context-menu';
 import { daysUntil, startsInFuture } from '@/core/frontmatter';
 import type { NoteKind, NoteMeta } from '@/core/frontmatter';
+import { isTemplateNote } from '@/lib/noteTemplates';
 import { acceptTreeDrop, TREE_DND_MIME } from '@/lib/treeDnd';
 import { cn } from '@/lib/utils';
 import type { LocalNote } from '@/stores/db';
 import { promptText } from '@/stores/prompt';
+import { openTemplateDialog } from '@/stores/templateDialog';
 import { expandedFolders, expandFolder, toggleFolder } from '@/stores/ui';
 import {
     createFolder,
@@ -433,6 +435,13 @@ async function onDrop(event: DragEvent): Promise<void> {
                     </button>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
+                    <ContextMenuItem
+                        v-if="isTemplateNote(note)"
+                        @select="openTemplateDialog(note.id)"
+                    >
+                        <FilePlus /> New note from template…
+                    </ContextMenuItem>
+                    <ContextMenuSeparator v-if="isTemplateNote(note)" />
                     <ContextMenuItem
                         @select="emit('open-note', note.id, false)"
                     >

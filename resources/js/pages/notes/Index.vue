@@ -23,6 +23,7 @@ import ShortcutsDialog from '@/components/notes/ShortcutsDialog.vue';
 import SyncedLineLocations from '@/components/notes/SyncedLineLocations.vue';
 import SyncPanel from '@/components/notes/SyncPanel.vue';
 import TasksView from '@/components/notes/TasksView.vue';
+import TemplateDialog from '@/components/notes/TemplateDialog.vue';
 import TrashView from '@/components/notes/TrashView.vue';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Toaster } from '@/components/ui/sonner';
@@ -591,6 +592,7 @@ onBeforeUnmount(() => {
                 <SyncPanel />
                 <DatePickerDialog />
                 <AiPromptDialog />
+                <TemplateDialog @open-note="(id) => handleOpenNote(id)" />
                 <ImageLightbox />
                 <FilePreview />
                 <SyncedLineLocations />
