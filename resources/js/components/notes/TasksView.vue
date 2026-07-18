@@ -14,7 +14,12 @@ import {
 } from '@/core/dates';
 import { priorityColor } from '@/core/priority';
 import { cn } from '@/lib/utils';
-import { toggleTaskLine, workspaceTasks, taskDayKey } from '@/stores/workspace';
+import {
+    isArchivedNote,
+    toggleTaskLine,
+    workspaceTasks,
+    taskDayKey,
+} from '@/stores/workspace';
 import type { WorkspaceTask } from '@/stores/workspace';
 
 /**
@@ -54,6 +59,7 @@ const emit = defineEmits<{
 }>();
 
 const includeChecklists = ref(false);
+const includeArchive = ref(false);
 const showCompleted = ref(false);
 const priorityOnly = ref(false);
 const selectedTag = ref<string | null>(props.filterTag ?? null);
@@ -76,6 +82,11 @@ const filtered = computed<WorkspaceTask[]>(() =>
         // Checklists appear only via the explicit "+ Checklists" toggle —
         // including in tag/mention views, which used to bypass the gate.
         if (task.line.kind === 'checklist' && !includeChecklists.value) {
+            return false;
+        }
+
+        // Archived work is dormant — hidden unless explicitly included.
+        if (!includeArchive.value && isArchivedNote(task.note)) {
             return false;
         }
 
@@ -109,6 +120,10 @@ const availableTags = computed(() => {
     const tags = new Set<string>();
 
     for (const task of workspaceTasks.value) {
+        if (!includeArchive.value && isArchivedNote(task.note)) {
+            continue;
+        }
+
         for (const tag of task.line.tags) {
             tags.add(tag);
         }
@@ -225,7 +240,15 @@ function dueLabel(task: WorkspaceTask): string | null {
                     class="h-7 px-2 text-xs"
                     @click="showCompleted = !showCompleted"
                 >
-                    Done
+                    + Done
+                </Button>
+                <Button
+                    :variant="includeArchive ? 'secondary' : 'ghost'"
+                    size="sm"
+                    class="h-7 px-2 text-xs"
+                    @click="includeArchive = !includeArchive"
+                >
+                    + Archive
                 </Button>
                 <Button
                     v-if="isSplit"

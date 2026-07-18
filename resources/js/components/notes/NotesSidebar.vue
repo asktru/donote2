@@ -65,9 +65,11 @@ import {
 import type { MainView } from '@/stores/ui';
 import { isSectionCollapsed, toggleSection } from '@/stores/uiSections';
 import {
+    ARCHIVE_FOLDER,
     createFolder,
     createNote,
     folders,
+    isArchivedFolder,
     markReviewed,
     mentionCounts,
     noteMetaFor,
@@ -86,6 +88,15 @@ const calendarHref = computed<string | null>(() => {
 
     return slug ? `/${slug}/calendar` : null;
 });
+
+/** The main tree hides @Archive — it gets its own section above Trash. */
+const mainFolders = computed(() =>
+    folders.value.filter((folder) => !isArchivedFolder(folder)),
+);
+
+const hasArchive = computed(() =>
+    folders.value.some((folder) => isArchivedFolder(folder)),
+);
 
 const REVIEW_ICONS: Record<NoteKind, typeof Target> = {
     project: Target,
@@ -437,7 +448,7 @@ const syncLabel = computed(() => {
                 <FolderTree
                     path=""
                     :depth="0"
-                    :folders="folders"
+                    :folders="mainFolders"
                     :notes="ownNotes"
                     :active-note-id="activeNoteId"
                     @open-note="(id, split) => openNote(id, { split })"
@@ -474,6 +485,16 @@ const syncLabel = computed(() => {
                             >view</span
                         >
                     </button>
+                </div>
+                <div v-if="hasArchive" class="mt-1">
+                    <FolderTree
+                        :path="ARCHIVE_FOLDER"
+                        :depth="0"
+                        :folders="folders"
+                        :notes="ownNotes"
+                        :active-note-id="activeNoteId"
+                        @open-note="(id, split) => openNote(id, { split })"
+                    />
                 </div>
                 <button
                     v-if="trashedNotes.length > 0"

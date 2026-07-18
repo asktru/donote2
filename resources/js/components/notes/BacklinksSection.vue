@@ -1,6 +1,14 @@
 <script setup lang="ts">
-import { ChevronRight, FileText, Layers, ListTodo, Sparkles, Target } from '@lucide/vue';
-import { computed } from 'vue';
+import {
+    Archive,
+    ChevronRight,
+    FileText,
+    Layers,
+    ListTodo,
+    Sparkles,
+    Target,
+} from '@lucide/vue';
+import { computed, ref } from 'vue';
 
 import TaskTitle from '@/components/notes/TaskTitle.vue';
 import { humanizeKey } from '@/core/dates';
@@ -10,7 +18,12 @@ import type { ParsedLine } from '@/core/parser';
 import { cn } from '@/lib/utils';
 import type { LocalNote } from '@/stores/db';
 import { isSectionCollapsed, toggleSection } from '@/stores/uiSections';
-import { backlinksTo, noteMetaFor, parsedNote } from '@/stores/workspace';
+import {
+    backlinksTo,
+    isArchivedNote,
+    noteMetaFor,
+    parsedNote,
+} from '@/stores/workspace';
 
 const props = defineProps<{
     noteId: string | null;
@@ -41,7 +54,34 @@ interface ReferenceGroup {
     blocks: ReferenceBlock[];
 }
 
-const groups = computed<ReferenceGroup[]>(() => {
+/**
+ * Unlike the task/reminder views, references INCLUDE archived notes by
+ * default — a meeting series lives on in @Archive and its backlinks are
+ * the whole point. A single global preference can hide them.
+ */
+const ARCHIVE_PREF_KEY = 'donote:backlinks-include-archive';
+
+function readArchivePref(): boolean {
+    try {
+        return localStorage.getItem(ARCHIVE_PREF_KEY) !== '0';
+    } catch {
+        return true;
+    }
+}
+
+const includeArchive = ref(readArchivePref());
+
+function toggleArchivePref(): void {
+    includeArchive.value = !includeArchive.value;
+
+    try {
+        localStorage.setItem(ARCHIVE_PREF_KEY, includeArchive.value ? '1' : '0');
+    } catch {
+        // Preference just won't survive the session.
+    }
+}
+
+const allGroups = computed<ReferenceGroup[]>(() => {
     if (props.noteId === null) {
         return [];
     }
@@ -65,6 +105,17 @@ const groups = computed<ReferenceGroup[]>(() => {
         };
     });
 });
+
+const groups = computed<ReferenceGroup[]>(() =>
+    includeArchive.value
+        ? allGroups.value
+        : allGroups.value.filter((group) => !isArchivedNote(group.note)),
+);
+
+/** Whether any reference comes from @Archive — drives the toggle. */
+const hasArchived = computed(() =>
+    allGroups.value.some((group) => isArchivedNote(group.note)),
+);
 
 const total = computed(() =>
     groups.value.reduce((sum, group) => sum + group.blocks.length, 0),
@@ -109,24 +160,47 @@ function displayText(line: ParsedLine): string {
 
 <template>
     <section
-        v-if="total > 0"
+        v-if="total > 0 || hasArchived"
         class="mt-8 border-t border-border/60 bg-muted/10"
     >
-        <button
-            type="button"
-            class="flex w-full items-center gap-1.5 px-4 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground"
-            @click="toggleSection('reference')"
-        >
-            <ChevronRight
+        <div class="flex items-center">
+            <button
+                type="button"
+                class="flex min-w-0 flex-1 items-center gap-1.5 px-4 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                @click="toggleSection('reference')"
+            >
+                <ChevronRight
+                    :class="
+                        cn(
+                            'size-3 transition-transform',
+                            !isSectionCollapsed('reference') && 'rotate-90',
+                        )
+                    "
+                />
+                {{ total }} Reference{{ total === 1 ? '' : 's' }}
+            </button>
+            <button
+                v-if="hasArchived"
+                type="button"
                 :class="
                     cn(
-                        'size-3 transition-transform',
-                        !isSectionCollapsed('reference') && 'rotate-90',
+                        'mr-4 flex shrink-0 items-center gap-1 rounded px-1 py-0.5 text-[11px]',
+                        includeArchive
+                            ? 'text-foreground'
+                            : 'text-muted-foreground/70 hover:text-foreground',
                     )
                 "
-            />
-            {{ total }} Reference{{ total === 1 ? '' : 's' }}
-        </button>
+                :title="
+                    includeArchive
+                        ? 'Hide references from the archive'
+                        : 'Show references from the archive'
+                "
+                @click="toggleArchivePref"
+            >
+                <Archive class="size-3" />
+                {{ includeArchive ? 'Archive shown' : 'Archive hidden' }}
+            </button>
+        </div>
 
         <div v-if="!isSectionCollapsed('reference')" class="space-y-4 px-4 pb-4">
             <div v-for="group in groups" :key="group.note.id">

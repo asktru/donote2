@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import {
+    Archive,
+    ArchiveRestore,
     Check,
     ChevronRight,
     Columns2,
@@ -42,10 +44,15 @@ import { promptText } from '@/stores/prompt';
 import { openTemplateDialog } from '@/stores/templateDialog';
 import { expandedFolders, expandFolder, toggleFolder } from '@/stores/ui';
 import {
+    ARCHIVE_FOLDER,
+    archiveFolder,
+    archiveNote,
     createFolder,
     createNote,
     deleteFolder,
     deleteFolderWithNotes,
+    isArchivedFolder,
+    isArchivedNote,
     notesInFolderTree,
     deleteNote,
     duplicateNote,
@@ -57,6 +64,8 @@ import {
     renameNote,
     setNotePinned,
     setNoteType,
+    unarchiveFolder,
+    unarchiveNote,
 } from '@/stores/workspace';
 
 const props = defineProps<{
@@ -74,7 +83,17 @@ const emit = defineEmits<{
 const expanded = computed(() => expandedFolders.value.has(props.path));
 const dropTarget = ref(false);
 
-const label = computed(() => props.path.split('/').pop() ?? props.path);
+/** The @Archive root gets its own icon and a friendlier label. */
+const isArchiveRoot = computed(() => props.path === ARCHIVE_FOLDER);
+const inArchive = computed(
+    () => !isArchiveRoot.value && isArchivedFolder(props.path),
+);
+
+const label = computed(() =>
+    isArchiveRoot.value
+        ? 'Archive'
+        : (props.path.split('/').pop() ?? props.path),
+);
 
 const childFolders = computed(() =>
     props.folders.filter((folder) => {
@@ -323,7 +342,10 @@ async function onDrop(event: DragEvent): Promise<void> {
                             )
                         "
                     />
-                    <Folder class="size-4 shrink-0 text-muted-foreground" />
+                    <component
+                        :is="isArchiveRoot ? Archive : Folder"
+                        class="size-4 shrink-0 text-muted-foreground"
+                    />
                     <span class="truncate">{{ label }}</span>
                 </button>
             </ContextMenuTrigger>
@@ -334,22 +356,34 @@ async function onDrop(event: DragEvent): Promise<void> {
                 <ContextMenuItem @select="newSubfolder">
                     <FolderPlus /> New subfolder…
                 </ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem @select="renameThisFolder">
-                    <Pencil /> Rename…
-                </ContextMenuItem>
-                <ContextMenuItem
-                    variant="destructive"
-                    @select="deleteThisFolder"
-                >
-                    <Trash2 /> Delete folder (keep notes)
-                </ContextMenuItem>
-                <ContextMenuItem
-                    variant="destructive"
-                    @select="deleteThisFolderWithNotes"
-                >
-                    <Trash2 /> Delete folder and notes…
-                </ContextMenuItem>
+                <!-- @Archive itself can't be renamed, archived or deleted. -->
+                <template v-if="!isArchiveRoot">
+                    <ContextMenuSeparator />
+                    <ContextMenuItem @select="renameThisFolder">
+                        <Pencil /> Rename…
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                        v-if="inArchive"
+                        @select="unarchiveFolder(path)"
+                    >
+                        <ArchiveRestore /> Unarchive folder
+                    </ContextMenuItem>
+                    <ContextMenuItem v-else @select="archiveFolder(path)">
+                        <Archive /> Archive folder
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                        variant="destructive"
+                        @select="deleteThisFolder"
+                    >
+                        <Trash2 /> Delete folder (keep notes)
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                        variant="destructive"
+                        @select="deleteThisFolderWithNotes"
+                    >
+                        <Trash2 /> Delete folder and notes…
+                    </ContextMenuItem>
+                </template>
             </ContextMenuContent>
         </ContextMenu>
 
@@ -469,6 +503,15 @@ async function onDrop(event: DragEvent): Promise<void> {
                     </ContextMenuItem>
                     <ContextMenuItem @select="duplicateNoteAction(note)">
                         <Copy /> Duplicate
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                        v-if="isArchivedNote(note)"
+                        @select="unarchiveNote(note.id)"
+                    >
+                        <ArchiveRestore /> Unarchive
+                    </ContextMenuItem>
+                    <ContextMenuItem v-else @select="archiveNote(note.id)">
+                        <Archive /> Archive
                     </ContextMenuItem>
                     <ContextMenuSub>
                         <ContextMenuSubTrigger>

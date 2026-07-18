@@ -16,6 +16,7 @@ import { parseNote } from '@/core/parser';
 import type { ParsedLine } from '@/core/parser';
 import { applySyncedLine, changedSyncedLines } from '@/core/syncedLines';
 import { buildAgendaAppendix } from '@/lib/agenda';
+import { apiFetch } from '@/lib/api';
 import type { NoteAccess } from '@/lib/noteAccess';
 import { openWorkspaceDb } from '@/stores/db';
 import type { LocalNote, WorkspaceDb } from '@/stores/db';
@@ -224,6 +225,23 @@ export const trashedNotes = computed<LocalNote[]>(() =>
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
 );
 
+/**
+ * The special long-term storage folder. Unlike trash, archived content is
+ * kept indefinitely — it just stops showing up in active views (tasks,
+ * reminders, tag/mention counts) unless explicitly included.
+ */
+export const ARCHIVE_FOLDER = '@Archive';
+
+export function isArchivedFolder(folder: string): boolean {
+    return (
+        folder === ARCHIVE_FOLDER || folder.startsWith(`${ARCHIVE_FOLDER}/`)
+    );
+}
+
+export function isArchivedNote(note: { folder: string }): boolean {
+    return isArchivedFolder(note.folder);
+}
+
 export const pinnedNotes = computed<LocalNote[]>(() =>
     regularNotes.value.filter((note) => note.pinned === 1),
 );
@@ -406,6 +424,84 @@ export async function deleteNote(id: string): Promise<void> {
 /** Bring a trashed note back (its folder reappears implicitly). */
 export async function restoreNote(id: string): Promise<void> {
     await mutate(id, { deleted: 0 });
+}
+
+/**
+ * Move a note into @Archive, preserving its original folder path so
+ * unarchiving can put it back where it came from.
+ */
+export async function archiveNote(id: string): Promise<void> {
+    const note = notes.get(id);
+
+    if (!note || isArchivedFolder(note.folder)) {
+        return;
+    }
+
+    await mutate(id, {
+        folder:
+            note.folder === ''
+                ? ARCHIVE_FOLDER
+                : `${ARCHIVE_FOLDER}/${note.folder}`,
+    });
+}
+
+/** Move an archived note back to its pre-archive folder. */
+export async function unarchiveNote(id: string): Promise<void> {
+    const note = notes.get(id);
+
+    if (!note || !isArchivedFolder(note.folder)) {
+        return;
+    }
+
+    await mutate(id, {
+        folder:
+            note.folder === ARCHIVE_FOLDER
+                ? ''
+                : note.folder.slice(ARCHIVE_FOLDER.length + 1),
+    });
+}
+
+/** Archive a whole folder subtree (notes and subfolders travel along). */
+export async function archiveFolder(path: string): Promise<void> {
+    if (path === '' || isArchivedFolder(path)) {
+        return;
+    }
+
+    await renameFolder(path, `${ARCHIVE_FOLDER}/${path}`);
+}
+
+/** Move an archived folder subtree back to its pre-archive path. */
+export async function unarchiveFolder(path: string): Promise<void> {
+    if (!path.startsWith(`${ARCHIVE_FOLDER}/`)) {
+        return;
+    }
+
+    await renameFolder(path, path.slice(ARCHIVE_FOLDER.length + 1));
+}
+
+/**
+ * Permanently delete trashed notes — server first (the row is gone for
+ * good), then the local copies. Only reachable from the Trash view.
+ */
+export async function purgeNotes(ids: string[]): Promise<void> {
+    if (ids.length === 0) {
+        return;
+    }
+
+    const config = workspaceConfig();
+
+    if (!config) {
+        return;
+    }
+
+    await apiFetch(`/api/${config.teamSlug}/notes/purge`, {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+    });
+
+    for (const id of ids) {
+        await removeLocalNote(id);
+    }
 }
 
 /**
@@ -609,6 +705,11 @@ function openItemCounts(
     const counts = new Map<string, number>();
 
     for (const note of liveNotes.value) {
+        // Archived work isn't active — it shouldn't inflate the sidebar.
+        if (isArchivedNote(note)) {
+            continue;
+        }
+
         for (const line of parsedNote(note.id)) {
             if (!isOpenItem(line)) {
                 continue;

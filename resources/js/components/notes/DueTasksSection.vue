@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import { ChevronRight } from '@lucide/vue';
+import { Archive, ChevronRight } from '@lucide/vue';
 import { format } from 'date-fns';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 import { humanizeKey, keyRange, keyStartDate, todayDailyKey } from '@/core/dates';
 import { priorityColor } from '@/core/priority';
 import { cn } from '@/lib/utils';
 import { currentView } from '@/stores/ui';
 import { isSectionCollapsed, toggleSection } from '@/stores/uiSections';
-import { taskDayKey, toggleTaskLine, workspaceTasks } from '@/stores/workspace';
+import {
+    isArchivedNote,
+    taskDayKey,
+    toggleTaskLine,
+    workspaceTasks,
+} from '@/stores/workspace';
 import type { WorkspaceTask } from '@/stores/workspace';
 
 /**
@@ -30,7 +35,10 @@ const periodKey = computed(() =>
 
 const periodLabel = computed(() => humanizeKey(periodKey.value));
 
-const dueTasks = computed<WorkspaceTask[]>(() => {
+const includeArchive = ref(false);
+
+/** Every open task landing in the viewed period, archived ones included. */
+const periodTasks = computed<WorkspaceTask[]>(() => {
     const range = keyRange(periodKey.value);
     const start = range.start.getTime();
     const end = range.end.getTime();
@@ -59,6 +67,17 @@ const dueTasks = computed<WorkspaceTask[]>(() => {
         );
 });
 
+const dueTasks = computed<WorkspaceTask[]>(() =>
+    includeArchive.value
+        ? periodTasks.value
+        : periodTasks.value.filter((task) => !isArchivedNote(task.note)),
+);
+
+/** Archived tasks in the period — drives the toggle's visibility. */
+const archivedCount = computed(
+    () => periodTasks.value.filter((task) => isArchivedNote(task.note)).length,
+);
+
 function noteLabel(task: WorkspaceTask): string {
     if (task.note.type !== 'note' && task.note.dateKey !== null) {
         return humanizeKey(task.note.dateKey);
@@ -78,22 +97,44 @@ function dueBadge(task: WorkspaceTask): string | null {
 </script>
 
 <template>
-    <div v-if="dueTasks.length > 0">
-        <button
-            type="button"
-            class="flex w-full items-center gap-1 px-1 pb-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground"
-            @click="toggleSection('tasks')"
-        >
-            <ChevronRight
+    <div v-if="dueTasks.length > 0 || archivedCount > 0">
+        <div class="flex items-center gap-1 pb-1.5">
+            <button
+                type="button"
+                class="flex min-w-0 flex-1 items-center gap-1 px-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground"
+                @click="toggleSection('tasks')"
+            >
+                <ChevronRight
+                    :class="
+                        cn(
+                            'size-3 shrink-0 transition-transform',
+                            !isSectionCollapsed('tasks') && 'rotate-90',
+                        )
+                    "
+                />
+                Tasks · {{ periodLabel }}
+            </button>
+            <button
+                v-if="archivedCount > 0"
+                type="button"
                 :class="
                     cn(
-                        'size-3 shrink-0 transition-transform',
-                        !isSectionCollapsed('tasks') && 'rotate-90',
+                        'flex shrink-0 items-center gap-1 rounded px-1 text-[11px]',
+                        includeArchive
+                            ? 'text-foreground'
+                            : 'text-muted-foreground/70 hover:text-foreground',
                     )
                 "
-            />
-            Tasks · {{ periodLabel }}
-        </button>
+                :title="
+                    includeArchive
+                        ? 'Hide archived tasks'
+                        : `Show ${archivedCount} archived task${archivedCount === 1 ? '' : 's'}`
+                "
+                @click="includeArchive = !includeArchive"
+            >
+                <Archive class="size-3" /> {{ archivedCount }}
+            </button>
+        </div>
         <div v-if="!isSectionCollapsed('tasks')" class="space-y-0.5">
             <div
                 v-for="task in dueTasks"

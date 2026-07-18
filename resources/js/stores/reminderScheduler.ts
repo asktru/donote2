@@ -8,6 +8,7 @@ import type { DesiredNotification } from '@/lib/notifications';
 import { openWorkspaceDb } from '@/stores/db';
 import type { WorkspaceDb } from '@/stores/db';
 import {
+    isArchivedNote,
     liveNotes,
     parsedNote,
     rewriteReminderToken,
@@ -47,6 +48,11 @@ export async function reconcileReminderNotifications(): Promise<void> {
     const desired: DesiredNotification[] = [];
 
     for (const note of liveNotes.value) {
+        // Archived notes are dormant — their reminders never fire.
+        if (isArchivedNote(note)) {
+            continue;
+        }
+
         for (const candidate of reminderCandidates(note.id, parsedNote(note.id))) {
             const fireAt = candidate.at.getTime();
 

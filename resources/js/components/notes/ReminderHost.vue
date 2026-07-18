@@ -15,6 +15,7 @@ import {
 } from '@/stores/reminderScheduler';
 import {
     workspaceConfig,
+    isArchivedNote,
     liveNotes,
     parsedNote,
     rewriteReminderToken,
@@ -39,6 +40,11 @@ async function scan(): Promise<void> {
     const candidates: ReminderCandidate[] = [];
 
     for (const note of liveNotes.value) {
+        // Archived notes are dormant — their reminders never pop up.
+        if (isArchivedNote(note)) {
+            continue;
+        }
+
         candidates.push(...reminderCandidates(note.id, parsedNote(note.id)));
     }
 

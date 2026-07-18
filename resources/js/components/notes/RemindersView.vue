@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { openWorkspaceDb } from '@/stores/db';
 import type { ReminderState, WorkspaceDb } from '@/stores/db';
 import {
+    isArchivedNote,
     liveNotes,
     parsedNote,
     toggleTaskLine,
@@ -41,11 +42,17 @@ async function refreshStates(): Promise<void> {
     states.value = new Map(all.map((entry) => [entry.key, entry]));
 }
 
+const includeArchive = ref(false);
+
 /** All open tasks with a reminder, soonest first. */
 const rows = computed<ReminderCandidate[]>(() => {
     const candidates: ReminderCandidate[] = [];
 
     for (const note of liveNotes.value) {
+        if (!includeArchive.value && isArchivedNote(note)) {
+            continue;
+        }
+
         candidates.push(...reminderCandidates(note.id, parsedNote(note.id)));
     }
 
@@ -194,6 +201,14 @@ onBeforeUnmount(() => {
             <AlarmClock class="size-4 text-muted-foreground" />
             <h1 class="text-base font-semibold">Reminders</h1>
             <span class="text-xs text-muted-foreground">{{ rows.length }}</span>
+            <Button
+                :variant="includeArchive ? 'secondary' : 'ghost'"
+                size="sm"
+                class="ml-auto h-7 px-2 text-xs"
+                @click="includeArchive = !includeArchive"
+            >
+                + Archive
+            </Button>
         </header>
 
         <div class="min-h-0 flex-1 overflow-y-auto px-4 py-3">

@@ -1,16 +1,19 @@
 <script setup lang="ts">
-import { ArchiveRestore, Folder, Trash2 } from '@lucide/vue';
+import { ArchiveRestore, Folder, Trash2, X } from '@lucide/vue';
 import { format } from 'date-fns';
+import { ref } from 'vue';
 
 import MobileSidebarButton from '@/components/notes/MobileSidebarButton.vue';
 import { Button } from '@/components/ui/button';
 import { humanizeKey } from '@/core/dates';
 import type { LocalNote } from '@/stores/db';
-import { restoreNote, trashedNotes } from '@/stores/workspace';
+import { purgeNotes, restoreNote, trashedNotes } from '@/stores/workspace';
 
 const emit = defineEmits<{
     'open-note': [id: string];
 }>();
+
+const purging = ref(false);
 
 function label(note: LocalNote): string {
     if (note.type !== 'note' && note.dateKey !== null) {
@@ -38,6 +41,44 @@ async function restore(note: LocalNote): Promise<void> {
     await restoreNote(note.id);
     emit('open-note', note.id);
 }
+
+async function purgeOne(note: LocalNote): Promise<void> {
+    if (
+        !confirm(
+            `Permanently delete “${label(note)}”? This cannot be undone.`,
+        )
+    ) {
+        return;
+    }
+
+    purging.value = true;
+
+    try {
+        await purgeNotes([note.id]);
+    } finally {
+        purging.value = false;
+    }
+}
+
+async function emptyTrash(): Promise<void> {
+    const count = trashedNotes.value.length;
+
+    if (
+        !confirm(
+            `Permanently delete all ${count} note${count === 1 ? '' : 's'} in the trash? This cannot be undone.`,
+        )
+    ) {
+        return;
+    }
+
+    purging.value = true;
+
+    try {
+        await purgeNotes(trashedNotes.value.map((note) => note.id));
+    } finally {
+        purging.value = false;
+    }
+}
 </script>
 
 <template>
@@ -51,6 +92,16 @@ async function restore(note: LocalNote): Promise<void> {
             <span class="text-xs text-muted-foreground">
                 {{ trashedNotes.length }}
             </span>
+            <Button
+                v-if="trashedNotes.length > 0"
+                variant="outline"
+                size="sm"
+                class="ml-auto h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-destructive"
+                :disabled="purging"
+                @click="emptyTrash"
+            >
+                <Trash2 class="size-3.5" /> Empty trash…
+            </Button>
         </header>
 
         <div class="min-h-0 flex-1 overflow-y-auto px-4 py-3">
@@ -92,6 +143,16 @@ async function restore(note: LocalNote): Promise<void> {
                     @click="restore(note)"
                 >
                     <ArchiveRestore class="size-3.5" /> Restore
+                </Button>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    class="h-7 shrink-0 gap-1.5 px-2 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive"
+                    :disabled="purging"
+                    title="Delete forever"
+                    @click="purgeOne(note)"
+                >
+                    <X class="size-3.5" /> Delete forever
                 </Button>
             </div>
         </div>
