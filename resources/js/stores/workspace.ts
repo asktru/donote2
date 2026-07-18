@@ -1224,6 +1224,12 @@ export const reviewQueue = computed<LocalNote[]>(() => {
 
     return regularNotes.value
         .filter((note) => {
+            // Archived notes are long-term storage — never surface them in
+            // the review queue, even when their review cadence comes due.
+            if (isArchivedNote(note)) {
+                return false;
+            }
+
             const meta = noteMetaFor(note.id);
 
             return meta.review !== null && isReviewDue(meta, today);
