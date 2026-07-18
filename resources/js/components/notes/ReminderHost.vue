@@ -8,6 +8,7 @@ import type { ReminderCandidate } from '@/core/reminders';
 import { onNotificationTap } from '@/lib/notifications';
 import { openWorkspaceDb } from '@/stores/db';
 import type { WorkspaceDb } from '@/stores/db';
+import { isRecording } from '@/stores/memos';
 import {
     crossTeamReminderUrl,
     isForeignTeamReminder,
@@ -164,7 +165,13 @@ onBeforeUnmount(() => {
     <Teleport to="body">
         <div
             v-if="active.length > 0"
-            class="fixed bottom-[calc(1rem+var(--bottom-chrome,0px))] left-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
+            class="fixed left-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
+            :style="{
+                // The recording pill shares this corner — stack above it.
+                bottom: isRecording
+                    ? 'calc(4.5rem + var(--bottom-chrome, 0px))'
+                    : 'calc(1rem + var(--bottom-chrome, 0px))',
+            }"
         >
             <div
                 v-for="candidate in active"

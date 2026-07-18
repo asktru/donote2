@@ -60,7 +60,7 @@ function dismissDestination(open: boolean): void {
         <button
             v-if="isRecording"
             type="button"
-            class="fixed right-5 bottom-[calc(1.25rem+var(--bottom-chrome,0px))] z-50 flex items-center gap-2.5 rounded-full bg-red-600 py-2.5 pr-5 pl-4 text-white shadow-xl transition-colors hover:bg-red-700"
+            class="fixed bottom-[calc(1.25rem+var(--bottom-chrome,0px))] left-5 z-50 flex items-center gap-2.5 rounded-full bg-red-600 py-2.5 pr-5 pl-4 text-white shadow-xl transition-colors hover:bg-red-700"
             :title="
                 recordingHasSystemAudio
                     ? 'Recording microphone + system audio — click to stop'
