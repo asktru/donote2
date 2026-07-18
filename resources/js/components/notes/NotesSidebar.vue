@@ -486,35 +486,6 @@ const syncLabel = computed(() => {
                         >
                     </button>
                 </div>
-                <div v-if="hasArchive" class="mt-1">
-                    <FolderTree
-                        :path="ARCHIVE_FOLDER"
-                        :depth="0"
-                        :folders="folders"
-                        :notes="ownNotes"
-                        :active-note-id="activeNoteId"
-                        @open-note="(id, split) => openNote(id, { split })"
-                    />
-                </div>
-                <button
-                    v-if="trashedNotes.length > 0"
-                    type="button"
-                    :class="
-                        cn(
-                            'mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted/70',
-                            isActive('trash')
-                                ? 'bg-muted font-medium text-primary'
-                                : 'text-muted-foreground',
-                        )
-                    "
-                    @click="openView({ kind: 'trash' })"
-                >
-                    <Trash2 class="size-4 shrink-0" />
-                    Trash
-                    <span class="ml-auto text-xs">
-                        {{ trashedNotes.length }}
-                    </span>
-                </button>
                 </template>
             </section>
 
@@ -541,6 +512,39 @@ const syncLabel = computed(() => {
                     @open="(mention) => openView({ kind: 'mention', mention })"
                 />
             </CollapsibleSection>
+
+            <!-- Archive and Trash live at the very bottom, below tags and
+                 mentions — long-term storage and discard, out of the way of
+                 the active workspace. -->
+            <div v-if="hasArchive" class="mt-2">
+                <FolderTree
+                    :path="ARCHIVE_FOLDER"
+                    :depth="0"
+                    :folders="folders"
+                    :notes="ownNotes"
+                    :active-note-id="activeNoteId"
+                    @open-note="(id, split) => openNote(id, { split })"
+                />
+            </div>
+            <button
+                v-if="trashedNotes.length > 0"
+                type="button"
+                :class="
+                    cn(
+                        'mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted/70',
+                        isActive('trash')
+                            ? 'bg-muted font-medium text-primary'
+                            : 'text-muted-foreground',
+                    )
+                "
+                @click="openView({ kind: 'trash' })"
+            >
+                <Trash2 class="size-4 shrink-0" />
+                Trash
+                <span class="ml-auto text-xs">
+                    {{ trashedNotes.length }}
+                </span>
+            </button>
         </div>
 
         <div class="flex items-center gap-1 border-t border-border/60 p-2">
