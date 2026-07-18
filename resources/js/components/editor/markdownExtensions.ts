@@ -1666,7 +1666,15 @@ function endOfChildrenBlock(
         const line = doc.line(lineNumber);
         const parsed = parseLine(line.text);
 
-        if (parsed.kind === 'empty' || parsed.indent <= taskIndent) {
+        // Blank lines inside the block don't end it (mirroring parseNote's
+        // nesting rules, so multi-paragraph nested content folds as one
+        // unit). Only a following deeper line pulls them in — `end` never
+        // advances past a blank, so trailing blanks stay outside.
+        if (parsed.kind === 'empty') {
+            continue;
+        }
+
+        if (parsed.indent <= taskIndent) {
             break;
         }
 
