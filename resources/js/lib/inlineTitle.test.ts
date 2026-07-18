@@ -38,6 +38,24 @@ describe('inlineSegments', () => {
         ]);
     });
 
+    it('shows a markdown link by its label', () => {
+        expect(
+            inlineSegments('Read [the docs](https://example.com/a?b=1) today'),
+        ).toEqual([
+            { kind: 'plain', text: 'Read ' },
+            { kind: 'link', text: 'the docs' },
+            { kind: 'plain', text: ' today' },
+        ]);
+    });
+
+    it('prefers wiki links over markdown links', () => {
+        expect(inlineSegments('[[Note]] and [label](https://x.dev)')).toEqual([
+            { kind: 'wikilink', text: 'Note' },
+            { kind: 'plain', text: ' and ' },
+            { kind: 'link', text: 'label' },
+        ]);
+    });
+
     it('handles highlight and inline code', () => {
         expect(inlineSegments('==urgent== run `build`')).toEqual([
             { kind: 'highlight', text: 'urgent' },

@@ -36,6 +36,10 @@ const segments = computed(() => inlineSegments(props.text));
             ><span v-else-if="seg.kind === 'wikilink'" class="text-primary">{{
                 seg.text
             }}</span
+            ><span
+                v-else-if="seg.kind === 'link'"
+                class="text-primary underline decoration-primary/40 underline-offset-2"
+                >{{ seg.text }}</span
             ><template v-else>{{ seg.text }}</template></template
         ></span
     >

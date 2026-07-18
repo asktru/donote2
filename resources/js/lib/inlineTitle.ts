@@ -6,7 +6,8 @@ export type InlineKind =
     | 'highlight'
     | 'tag'
     | 'mention'
-    | 'wikilink';
+    | 'wikilink'
+    | 'link';
 
 export interface InlineSegment {
     kind: InlineKind;
@@ -18,6 +19,7 @@ const HIGHLIGHT = /^==([^=]+)==/;
 const CODE = /^`([^`]+)`/;
 const ITALIC = /^\*([^*\n]+)\*/;
 const WIKILINK = /^\[\[([^\]|\n]+?)(?:\s*\|\s*([^\]\n]+?))?\]\]/;
+const LINK = /^\[([^\]\n]+)\]\(([^)\n]+)\)/;
 const TAG = /^#([A-Za-z][\w/-]*)/;
 const MENTION = /^@([A-Za-z][\w/.-]*)/;
 
@@ -66,6 +68,8 @@ export function inlineSegments(text: string): InlineSegment[] {
                 kind: 'wikilink',
                 text: (match[2] ?? match[1]).trim(),
             };
+        } else if ((match = LINK.exec(rest))) {
+            segment = { kind: 'link', text: match[1] };
         } else if (atBoundary(text, i, '#') && (match = TAG.exec(rest))) {
             segment = { kind: 'tag', text: `#${match[1]}` };
         } else if (atBoundary(text, i, '@') && (match = MENTION.exec(rest))) {

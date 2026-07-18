@@ -2,6 +2,7 @@
 import { ChevronRight, FileText, Layers, ListTodo, Sparkles, Target } from '@lucide/vue';
 import { computed } from 'vue';
 
+import TaskTitle from '@/components/notes/TaskTitle.vue';
 import { humanizeKey } from '@/core/dates';
 import type { NoteKind } from '@/core/frontmatter';
 import { childrenOf } from '@/core/parser';
@@ -91,18 +92,16 @@ function glyph(line: ParsedLine): string {
     return '';
 }
 
-/** Reader-friendly text: markers stripped, wiki links shown by display name. */
+/**
+ * Reader-friendly text: leading markers stripped. Inline markdown (bold,
+ * wiki links, tags, …) is left in place — TaskTitle renders it styled.
+ */
 function displayText(line: ParsedLine): string {
     let text = line.raw.trim();
 
     text = text.replace(/^[-*+]\s\[[ xX>-]\]\s/, '');
     text = text.replace(/^[-*+]\s/, '');
     text = text.replace(/^#{1,6}\s/, '');
-    text = text.replace(
-        /\[\[([^\]|\n]+?)(?:\s*\|\s*([^\]\n]*?))?\]\]/g,
-        (_match, target: string, display?: string) =>
-            (display ?? '').trim() || target.trim(),
-    );
 
     return text;
 }
@@ -178,7 +177,7 @@ function displayText(line: ParsedLine): string {
                                 )
                             "
                             >{{ glyph(line) }}</span
-                        >{{ displayText(line) }}
+                        ><TaskTitle :text="displayText(line)" />
                     </p>
                 </button>
             </div>
