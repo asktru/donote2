@@ -25,6 +25,7 @@ import {
     foldGutter,
     foldKeymap,
     foldService,
+    forceParsing,
     indentUnit,
     syntaxHighlighting,
     syntaxTree,
@@ -1555,6 +1556,12 @@ export function applyPersistedFolds(view: EditorView): void {
             });
         }
     }
+
+    // foldable() consults the Lezer tree, which parses asynchronously —
+    // at note-open time only the first chunk is done, so a section that
+    // crosses the parse frontier folds short (collapsed chevron, content
+    // still visible). Finish the parse before computing any ranges.
+    forceParsing(view, view.state.doc.length, 250);
 
     const effects = [];
     const doc = view.state.doc;
