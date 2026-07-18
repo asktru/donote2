@@ -40,7 +40,7 @@ import { isTemplateNote } from '@/lib/noteTemplates';
 import { acceptTreeDrop, TREE_DND_MIME } from '@/lib/treeDnd';
 import { cn } from '@/lib/utils';
 import type { LocalNote } from '@/stores/db';
-import { promptText } from '@/stores/prompt';
+import { confirmAction, promptText } from '@/stores/prompt';
 import { openTemplateDialog } from '@/stores/templateDialog';
 import { expandedFolders, expandFolder, toggleFolder } from '@/stores/ui';
 import {
@@ -219,25 +219,31 @@ async function renameThisFolder(): Promise<void> {
 }
 
 async function deleteThisFolder(): Promise<void> {
-    if (
-        confirm(`Delete folder “${label.value}”? Its notes move up one level.`)
-    ) {
+    const confirmed = await confirmAction({
+        title: `Delete folder “${label.value}”?`,
+        message: 'Its notes move up one level.',
+        confirmLabel: 'Delete folder',
+        destructive: true,
+    });
+
+    if (confirmed) {
         await deleteFolder(props.path);
     }
 }
 
 async function deleteThisFolderWithNotes(): Promise<void> {
     const count = notesInFolderTree(props.path).length;
-    const contents =
-        count === 0
-            ? 'It contains no notes.'
-            : `Its ${count} note${count === 1 ? '' : 's'} move to trash.`;
+    const confirmed = await confirmAction({
+        title: `Delete folder “${label.value}” and everything in it?`,
+        message:
+            count === 0
+                ? 'It contains no notes.'
+                : `Its ${count} note${count === 1 ? '' : 's'} move to trash.`,
+        confirmLabel: 'Delete all',
+        destructive: true,
+    });
 
-    if (
-        confirm(
-            `Delete folder “${label.value}” and everything in it? ${contents}`,
-        )
-    ) {
+    if (confirmed) {
         await deleteFolderWithNotes(props.path);
     }
 }
@@ -263,7 +269,13 @@ async function duplicateNoteAction(note: LocalNote): Promise<void> {
 }
 
 async function deleteNotePrompt(note: LocalNote): Promise<void> {
-    if (confirm(`Move “${note.title || 'this note'}” to trash?`)) {
+    const confirmed = await confirmAction({
+        title: `Move “${note.title || 'this note'}” to trash?`,
+        confirmLabel: 'Move to trash',
+        destructive: true,
+    });
+
+    if (confirmed) {
         await deleteNote(note.id);
     }
 }

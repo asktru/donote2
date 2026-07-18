@@ -39,6 +39,7 @@ import { isMacDesktopShell } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import { openDatePicker } from '@/stores/datePicker';
 import type { LocalNote } from '@/stores/db';
+import { confirmAction } from '@/stores/prompt';
 import { syncNow } from '@/stores/sync';
 import type { PaneView } from '@/stores/ui';
 import { openGraphView, pendingScrollLine } from '@/stores/ui';
@@ -319,10 +320,17 @@ async function togglePin(): Promise<void> {
 }
 
 async function trashNote(): Promise<void> {
-    if (
-        note.value &&
-        confirm(`Move “${note.value.title || 'this note'}” to trash?`)
-    ) {
+    if (!note.value) {
+        return;
+    }
+
+    const confirmed = await confirmAction({
+        title: `Move “${note.value.title || 'this note'}” to trash?`,
+        confirmLabel: 'Move to trash',
+        destructive: true,
+    });
+
+    if (confirmed && note.value) {
         await deleteNote(note.value.id);
         emit('close');
     }

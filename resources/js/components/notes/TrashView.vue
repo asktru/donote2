@@ -7,6 +7,7 @@ import MobileSidebarButton from '@/components/notes/MobileSidebarButton.vue';
 import { Button } from '@/components/ui/button';
 import { humanizeKey } from '@/core/dates';
 import type { LocalNote } from '@/stores/db';
+import { confirmAction } from '@/stores/prompt';
 import { purgeNotes, restoreNote, trashedNotes } from '@/stores/workspace';
 
 const emit = defineEmits<{
@@ -43,11 +44,14 @@ async function restore(note: LocalNote): Promise<void> {
 }
 
 async function purgeOne(note: LocalNote): Promise<void> {
-    if (
-        !confirm(
-            `Permanently delete “${label(note)}”? This cannot be undone.`,
-        )
-    ) {
+    const confirmed = await confirmAction({
+        title: `Permanently delete “${label(note)}”?`,
+        message: 'This cannot be undone.',
+        confirmLabel: 'Delete forever',
+        destructive: true,
+    });
+
+    if (!confirmed) {
         return;
     }
 
@@ -62,12 +66,14 @@ async function purgeOne(note: LocalNote): Promise<void> {
 
 async function emptyTrash(): Promise<void> {
     const count = trashedNotes.value.length;
+    const confirmed = await confirmAction({
+        title: 'Empty trash?',
+        message: `All ${count} note${count === 1 ? '' : 's'} in the trash will be permanently deleted. This cannot be undone.`,
+        confirmLabel: 'Empty trash',
+        destructive: true,
+    });
 
-    if (
-        !confirm(
-            `Permanently delete all ${count} note${count === 1 ? '' : 's'} in the trash? This cannot be undone.`,
-        )
-    ) {
+    if (!confirmed) {
         return;
     }
 

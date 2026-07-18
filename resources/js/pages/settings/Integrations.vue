@@ -11,6 +11,7 @@ import {
 import { computed, ref } from 'vue';
 
 import Heading from '@/components/Heading.vue';
+import ConfirmDialog from '@/components/notes/ConfirmDialog.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { apiFetch } from '@/lib/api';
@@ -26,6 +27,7 @@ import {
     store as bluedotStore,
     destroy as bluedotDestroy,
 } from '@/routes/integrations/bluedot';
+import { confirmAction } from '@/stores/prompt';
 
 interface GoogleCalendarOption {
     id: string;
@@ -126,12 +128,17 @@ function generateWebhook(): void {
     );
 }
 
-function revokeWebhook(id: number): void {
-    if (!confirm('Revoke this webhook URL? Bluedot will stop delivering to it.')) {
-        return;
-    }
+async function revokeWebhook(id: number): Promise<void> {
+    const confirmed = await confirmAction({
+        title: 'Revoke this webhook URL?',
+        message: 'Bluedot will stop delivering to it.',
+        confirmLabel: 'Revoke',
+        destructive: true,
+    });
 
-    router.delete(bluedotDestroy(id).url, { preserveScroll: true });
+    if (confirmed) {
+        router.delete(bluedotDestroy(id).url, { preserveScroll: true });
+    }
 }
 
 async function copyUrl(): Promise<void> {
@@ -192,7 +199,14 @@ async function toggleCalendar(
 }
 
 async function disconnect(account: GoogleAccountView): Promise<void> {
-    if (!confirm(`Disconnect ${account.email}?`)) {
+    const confirmed = await confirmAction({
+        title: `Disconnect ${account.email}?`,
+        message: 'Its calendars disappear from your workspace.',
+        confirmLabel: 'Disconnect',
+        destructive: true,
+    });
+
+    if (!confirmed) {
         return;
     }
 
@@ -204,6 +218,8 @@ async function disconnect(account: GoogleAccountView): Promise<void> {
 
 <template>
     <Head title="Integrations" />
+
+    <ConfirmDialog />
 
     <div class="space-y-6">
         <Heading

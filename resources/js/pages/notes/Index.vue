@@ -3,6 +3,7 @@ import { Head, router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 import AiPromptDialog from '@/components/notes/AiPromptDialog.vue';
+import ConfirmDialog from '@/components/notes/ConfirmDialog.vue';
 import DatePickerDialog from '@/components/notes/DatePickerDialog.vue';
 import DueTasksSection from '@/components/notes/DueTasksSection.vue';
 import EditorToolbar from '@/components/notes/EditorToolbar.vue';
@@ -597,6 +598,7 @@ onBeforeUnmount(() => {
                 <FilePreview />
                 <SyncedLineLocations />
                 <PromptDialog />
+                <ConfirmDialog />
                 <EditorToolbar />
                 <RecordingIndicator />
                 <ReminderHost
