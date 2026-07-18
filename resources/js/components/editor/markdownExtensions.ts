@@ -47,6 +47,7 @@ import {
     WidgetType,
 } from '@codemirror/view';
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
+import type { SyntaxNode } from '@lezer/common';
 import { tags } from '@lezer/highlight';
 
 import type { Mermaid } from 'mermaid';
@@ -381,7 +382,7 @@ class SyncGlyphWidget extends WidgetType {
 
 const MARKER_RE = /^(\s*)([-*+]\s\[[ xX>-]\]\s)/;
 const BULLET_MARKER_RE = /^(\s*)([-*+])\s(?!\[[ xX>-]\]\s)/;
-const HEADING_MARKER_RE = /^(#{1,6})\s/;
+const HEADING_MARKER_RE = /^(\s*)(#{1,6}\s)/;
 const SCHEDULE_TOKEN_RE =
     />(\d{4}-\d{2}-\d{2}|\d{4}-W\d{1,2}|\d{4}-Q[1-4]|\d{4}-\d{2}|\d{4}|today)\b/g;
 const META_TOKEN_RE = /@(?:due|repeat)\([^)]*\)/g;
@@ -443,7 +444,7 @@ function computeGuideLevels(state: EditorState, fmEnd: number): number[][] {
 
         const parsed = parseLine(doc.line(lineNumber).text);
 
-        if (parsed.kind === 'heading') {
+        if (parsed.kind === 'heading' && parsed.indent === 0) {
             stack.length = 0;
             continue;
         }
@@ -530,9 +531,10 @@ const donoteFoldService = foldService.of((state, lineStart) => {
 
     const parsed = parseLine(line.text);
 
-    // A heading folds everything until the next heading of the same or a
-    // higher level.
-    if (parsed.kind === 'heading') {
+    // A column-0 heading folds everything until the next column-0 heading
+    // of the same or a higher level. Indented headings are cosmetic — they
+    // neither fold a section nor terminate one.
+    if (parsed.kind === 'heading' && parsed.indent === 0) {
         const level = parsed.headingLevel ?? 1;
         let end = line.to;
         let sawContent = false;
@@ -543,6 +545,7 @@ const donoteFoldService = foldService.of((state, lineStart) => {
 
             if (
                 nextParsed.kind === 'heading' &&
+                nextParsed.indent === 0 &&
                 (nextParsed.headingLevel ?? 1) <= level
             ) {
                 break;
@@ -800,15 +803,51 @@ function buildDecorations(state: EditorState): DecorationSet {
             }
         }
 
-        if (parsed.kind === 'heading' && !revealed) {
+        if (parsed.kind === 'heading') {
             const marker = line.text.match(HEADING_MARKER_RE);
 
             if (marker) {
-                tokens.push({
-                    from: line.from,
-                    to: line.from + marker[0].length,
-                    decoration: hideDecoration,
-                });
+                const markerFrom = line.from + marker[1].length;
+                const textFrom = markerFrom + marker[2].length;
+
+                if (!revealed) {
+                    tokens.push({
+                        from: markerFrom,
+                        to: textFrom,
+                        decoration: hideDecoration,
+                    });
+                }
+
+                // Lezer styles only CommonMark-valid headings; a heading
+                // nested deep under list items would lose the look. Style
+                // those from our own parse — but never double up where
+                // Lezer already applied cm-h* (em sizes would compound).
+                if (parsed.indent > 0 && textFrom < line.to) {
+                    let lezerHeading = false;
+
+                    for (
+                        let node: SyntaxNode | null = syntaxTree(
+                            state,
+                        ).resolveInner(textFrom, 1);
+                        node;
+                        node = node.parent
+                    ) {
+                        if (node.name.startsWith('ATXHeading')) {
+                            lezerHeading = true;
+                            break;
+                        }
+                    }
+
+                    if (!lezerHeading) {
+                        tokens.push({
+                            from: textFrom,
+                            to: line.to,
+                            decoration: Decoration.mark({
+                                class: `cm-h${Math.min(parsed.headingLevel ?? 1, 4)}`,
+                            }),
+                        });
+                    }
+                }
             }
         }
 

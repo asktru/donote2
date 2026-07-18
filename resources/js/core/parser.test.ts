@@ -332,4 +332,37 @@ describe('parseNote — hierarchy', () => {
         );
         expect(lines[2].parent).toBeNull();
     });
+
+    it('parses an indented heading with its indent and level', () => {
+        const line = parseLine('    ## Key Topics Covered');
+
+        expect(line.kind).toBe('heading');
+        expect(line.headingLevel).toBe(2);
+        expect(line.indent).toBe(4);
+        expect(line.title).toBe('Key Topics Covered');
+    });
+
+    it('indented headings stay children and never own siblings', () => {
+        const lines = parseNote(
+            [
+                '- Audio memo of [[Meeting]]',
+                '    ## Key Topics',
+                '    First paragraph line',
+                '    - Nested bullet',
+                '## Top-level section',
+                '    - [ ] Task under a real section',
+            ].join('\n'),
+        );
+
+        // The heading and its "siblings" all hang off the bullet — the
+        // indented heading is cosmetic, not a container.
+        expect(lines[1].kind).toBe('heading');
+        expect(lines[1].parent).toBe(0);
+        expect(lines[2].parent).toBe(0);
+        expect(lines[3].parent).toBe(0);
+
+        // A column-0 heading still resets nesting.
+        expect(lines[4].indent).toBe(0);
+        expect(lines[5].parent).toBeNull();
+    });
 });

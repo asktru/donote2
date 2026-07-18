@@ -59,7 +59,7 @@ export interface ParsedLine {
 const TASK_RE = /^(\s*)([-*])\s\[([ xX>-])\]\s(.*)$/;
 const CHECKLIST_RE = /^(\s*)\+\s\[([ xX>-])\]\s(.*)$/;
 const BULLET_RE = /^(\s*)([-*+])\s(?!\[[ xX>-]\]\s)(.*)$/;
-const HEADING_RE = /^(#{1,6})\s+(.*)$/;
+const HEADING_RE = /^(\s*)(#{1,6})\s+(.*)$/;
 
 const SCHEDULE_RE =
     />(\d{4}-\d{2}-\d{2}|\d{4}-W\d{1,2}|\d{4}-Q[1-4]|\d{4}-\d{2}|\d{4}|today)\b/;
@@ -325,8 +325,9 @@ export function parseLine(raw: string, index = 0): ParsedLine {
 
     if (heading) {
         line.kind = 'heading';
-        line.headingLevel = heading[1].length;
-        line.title = heading[2].trim();
+        line.indent = indentWidth(heading[1]);
+        line.headingLevel = heading[2].length;
+        line.title = heading[3].trim();
         line.tags = extractTags(raw);
         line.mentions = extractMentions(raw);
 
@@ -433,7 +434,10 @@ export function parseNote(content: string): ParsedLine[] {
             continue;
         }
 
-        if (line.kind === 'heading') {
+        // Only column-0 headings start a new section. An indented heading
+        // (an AI summary nested under a meeting bullet) is cosmetic — it
+        // stays a child of the list item above and never owns siblings.
+        if (line.kind === 'heading' && line.indent === 0) {
             stack.length = 0;
             continue;
         }
