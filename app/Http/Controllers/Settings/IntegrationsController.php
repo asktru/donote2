@@ -35,7 +35,26 @@ class IntegrationsController extends Controller
                     'name' => $team->name,
                 ])->values(),
             'bluedotWebhooks' => $this->bluedotWebhooks($user),
+            'aiEngine' => $user->ai_engine,
+            'openaiConfigured' => (bool) config('services.openai.key'),
+            'claudeConfigured' => (bool) config('services.anthropic.key'),
         ]);
+    }
+
+    /**
+     * Switch the engine that powers AI prompts for this user.
+     */
+    public function updateAi(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ai_engine' => ['required', Rule::in(['openai', 'claude'])],
+        ]);
+
+        $user = $request->user();
+        $user->ai_engine = $validated['ai_engine'];
+        $user->save();
+
+        return back();
     }
 
     /**

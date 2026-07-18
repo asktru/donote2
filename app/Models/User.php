@@ -29,6 +29,7 @@ use Laravel\Sanctum\HasApiTokens;
  * @property Carbon|null $two_factor_confirmed_at
  * @property string|null $remember_token
  * @property int|null $current_team_id
+ * @property string $ai_engine
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Team|null $currentTeam
@@ -43,6 +44,15 @@ class User extends Authenticatable implements PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, HasTeams, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+
+    /**
+     * The model's default attribute values.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'ai_engine' => 'openai',
+    ];
 
     /**
      * Get the Google accounts connected by this user.

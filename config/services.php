@@ -39,6 +39,11 @@ return [
         'ai_model' => env('DONOTE_AI_MODEL', 'gpt-4o-mini'),
     ],
 
+    'anthropic' => [
+        'key' => env('ANTHROPIC_API_KEY'),
+        'ai_model' => env('DONOTE_CLAUDE_MODEL', 'claude-haiku-4-5'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

@@ -1,18 +1,27 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { CalendarPlus, Check, Copy, Trash2, Webhook } from '@lucide/vue';
+import {
+    CalendarPlus,
+    Check,
+    Copy,
+    Sparkles,
+    Trash2,
+    Webhook,
+} from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { apiFetch } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { redirect as googleRedirect } from '@/routes/google';
 import {
     update as updateAccount,
     destroy as destroyAccount,
 } from '@/routes/google/accounts';
 import { edit } from '@/routes/integrations';
+import { update as aiUpdate } from '@/routes/integrations/ai';
 import {
     store as bluedotStore,
     destroy as bluedotDestroy,
@@ -49,7 +58,50 @@ const props = defineProps<{
     googleConfigured: boolean;
     teams: TeamOption[];
     bluedotWebhooks: BluedotWebhook[];
+    aiEngine: 'openai' | 'claude';
+    openaiConfigured: boolean;
+    claudeConfigured: boolean;
 }>();
+
+const aiEngine = ref<'openai' | 'claude'>(props.aiEngine);
+
+interface AiEngineOption {
+    value: 'openai' | 'claude';
+    label: string;
+    description: string;
+    configured: boolean;
+    envKey: string;
+}
+
+const aiEngines = computed<AiEngineOption[]>(() => [
+    {
+        value: 'openai',
+        label: 'OpenAI',
+        description: 'GPT models — also used for voice transcription.',
+        configured: props.openaiConfigured,
+        envKey: 'OPENAI_API_KEY',
+    },
+    {
+        value: 'claude',
+        label: 'Claude',
+        description: 'Anthropic models for AI prompts and summaries.',
+        configured: props.claudeConfigured,
+        envKey: 'ANTHROPIC_API_KEY',
+    },
+]);
+
+function pickAiEngine(engine: 'openai' | 'claude'): void {
+    if (aiEngine.value === engine) {
+        return;
+    }
+
+    aiEngine.value = engine;
+    router.patch(
+        aiUpdate().url,
+        { ai_engine: engine },
+        { preserveScroll: true },
+    );
+}
 
 const page = usePage<{
     flash: { bluedotUrl: string | null; bluedotTeam: string | null };
@@ -238,6 +290,66 @@ async function disconnect(account: GoogleAccountView): Promise<void> {
                         </span>
                     </label>
                 </div>
+            </div>
+        </div>
+
+        <div class="space-y-4 border-t border-border pt-6">
+            <div>
+                <h3 class="text-sm font-medium">AI prompts</h3>
+                <p class="text-sm text-muted-foreground">
+                    The engine behind AI prompts, web-clip summaries, and
+                    transcript transformations. Voice transcription always uses
+                    OpenAI.
+                </p>
+            </div>
+
+            <div class="grid gap-2 sm:grid-cols-2">
+                <button
+                    v-for="engine in aiEngines"
+                    :key="engine.value"
+                    type="button"
+                    :class="
+                        cn(
+                            'rounded-xl border p-4 text-left transition-colors',
+                            aiEngine === engine.value
+                                ? 'border-primary/60 bg-primary/5'
+                                : 'border-border hover:bg-muted/50',
+                        )
+                    "
+                    @click="pickAiEngine(engine.value)"
+                >
+                    <div class="flex items-center gap-2">
+                        <Sparkles
+                            :class="
+                                cn(
+                                    'size-4',
+                                    aiEngine === engine.value
+                                        ? 'text-primary'
+                                        : 'text-muted-foreground',
+                                )
+                            "
+                        />
+                        <span class="text-sm font-medium">{{
+                            engine.label
+                        }}</span>
+                        <Check
+                            v-if="aiEngine === engine.value"
+                            class="ml-auto size-4 text-primary"
+                        />
+                    </div>
+                    <p class="mt-1 text-xs text-muted-foreground">
+                        {{ engine.description }}
+                    </p>
+                    <p
+                        v-if="!engine.configured"
+                        class="mt-1.5 text-xs text-amber-600 dark:text-amber-500"
+                    >
+                        Set
+                        <code class="font-mono">{{ engine.envKey }}</code>
+                        in <code class="font-mono">.env</code> to use this
+                        engine.
+                    </p>
+                </button>
             </div>
         </div>
 

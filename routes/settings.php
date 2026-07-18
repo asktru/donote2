@@ -31,6 +31,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('settings/appearance', 'settings/Appearance')->name('appearance.edit');
 
     Route::get('settings/integrations', [IntegrationsController::class, 'edit'])->name('integrations.edit');
+    Route::patch('settings/integrations/ai', [IntegrationsController::class, 'updateAi'])->name('integrations.ai.update');
     Route::post('settings/integrations/bluedot', [IntegrationsController::class, 'storeBluedot'])->name('integrations.bluedot.store');
     Route::delete('settings/integrations/bluedot/{token}', [IntegrationsController::class, 'destroyBluedot'])->name('integrations.bluedot.destroy');
 
