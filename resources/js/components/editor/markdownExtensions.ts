@@ -2627,17 +2627,19 @@ const editorTheme = EditorView.theme({
             'color-mix(in oklab, var(--border) 55%, var(--muted-foreground))',
         pointerEvents: 'none',
     },
-    // A guide run starts at the vertical center of its first line and ends
-    // at the center of its last line, fading out at both tips.
+    // A guide run starts at the vertical center of its first line (fading
+    // in) and runs all the way down to the bottom of its last line — past
+    // any wrapped rows — fading out only over the final few pixels so it
+    // visibly reaches the last child rather than stopping at its top.
     '.cm-indent-guide-first::before': {
         top: '50%',
         background:
             'linear-gradient(to bottom, transparent, color-mix(in oklab, var(--border) 55%, var(--muted-foreground)) 12px)',
     },
     '.cm-indent-guide-last::before': {
-        bottom: '50%',
+        bottom: 'calc(0px - var(--wrap-extra, 0px))',
         background:
-            'linear-gradient(to top, transparent, color-mix(in oklab, var(--border) 55%, var(--muted-foreground)) 12px)',
+            'linear-gradient(to bottom, color-mix(in oklab, var(--border) 55%, var(--muted-foreground)), color-mix(in oklab, var(--border) 55%, var(--muted-foreground)) calc(100% - 8px), transparent)',
     },
     '.cm-indent-guide-first.cm-indent-guide-last::before': {
         display: 'none',
