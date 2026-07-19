@@ -2,6 +2,7 @@
 import { format, isSameDay, parseISO, startOfDay } from 'date-fns';
 import { computed } from 'vue';
 
+import { useNow } from '@/composables/useNow';
 import { cn } from '@/lib/utils';
 import type { CalendarEvent } from '@/stores/calendar';
 
@@ -34,10 +35,21 @@ function rsvpClass(event: GridEvent): string {
 const MAX_CHIPS = 3;
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+const now = useNow();
+
 function parseAllDay(value: string): Date {
     const [y, m, d] = value.split('-').map(Number);
 
     return new Date(y, (m ?? 1) - 1, d ?? 1);
+}
+
+/** A chip for a finished event reads muted, matching the time grid. */
+function isPast(event: GridEvent): boolean {
+    if (event.allDay) {
+        return parseAllDay(event.end) <= startOfDay(now.value);
+    }
+
+    return parseISO(event.end) < now.value;
 }
 
 function eventsFor(day: Date): GridEvent[] {
@@ -130,6 +142,7 @@ const cells = computed(() =>
                             cn(
                                 'flex w-full items-center gap-1 truncate rounded px-1 text-left text-[10px] hover:bg-muted/60',
                                 rsvpClass(event),
+                                isPast(event) && 'opacity-50',
                             )
                         "
                         @click="emit('open-event', event)"

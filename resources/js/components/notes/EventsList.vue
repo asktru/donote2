@@ -19,6 +19,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useNow } from '@/composables/useNow';
 import { keyRange, kindOfKey } from '@/core/dates';
 import { apiFetch } from '@/lib/api';
 import { appleCalendar } from '@/lib/appleCalendar';
@@ -254,6 +255,22 @@ function isHidden(event: UnifiedEvent): boolean {
     return hiddenEvents.value.has(event.hideKey);
 }
 
+const now = useNow();
+
+/**
+ * Past events are muted. Timed events dim once their end (falling back to
+ * start) has passed; all-day events aren't treated as past within their day.
+ */
+function isPast(event: UnifiedEvent): boolean {
+    if (event.allDay) {
+        return false;
+    }
+
+    const marker = event.end ?? event.start;
+
+    return marker !== null && new Date(marker) < now.value;
+}
+
 onMounted(async () => {
     loadEventPrefs();
     await refreshAppleStatus();
@@ -415,7 +432,7 @@ watch(() => range.value.start.getTime(), load);
                     :class="
                         cn(
                             'group flex items-start gap-2 rounded-md px-1.5 py-1 hover:bg-muted/60',
-                            isHidden(event) && 'opacity-50',
+                            (isHidden(event) || isPast(event)) && 'opacity-50',
                         )
                     "
                 >

@@ -54,6 +54,19 @@ function isStripped(event: GridEvent): boolean {
     return (event.hidden ?? false) && !props.showHidden;
 }
 
+/**
+ * Past events read as muted so the eye lands on what's still ahead. A timed
+ * event is past once it has ended; an all-day event once its (exclusive) end
+ * date has arrived. Reactive on `now`, so blocks dim as the day advances.
+ */
+function isPast(event: CalendarEvent): boolean {
+    if (event.allDay) {
+        return parseAllDay(event.end) <= startOfDay(now.value);
+    }
+
+    return parseISO(event.end) < now.value;
+}
+
 /** RSVP-derived styling: dim declined, soften tentative, outline pending. */
 /** Fill = the event's custom color when set, else its calendar's color. */
 function fillOf(event: CalendarEvent): string | null {
@@ -74,6 +87,10 @@ function eventStyles(event: CalendarEvent): Record<string, string> {
 
     if (event.eventColor && event.color && event.eventColor !== event.color) {
         styles.borderLeft = `3px solid ${event.color}`;
+    }
+
+    if (isPast(event)) {
+        styles.opacity = '0.5';
     }
 
     return styles;
