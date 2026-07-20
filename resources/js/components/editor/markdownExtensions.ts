@@ -533,6 +533,90 @@ function frontMatterEnd(state: EditorState): number {
 /* Folding: front matter, heading sections, nested list children       */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Task/checklist completion inside a folded range, so a collapsed heading
+ * can advertise how much of what it hides is already done. Counts both
+ * tasks and checklist items (cancelled ones don't count toward the total).
+ */
+function foldTaskProgress(
+    state: EditorState,
+    from: number,
+    to: number,
+): { done: number; total: number } | null {
+    const doc = state.doc;
+    const first = doc.lineAt(from).number;
+    const last = doc.lineAt(to).number;
+    let done = 0;
+    let total = 0;
+
+    for (let n = first; n <= last; n++) {
+        const parsed = parseLine(doc.line(n).text);
+
+        if (
+            (parsed.kind !== 'task' && parsed.kind !== 'checklist') ||
+            parsed.state === 'cancelled'
+        ) {
+            continue;
+        }
+
+        total += 1;
+
+        if (parsed.state === 'done') {
+            done += 1;
+        }
+    }
+
+    return total > 0 ? { done, total } : null;
+}
+
+/** A 16×16 progress pie in plain DOM (mirrors PieProgress.vue's geometry). */
+function foldProgressPie(done: number, total: number): SVGSVGElement {
+    const fraction = total > 0 ? Math.min(1, done / total) : 0;
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('width', '13');
+    svg.setAttribute('height', '13');
+    svg.setAttribute('viewBox', '0 0 16 16');
+    svg.setAttribute('class', 'cm-fold-pie');
+
+    const title = document.createElementNS(SVG_NS, 'title');
+    title.textContent = `${done}/${total} done`;
+    svg.appendChild(title);
+
+    const ring = document.createElementNS(SVG_NS, 'circle');
+    ring.setAttribute('cx', '8');
+    ring.setAttribute('cy', '8');
+    ring.setAttribute('r', '6.4');
+    ring.setAttribute('fill', 'none');
+    ring.setAttribute('stroke', 'currentColor');
+    ring.setAttribute('stroke-width', '1.4');
+    svg.appendChild(ring);
+
+    if (fraction > 0) {
+        const wedge = document.createElementNS(SVG_NS, 'path');
+
+        if (fraction >= 1) {
+            wedge.setAttribute(
+                'd',
+                'M8 8 m0 -5.2 a5.2 5.2 0 1 1 0 10.4 a5.2 5.2 0 1 1 0 -10.4',
+            );
+        } else {
+            const angle = fraction * 2 * Math.PI;
+            const x = 8 + 5.2 * Math.sin(angle);
+            const y = 8 - 5.2 * Math.cos(angle);
+            const largeArc = fraction > 0.5 ? 1 : 0;
+            wedge.setAttribute(
+                'd',
+                `M8 8 L8 2.8 A5.2 5.2 0 ${largeArc} 1 ${x.toFixed(3)} ${y.toFixed(3)} Z`,
+            );
+        }
+
+        wedge.setAttribute('fill', 'currentColor');
+        svg.appendChild(wedge);
+    }
+
+    return svg;
+}
+
 const donoteFoldService = foldService.of((state, lineStart) => {
     const line = state.doc.lineAt(lineStart);
 
@@ -2602,6 +2686,14 @@ const editorTheme = EditorView.theme({
         padding: '0 6px',
         cursor: 'pointer',
     },
+    // Progress pie inside a fold placeholder: nudged to sit on the text
+    // baseline, tinted with the theme primary like the project pie.
+    '.cm-fold-pie': {
+        display: 'inline-block',
+        verticalAlign: '-2px',
+        marginRight: '4px',
+        color: 'var(--primary)',
+    },
 
     '.cm-line-comment': {
         color: 'var(--muted-foreground)',
@@ -3125,7 +3217,34 @@ export function donoteMarkdown(callbacks: EditorCallbacks): Extension {
         mermaidField,
         codeBlockPlugin,
         foldPersistence,
-        codeFolding(),
+        codeFolding({
+            // Compute how much of the hidden section is done so the
+            // placeholder can show a progress pie.
+            preparePlaceholder: (state, range) =>
+                foldTaskProgress(state, range.from, range.to),
+            placeholderDOM: (_view, onclick, prepared) => {
+                const el = document.createElement('span');
+                el.className = 'cm-foldPlaceholder';
+                el.setAttribute('aria-label', 'folded lines');
+                el.title = 'Click to expand';
+                el.onclick = onclick;
+
+                const progress = prepared as {
+                    done: number;
+                    total: number;
+                } | null;
+
+                if (progress) {
+                    el.appendChild(
+                        foldProgressPie(progress.done, progress.total),
+                    );
+                }
+
+                el.appendChild(document.createTextNode('…'));
+
+                return el;
+            },
+        }),
         donoteFoldService,
         foldGutter({
             markerDOM(open) {
