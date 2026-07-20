@@ -11,7 +11,7 @@ import {
 import { computed, ref } from 'vue';
 
 import TaskTitle from '@/components/notes/TaskTitle.vue';
-import { humanizeKey } from '@/core/dates';
+import { humanizeKey, keyStartDate } from '@/core/dates';
 import type { NoteKind } from '@/core/frontmatter';
 import { childrenOf } from '@/core/parser';
 import type { ParsedLine } from '@/core/parser';
@@ -106,11 +106,28 @@ const allGroups = computed<ReferenceGroup[]>(() => {
     });
 });
 
-const groups = computed<ReferenceGroup[]>(() =>
-    includeArchive.value
+/**
+ * Chronological anchor for newest-first ordering: a calendar note sorts by
+ * the date it represents; a regular note by its last-changed time. Both
+ * resolve to an absolute millisecond value so the two kinds interleave.
+ */
+function recencyOf(note: LocalNote): number {
+    if (note.type !== 'note' && note.dateKey !== null) {
+        return keyStartDate(note.dateKey).getTime();
+    }
+
+    return new Date(note.updatedAt).getTime();
+}
+
+const groups = computed<ReferenceGroup[]>(() => {
+    const filtered = includeArchive.value
         ? allGroups.value
-        : allGroups.value.filter((group) => !isArchivedNote(group.note)),
-);
+        : allGroups.value.filter((group) => !isArchivedNote(group.note));
+
+    return [...filtered].sort(
+        (a, b) => recencyOf(b.note) - recencyOf(a.note),
+    );
+});
 
 /** Whether any reference comes from @Archive — drives the toggle. */
 const hasArchived = computed(() =>

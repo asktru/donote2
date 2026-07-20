@@ -169,19 +169,21 @@ async function onRootDrop(event: DragEvent): Promise<void> {
 
 // Dropping into a child folder re-renders (unmounting the dragged row), so the
 // section's own dragend never fires and its highlight would stick. Clear it on
-// any drag end/drop anywhere.
+// any drag end/drop anywhere. These run in the CAPTURE phase so they fire even
+// though FolderTree's own drop handler calls stopPropagation() (which would
+// otherwise keep a bubble-phase listener here from ever seeing the drop).
 function clearRootDropTarget(): void {
     rootDropTarget.value = false;
 }
 
 onMounted(() => {
-    document.addEventListener('dragend', clearRootDropTarget);
-    document.addEventListener('drop', clearRootDropTarget);
+    document.addEventListener('dragend', clearRootDropTarget, true);
+    document.addEventListener('drop', clearRootDropTarget, true);
 });
 
 onBeforeUnmount(() => {
-    document.removeEventListener('dragend', clearRootDropTarget);
-    document.removeEventListener('drop', clearRootDropTarget);
+    document.removeEventListener('dragend', clearRootDropTarget, true);
+    document.removeEventListener('drop', clearRootDropTarget, true);
 });
 
 const syncLabel = computed(() => {
