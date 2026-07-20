@@ -6,6 +6,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
     applyPersistedFolds,
     donoteMarkdown,
+    viewModeFacet,
 } from '@/components/editor/markdownExtensions';
 import { attachmentHandlers } from '@/lib/attachments';
 import { recallCursor, rememberCursor } from '@/lib/cursorMemory';
@@ -32,6 +33,12 @@ const props = defineProps<{
     grow?: boolean;
     /** Make the note non-editable (a read-only share, or offline write). */
     readOnly?: boolean;
+    /**
+     * User read-only mode (`mode: read-only`): block text editing and never
+     * reveal raw markdown, but keep the note interactive — task/checklist
+     * toggles, folds, and links still work, and their changes persist.
+     */
+    viewMode?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -49,10 +56,23 @@ let lastEmitted: string | null = null;
 /** Lets us toggle read-only without rebuilding the whole editor state. */
 const readOnlyCompartment = new Compartment();
 
-function readOnlyExtension(readOnly: boolean) {
-    return readOnly
-        ? [EditorState.readOnly.of(true), EditorView.editable.of(false)]
-        : [];
+/**
+ * Two flavours of non-editable:
+ * - `readOnly` (a read-only share, or an offline write) fully locks the
+ *   editor: no typing AND no programmatic edits accepted.
+ * - `viewMode` (`mode: read-only`) blocks typing and mark-revealing but
+ *   leaves the note interactive — checkbox/fold/link dispatches still apply
+ *   (only `EditorView.editable` is off, not `EditorState.readOnly`).
+ * Either flavour suppresses reveal-on-cursor via the viewMode facet.
+ */
+function readOnlyExtension(readOnly: boolean, viewMode: boolean) {
+    const nonEditable = readOnly || viewMode;
+
+    return [
+        viewModeFacet.of(nonEditable),
+        ...(nonEditable ? [EditorView.editable.of(false)] : []),
+        ...(readOnly ? [EditorState.readOnly.of(true)] : []),
+    ];
 }
 
 function createView(): void {
@@ -93,7 +113,12 @@ function createView(): void {
                     getMentions: () => [...mentionCounts.value.keys()],
                 }),
                 placeholderExt(props.placeholder ?? 'Type something…'),
-                readOnlyCompartment.of(readOnlyExtension(props.readOnly ?? false)),
+                readOnlyCompartment.of(
+                    readOnlyExtension(
+                        props.readOnly ?? false,
+                        props.viewMode ?? false,
+                    ),
+                ),
                 attachmentHandlers(() => props.stateKey),
                 EditorView.domEventHandlers({
                     focus: (_event, focusedView) =>
@@ -156,11 +181,11 @@ watch(
 );
 
 watch(
-    () => props.readOnly,
-    (readOnly) => {
+    () => [props.readOnly, props.viewMode],
+    ([readOnly, viewMode]) => {
         view?.dispatch({
             effects: readOnlyCompartment.reconfigure(
-                readOnlyExtension(readOnly ?? false),
+                readOnlyExtension(readOnly ?? false, viewMode ?? false),
             ),
         });
     },

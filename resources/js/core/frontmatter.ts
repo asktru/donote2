@@ -18,6 +18,8 @@ export interface NoteMeta {
     start: string | null;
     /** Project due date (yyyy-mm-dd). */
     due: string | null;
+    /** `mode: read-only` — render interactively but block text editing. */
+    readOnly: boolean;
     /** All raw front matter entries. */
     properties: Record<string, string>;
     /** 0-based line index of the closing --- (or -1 without front matter). */
@@ -34,6 +36,7 @@ export const EMPTY_META: NoteMeta = {
     reviewed: null,
     start: null,
     due: null,
+    readOnly: false,
     properties: {},
     endLine: -1,
 };
@@ -87,6 +90,7 @@ export function parseNoteMeta(content: string): NoteMeta {
         reviewed: DATE_RE.test(reviewed) ? reviewed : null,
         start: DATE_RE.test(start) ? start : null,
         due: DATE_RE.test(due) ? due : null,
+        readOnly: (properties.mode ?? '').toLowerCase() === 'read-only',
         properties,
         endLine: bounds[1],
     };

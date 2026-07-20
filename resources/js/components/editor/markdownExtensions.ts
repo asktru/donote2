@@ -35,6 +35,7 @@ import {
 import { languages } from '@codemirror/language-data';
 import {
     EditorSelection,
+    Facet,
     RangeSetBuilder,
     StateField,
 } from '@codemirror/state';
@@ -413,11 +414,25 @@ interface TokenDecoration {
     decoration: Decoration;
 }
 
+/**
+ * When true, the editor renders as a static live-preview: markdown marks
+ * stay hidden regardless of where the (non-editable) selection sits, so a
+ * read-only note never flips a line to raw source. Provided per-editor via
+ * a compartment; read here so every reveal check honours it.
+ */
+export const viewModeFacet = Facet.define<boolean, boolean>({
+    combine: (values) => values.some(Boolean),
+});
+
 function selectionTouches(
     state: EditorState,
     from: number,
     to: number,
 ): boolean {
+    if (state.facet(viewModeFacet)) {
+        return false;
+    }
+
     for (const range of state.selection.ranges) {
         if (range.from <= to && range.to >= from) {
             return true;
@@ -1624,6 +1639,10 @@ const decorationsField = StateField.define<DecorationSet>({
         if (
             transaction.docChanged ||
             transaction.selection ||
+            // Toggling read-only (view mode) flips whether marks reveal, but
+            // carries no doc/selection change — recompute on that too.
+            transaction.startState.facet(viewModeFacet) !==
+                transaction.state.facet(viewModeFacet) ||
             // The markdown parse is async: deep sections of long notes
             // gain their Link/Emphasis nodes after later parse batches,
             // each landing as a transaction. Without this, syntax marks

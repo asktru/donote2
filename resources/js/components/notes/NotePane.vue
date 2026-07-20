@@ -3,8 +3,11 @@ import {
     Check,
     ChevronLeft,
     ChevronRight,
+    Eye,
     Layers,
     ListTodo,
+    Lock,
+    MoreHorizontal,
     Pin,
     PinOff,
     Sparkles,
@@ -25,6 +28,13 @@ import NoteFilters from '@/components/notes/NoteFilters.vue';
 import PieProgress from '@/components/notes/PieProgress.vue';
 import ShareDialog from '@/components/notes/ShareDialog.vue';
 import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useOnline } from '@/composables/useOnline';
 import { addPeriods, humanizeKey, shortLabelForKey, todayKey } from '@/core/dates';
 import {
@@ -319,6 +329,25 @@ async function togglePin(): Promise<void> {
     }
 }
 
+/** User read-only mode, driven by `mode: read-only` in the front matter. */
+const viewMode = computed(() => meta.value?.readOnly ?? false);
+
+/** Flip read-only mode by adding/removing the front matter `mode` key. */
+async function toggleReadOnly(): Promise<void> {
+    if (!note.value) {
+        return;
+    }
+
+    await updateNoteContent(
+        note.value.id,
+        upsertFrontMatterKey(
+            note.value.content,
+            'mode',
+            viewMode.value ? '' : 'read-only',
+        ),
+    );
+}
+
 async function trashNote(): Promise<void> {
     if (!note.value) {
         return;
@@ -498,48 +527,56 @@ defineExpose({ focusEditor });
                     >
                         {{ note.folder }}
                     </span>
-                    <Button
-                        v-if="note && !isSplit"
-                        variant="ghost"
-                        size="icon"
-                        class="size-7"
-                        aria-label="Connections graph"
-                        title="Connections graph (⌘⇧G)"
-                        @click="openGraphView(note.id)"
-                    >
-                        <Waypoints class="size-4" />
-                    </Button>
-                    <Button
-                        v-if="note && isOwner && !isCalendar"
-                        variant="ghost"
-                        size="icon"
-                        class="size-7"
-                        aria-label="Share note"
-                        title="Share note"
-                        @click="shareOpen = true"
-                    >
-                        <Users class="size-4" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        class="size-7"
-                        :aria-label="note?.pinned ? 'Unpin' : 'Pin'"
-                        @click="togglePin"
-                    >
-                        <PinOff v-if="note?.pinned" class="size-4" />
-                        <Pin v-else class="size-4" />
-                    </Button>
-                    <Button
-                        v-if="isOwner"
-                        variant="ghost"
-                        size="icon"
-                        class="size-7 text-muted-foreground hover:text-destructive"
-                        aria-label="Delete note"
-                        @click="trashNote"
-                    >
-                        <Trash2 class="size-4" />
-                    </Button>
+                    <DropdownMenu v-if="note">
+                        <DropdownMenuTrigger as-child>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                class="size-7"
+                                aria-label="Note actions"
+                                title="Note actions"
+                            >
+                                <MoreHorizontal class="size-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" class="w-52">
+                            <DropdownMenuItem @select="toggleReadOnly">
+                                <Eye v-if="viewMode" class="size-4" />
+                                <Lock v-else class="size-4" />
+                                {{
+                                    viewMode
+                                        ? 'Disable read-only'
+                                        : 'Read-only mode'
+                                }}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                v-if="!isSplit"
+                                @select="openGraphView(note.id)"
+                            >
+                                <Waypoints class="size-4" /> Connections graph
+                            </DropdownMenuItem>
+                            <DropdownMenuItem @select="togglePin">
+                                <PinOff v-if="note.pinned" class="size-4" />
+                                <Pin v-else class="size-4" />
+                                {{ note.pinned ? 'Unpin' : 'Pin' }}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                v-if="isOwner"
+                                @select="shareOpen = true"
+                            >
+                                <Users class="size-4" /> Share…
+                            </DropdownMenuItem>
+                            <template v-if="isOwner">
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    class="text-destructive focus:text-destructive"
+                                    @select="trashNote"
+                                >
+                                    <Trash2 class="size-4" /> Delete
+                                </DropdownMenuItem>
+                            </template>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </template>
 
@@ -587,6 +624,7 @@ defineExpose({ focusEditor });
                     :key="note.id"
                     grow
                     :read-only="readOnly"
+                    :view-mode="viewMode"
                     :model-value="note.content"
                     :state-key="note.id"
                     :placeholder="'Type markdown, add a task (- [ ]), a checklist (+ [ ]), or link a note with [['"
