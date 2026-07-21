@@ -744,9 +744,67 @@ function buildDecorations(state: EditorState): DecorationSet {
     for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber++) {
         const line = doc.line(lineNumber);
 
-        // Front matter block: dim it and skip all other decorations.
+        // Front matter block: dim the line, then surface just links and
+        // dates as clickable tokens (skip the full markdown pipeline — front
+        // matter isn't markdown, so tasks/bullets/etc. must not apply).
         if (fmEnd !== -1 && lineNumber <= fmEnd) {
             builder.add(line.from, line.from, frontMatterLine);
+
+            const fmTokens: TokenDecoration[] = [];
+            const urlSpans: [number, number][] = [];
+
+            for (const match of line.text.matchAll(/https?:\/\/\S+/g)) {
+                const from = line.from + match.index;
+                const to = from + match[0].length;
+                urlSpans.push([from, to]);
+                fmTokens.push({
+                    from,
+                    to,
+                    decoration: Decoration.mark({
+                        class: 'cm-frontmatter-link',
+                        attributes: {
+                            'data-fm-url': match[0],
+                            title: 'Click to open link',
+                        },
+                    }),
+                });
+            }
+
+            for (const match of line.text.matchAll(/\d{4}-\d{2}-\d{2}/g)) {
+                const from = line.from + match.index;
+                const to = from + match[0].length;
+
+                // A date embedded in a URL (rare) belongs to the link.
+                if (urlSpans.some(([s, e]) => from >= s && to <= e)) {
+                    continue;
+                }
+
+                fmTokens.push({
+                    from,
+                    to,
+                    decoration: Decoration.mark({
+                        class: 'cm-date-link cm-fm-date',
+                        attributes: {
+                            'data-date-key': match[0],
+                            title: 'Click to open the day · ⌥-click for split',
+                        },
+                    }),
+                });
+            }
+
+            fmTokens.sort((a, b) => a.from - b.from || a.to - b.to);
+
+            let fmLastEnd = -1;
+
+            for (const token of fmTokens) {
+                if (token.from < fmLastEnd) {
+                    continue;
+                }
+
+                builder.add(token.from, token.to, token.decoration);
+                fmLastEnd = token.to;
+            }
+
             continue;
         }
 
@@ -2416,6 +2474,26 @@ function clickHandlers(callbacks: EditorCallbacks): Extension {
                 }
             }
 
+            // Front-matter links (bluedot-link, etc.) open externally, like
+            // markdown links but without the surrounding `[text](url)` syntax.
+            const fmLink = target.closest<HTMLElement>('.cm-frontmatter-link');
+
+            if (fmLink) {
+                const pos = view.posAtDOM(fmLink);
+                const line = view.state.doc.lineAt(pos);
+
+                if (!selectionTouches(view.state, line.from, line.to)) {
+                    const url = fmLink.dataset.fmUrl;
+
+                    if (url) {
+                        event.preventDefault();
+                        void openMarkdownUrl(url);
+
+                        return true;
+                    }
+                }
+            }
+
             const tokenEl = target.closest<HTMLElement>(
                 '.cm-wikilink, .cm-date-link, .cm-due-pill, .cm-hashtag, .cm-mention',
             );
@@ -2458,7 +2536,14 @@ function clickHandlers(callbacks: EditorCallbacks): Extension {
                     return false;
                 }
 
-                if (forced) {
+                if (tokenEl.classList.contains('cm-fm-date')) {
+                    // Front-matter dates have no schedule token to edit, so a
+                    // click simply opens that day (⌥-click opens it in split).
+                    callbacks.onOpenDate(
+                        key === 'today' ? todayDailyKey() : key,
+                        split,
+                    );
+                } else if (forced) {
                     // ⌘/⌥-click still jumps to the calendar note.
                     callbacks.onOpenDate(
                         key === 'today' ? todayDailyKey() : key,
@@ -2718,8 +2803,18 @@ const editorTheme = EditorView.theme({
 
     '.cm-frontmatter': {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-        fontSize: '0.82em',
+        // Clearly below the 15px body text so front matter reads as metadata.
+        fontSize: '0.72em',
         color: 'var(--muted-foreground)',
+    },
+    // Links in front matter (e.g. bluedot-link) look clickable.
+    '.cm-frontmatter-link': {
+        color: 'var(--token-link)',
+        textDecoration: 'underline',
+        textDecorationColor:
+            'color-mix(in oklab, var(--token-link) 40%, transparent)',
+        textUnderlineOffset: '2px',
+        cursor: 'pointer',
     },
 
     '.cm-indent-guide': {
