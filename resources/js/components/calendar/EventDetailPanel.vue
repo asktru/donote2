@@ -13,6 +13,7 @@ import { format, parseISO } from 'date-fns';
 import { computed } from 'vue';
 
 import { Button } from '@/components/ui/button';
+import { htmlToText } from '@/lib/htmlText';
 import { cn } from '@/lib/utils';
 import {
     closeEventDetail,
@@ -25,6 +26,13 @@ import type { RsvpStatus } from '@/stores/calendar';
 
 const isHidden = computed<boolean>(() =>
     selectedEvent.value ? isEventHidden(selectedEvent.value) : false,
+);
+
+/** Google sends the description as HTML; render it as readable plain text. */
+const descriptionText = computed<string>(() =>
+    selectedEvent.value?.description
+        ? htmlToText(selectedEvent.value.description)
+        : '',
 );
 
 function hideOne(): void {
@@ -146,10 +154,10 @@ const RSVP_CLASS: Record<RsvpStatus, string> = {
                 </a>
 
                 <p
-                    v-if="selectedEvent.description"
-                    class="text-sm whitespace-pre-wrap text-foreground/90"
+                    v-if="descriptionText"
+                    class="text-sm break-words whitespace-pre-wrap text-foreground/90"
                 >
-                    {{ selectedEvent.description }}
+                    {{ descriptionText }}
                 </p>
 
                 <div v-if="selectedEvent.attendees.length > 0" class="space-y-1.5">
