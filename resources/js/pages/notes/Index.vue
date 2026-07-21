@@ -57,6 +57,7 @@ import {
     collapseAllFolders,
     currentView,
     expandFolderPath,
+    focusMode,
     initViewFromUrl,
     mobileSidebarOpen,
     openCalendar,
@@ -66,9 +67,12 @@ import {
     openTagView,
     openView,
     searchOpen,
+    setSidebarWidth,
     shortcutsOpen,
+    sidebarWidth,
     splitView,
     stepCalendar,
+    toggleFocusMode,
 } from '@/stores/ui';
 import { initSectionPrefs } from '@/stores/uiSections';
 import {
@@ -105,6 +109,29 @@ function handleOpenCalendar(dateKey: string, split = false): void {
 
 function handleOpenNote(id: string, split = false, line?: number): void {
     openNote(id, { split, line });
+}
+
+/** Drag the divider between the left sidebar and the main pane to resize it. */
+function startSidebarResize(event: PointerEvent): void {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = sidebarWidth.value;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const move = (e: PointerEvent): void => {
+        setSidebarWidth(startWidth + (e.clientX - startX));
+    };
+
+    const up = (): void => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+    };
+
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
 }
 
 const mainNoteExists = computed(() => {
@@ -312,6 +339,11 @@ function onKeydown(event: KeyboardEvent): void {
         if (startMoveToNote()) {
             event.preventDefault();
         }
+    } else if (key === 'f' && event.shiftKey) {
+        // ⌘⇧F: focus mode — hide both side rails to fill the window with the
+        // note(s).
+        event.preventDefault();
+        toggleFocusMode();
     } else if (event.altKey && event.key === 'ArrowLeft') {
         event.preventDefault();
         mainPane.value?.focusEditor();
@@ -424,8 +456,21 @@ onBeforeUnmount(() => {
             class="flex h-dvh w-full overflow-hidden bg-background text-foreground pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
         >
             <template v-if="ready && booted">
-                <div class="hidden h-full shrink-0 md:flex">
+                <div
+                    v-show="!focusMode"
+                    class="relative hidden h-full shrink-0 md:flex"
+                    :style="{ width: `${sidebarWidth}px` }"
+                >
                     <NotesSidebar />
+                    <!-- Drag handle to resize the sidebar. -->
+                    <div
+                        class="absolute inset-y-0 -right-0.5 z-10 w-1.5 cursor-col-resize touch-none transition-colors hover:bg-primary/30 active:bg-primary/50"
+                        role="separator"
+                        aria-orientation="vertical"
+                        aria-label="Resize sidebar"
+                        title="Drag to resize"
+                        @pointerdown="startSidebarResize"
+                    />
                 </div>
 
                 <Sheet v-model:open="mobileSidebarOpen">
@@ -569,9 +614,10 @@ onBeforeUnmount(() => {
                     </div>
                 </main>
 
-                <!-- Splits reclaim the calendar sidebar's width. -->
+                <!-- Splits reclaim the calendar sidebar's width; focus mode
+                     hides it entirely. -->
                 <aside
-                    v-if="splitView === null"
+                    v-if="splitView === null && !focusMode"
                     class="hidden h-full w-72 shrink-0 flex-col gap-5 overflow-y-auto border-l border-border/60 bg-muted/20 p-4 xl:flex"
                 >
                     <MiniCalendar

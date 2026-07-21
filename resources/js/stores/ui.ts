@@ -34,6 +34,54 @@ export const shortcutsOpen = ref(false);
 export const syncPanelOpen = ref(false);
 /** Off-canvas sidebar state on small screens. */
 export const mobileSidebarOpen = ref(false);
+
+/**
+ * Focus mode hides both side rails so the note(s) fill the window. It's a
+ * session toggle (⌘⇧F), deliberately not persisted — reopening the app
+ * starts with the sidebars back.
+ */
+export const focusMode = ref(false);
+
+export function toggleFocusMode(): void {
+    focusMode.value = !focusMode.value;
+}
+
+const SIDEBAR_WIDTH_KEY = 'donote:sidebar-width';
+const SIDEBAR_MIN = 200;
+const SIDEBAR_MAX = 520;
+const SIDEBAR_DEFAULT = 256; // matches the previous fixed w-64
+
+function readSidebarWidth(): number {
+    try {
+        const stored = Number.parseInt(
+            localStorage.getItem(SIDEBAR_WIDTH_KEY) ?? '',
+            10,
+        );
+
+        if (Number.isFinite(stored)) {
+            return Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, stored));
+        }
+    } catch {
+        // Ignore — fall back to the default width.
+    }
+
+    return SIDEBAR_DEFAULT;
+}
+
+/** Persisted width of the desktop left sidebar, in pixels. */
+export const sidebarWidth = ref<number>(readSidebarWidth());
+
+/** Set the sidebar width (clamped) and remember it across sessions. */
+export function setSidebarWidth(width: number): void {
+    const clamped = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, Math.round(width)));
+    sidebarWidth.value = clamped;
+
+    try {
+        localStorage.setItem(SIDEBAR_WIDTH_KEY, String(clamped));
+    } catch {
+        // Best-effort — resizing still works this session without it.
+    }
+}
 /**
  * Expanded sidebar folders. Empty on every app open — the sidebar
  * starts fully collapsed by design.

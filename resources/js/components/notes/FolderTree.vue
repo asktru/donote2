@@ -430,6 +430,7 @@ async function onDrop(event: DragEvent): Promise<void> {
                         type="button"
                         draggable="true"
                         :data-note-id="note.id"
+                        :title="note.title || 'Untitled'"
                         :class="
                             cn(
                                 'flex w-full items-center gap-1.5 rounded-md py-1 pr-2 text-sm hover:bg-muted/70',

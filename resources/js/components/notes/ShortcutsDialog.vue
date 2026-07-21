@@ -22,6 +22,7 @@ const groups: ShortcutGroup[] = [
             ],
             ['⌘⌃1 / ⌘⌃2', 'Switch to Notes / Calendar'],
             ['⌘⌥← / ⌘⌥→', 'Focus main / split pane'],
+            ['⌘⇧F', 'Focus mode — hide the side panels'],
             ['Esc', 'Close split pane'],
             ['⌘⇧G', 'Connections graph for the current note (split)'],
             [
