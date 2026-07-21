@@ -111,6 +111,29 @@ describe('extractActionItems', () => {
         expect(groups[0].items).toEqual(['Remind PMs about cross-team notices']);
         expect(groups[1].items).toEqual(['Share the B2B docs']);
     });
+
+    it('captures a bare paragraph action point (no bullet) under a person', () => {
+        const content = [
+            '## Action Items',
+            '',
+            '**Anton Skliar**',
+            '',
+            'Share the HTML analytics report with Natalie',
+            '',
+            '**Ivan**',
+            '',
+            '+ [ ] Ship the draft',
+            '',
+            '## Topics',
+        ].join('\n');
+
+        const groups = extractActionItems(content);
+        expect(groups.map((g) => g.person)).toEqual(['Anton Skliar', 'Ivan']);
+        expect(groups[0].items).toEqual([
+            'Share the HTML analytics report with Natalie',
+        ]);
+        expect(groups[1].items).toEqual(['Ship the draft']);
+    });
 });
 
 describe('classifyPerson', () => {

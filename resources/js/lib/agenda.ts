@@ -152,6 +152,15 @@ export function extractActionItems(
 
         if (item && current) {
             current.items.push(item[1].trim());
+
+            continue;
+        }
+
+        // Bluedot sometimes writes a lone action point as a plain paragraph
+        // (no bullet or checkbox) right under the person label. Treat any
+        // other non-blank line in the section as that person's item.
+        if (current && line.trim() !== '') {
+            current.items.push(line.trim());
         }
     }
 
