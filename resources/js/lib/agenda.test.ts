@@ -110,6 +110,24 @@ describe('selectMeetings', () => {
         const agenda = `${AGENDA_FM}\n- [[Ivan <> Anton -- 2026-04-21 | 2026-04-21]]`;
         expect(selectMeetings(meetings, config, agenda, '2026-04-22')).toHaveLength(0);
     });
+
+    it('includes a meeting dated exactly today', () => {
+        const meetings = [MEETING('Ivan <> Anton -- 2026-04-22', '2026-04-22')];
+        const selected = selectMeetings(meetings, config, '', '2026-04-22');
+        expect(selected.map((s) => s.meeting.title)).toEqual([
+            'Ivan <> Anton -- 2026-04-22',
+        ]);
+    });
+
+    it('includes a meeting whose UTC date runs ahead of the local today', () => {
+        // meeting-date is stamped server-side in UTC; a user behind UTC sees an
+        // evening meeting land on the next calendar day. It must still pull in.
+        const meetings = [MEETING('Ivan <> Anton -- 2026-04-23', '2026-04-23')];
+        const selected = selectMeetings(meetings, config, '', '2026-04-22');
+        expect(selected.map((s) => s.meeting.title)).toEqual([
+            'Ivan <> Anton -- 2026-04-23',
+        ]);
+    });
 });
 
 describe('buildAgendaAppendix', () => {

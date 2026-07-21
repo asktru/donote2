@@ -77,8 +77,15 @@ export function meetingDate(meeting: AgendaMeeting): string | null {
 
 /**
  * Meetings to pull in: in the Meetings folder, title contains the agenda
- * substring, dated within range, and not already linked in the agenda note.
- * Oldest first, matching how meetings accrete down the note.
+ * substring, dated on or after the look-back cutoff, and not already linked
+ * in the agenda note. Oldest first, matching how meetings accrete down the
+ * note.
+ *
+ * `range` is a look-back window only — a lower bound, no upper bound. A meeting
+ * can't be "too recent": capping at `today` used to silently drop today's
+ * meetings, because `meeting-date` is stamped server-side in UTC while `today`
+ * is the client's local date, so an evening meeting for a user behind UTC gets
+ * a next-day date and fell outside `<= today`.
  */
 export function selectMeetings(
     meetings: AgendaMeeting[],
@@ -95,7 +102,7 @@ export function selectMeetings(
         .map((meeting) => ({ meeting, date: meetingDate(meeting) }))
         .filter(
             (row): row is { meeting: AgendaMeeting; date: string } =>
-                row.date !== null && row.date >= cutoff && row.date <= today,
+                row.date !== null && row.date >= cutoff,
         )
         .filter(({ meeting }) => !agendaContent.includes(`[[${meeting.title}`))
         .sort((a, b) => a.date.localeCompare(b.date));
