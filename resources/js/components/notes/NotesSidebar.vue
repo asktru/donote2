@@ -351,7 +351,7 @@ const syncLabel = computed(() => {
                     <button
                         type="button"
                         class="min-w-0 flex-1 truncate text-left"
-                        @click="openNote(note.id)"
+                        @click="openNote(note.id, { split: $event.altKey })"
                     >
                         {{ note.title || 'Untitled' }}
                     </button>
@@ -390,7 +390,7 @@ const syncLabel = computed(() => {
                                 : 'text-foreground/80',
                         )
                     "
-                    @click="openNote(note.id)"
+                    @click="openNote(note.id, { split: $event.altKey })"
                 >
                     <Pin class="size-4 shrink-0 text-muted-foreground" />
                     <span class="truncate">{{ note.title || 'Untitled' }}</span>
@@ -474,7 +474,7 @@ const syncLabel = computed(() => {
                                     : 'text-foreground/90',
                             )
                         "
-                        @click="openNote(shared.id)"
+                        @click="openNote(shared.id, { split: $event.altKey })"
                     >
                         <FileText class="size-4 shrink-0 text-muted-foreground" />
                         <span class="min-w-0 flex-1 truncate">{{

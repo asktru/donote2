@@ -54,7 +54,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    'open-note': [noteId: string, line: number];
+    'open-note': [noteId: string, line: number, split: boolean];
     close: [];
 }>();
 
@@ -341,7 +341,15 @@ function dueLabel(task: WorkspaceTask): string | null {
                     <button
                         type="button"
                         class="min-w-0 flex-1 text-left"
-                        @click="emit('open-note', task.noteId, task.line.index)"
+                        @click="
+                            (event) =>
+                                emit(
+                                    'open-note',
+                                    task.noteId,
+                                    task.line.index,
+                                    event.altKey,
+                                )
+                        "
                     >
                         <p
                             :class="

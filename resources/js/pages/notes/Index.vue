@@ -449,13 +449,13 @@ onBeforeUnmount(() => {
                         <TasksView
                             v-if="currentView.kind === 'tasks'"
                             @open-note="
-                                (id, line) => handleOpenNote(id, false, line)
+                                (id, line, split) => handleOpenNote(id, split ?? false, line)
                             "
                         />
                         <RemindersView
                             v-else-if="currentView.kind === 'reminders'"
                             @open-note="
-                                (id, line) => handleOpenNote(id, false, line)
+                                (id, line, split) => handleOpenNote(id, split ?? false, line)
                             "
                         />
                         <TrashView
@@ -467,7 +467,7 @@ onBeforeUnmount(() => {
                             :key="`tag:${currentView.tag}`"
                             :filter-tag="currentView.tag"
                             @open-note="
-                                (id, line) => handleOpenNote(id, false, line)
+                                (id, line, split) => handleOpenNote(id, split ?? false, line)
                             "
                         />
                         <TasksView
@@ -475,7 +475,7 @@ onBeforeUnmount(() => {
                             :key="`mention:${currentView.mention}`"
                             :filter-mention="currentView.mention"
                             @open-note="
-                                (id, line) => handleOpenNote(id, false, line)
+                                (id, line, split) => handleOpenNote(id, split ?? false, line)
                             "
                         />
                         <NotePane
@@ -497,7 +497,7 @@ onBeforeUnmount(() => {
                                     openMentionView(mention, split)
                             "
                             @open-note-line="
-                                (id, line) => handleOpenNote(id, false, line)
+                                (id, line, split) => handleOpenNote(id, split ?? false, line)
                             "
                             @close="openCalendar('daily', todayDailyKey())"
                         />
@@ -530,7 +530,7 @@ onBeforeUnmount(() => {
                             :filter-tag="splitView.tag"
                             is-split
                             @open-note="
-                                (id, line) => handleOpenNote(id, false, line)
+                                (id, line, split) => handleOpenNote(id, split ?? false, line)
                             "
                             @close="closeSplit"
                         />
@@ -540,7 +540,7 @@ onBeforeUnmount(() => {
                             :filter-mention="splitView.mention"
                             is-split
                             @open-note="
-                                (id, line) => handleOpenNote(id, false, line)
+                                (id, line, split) => handleOpenNote(id, split ?? false, line)
                             "
                             @close="closeSplit"
                         />
@@ -562,7 +562,7 @@ onBeforeUnmount(() => {
                                     openMentionView(mention, split)
                             "
                             @open-note-line="
-                                (id, line) => handleOpenNote(id, false, line)
+                                (id, line, split) => handleOpenNote(id, split ?? false, line)
                             "
                             @close="closeSplit"
                         />
@@ -575,13 +575,15 @@ onBeforeUnmount(() => {
                     class="hidden h-full w-72 shrink-0 flex-col gap-5 overflow-y-auto border-l border-border/60 bg-muted/20 p-4 xl:flex"
                 >
                     <MiniCalendar
-                        @pick-day="(key) => handleOpenCalendar(key)"
-                        @pick-week="(key) => handleOpenCalendar(key)"
-                        @pick-period="(key) => handleOpenCalendar(key)"
+                        @pick-day="(key, split) => handleOpenCalendar(key, split)"
+                        @pick-week="(key, split) => handleOpenCalendar(key, split)"
+                        @pick-period="
+                            (key, split) => handleOpenCalendar(key, split)
+                        "
                     />
                     <EventsList :google-connected="googleConnected" />
                     <DueTasksSection
-                        @open-note="(id, line) => handleOpenNote(id, false, line)"
+                        @open-note="(id, line, split) => handleOpenNote(id, split ?? false, line)"
                     />
                 </aside>
 
@@ -602,7 +604,7 @@ onBeforeUnmount(() => {
                 <EditorToolbar />
                 <RecordingIndicator />
                 <ReminderHost
-                    @open-note="(id, line) => handleOpenNote(id, false, line)"
+                    @open-note="(id, line, split) => handleOpenNote(id, split ?? false, line)"
                 />
             </template>
 

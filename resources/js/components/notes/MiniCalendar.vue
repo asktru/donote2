@@ -20,9 +20,9 @@ import { currentView } from '@/stores/ui';
 import { liveNotes } from '@/stores/workspace';
 
 const emit = defineEmits<{
-    'pick-day': [dateKey: string];
-    'pick-week': [dateKey: string];
-    'pick-period': [dateKey: string];
+    'pick-day': [dateKey: string, split: boolean];
+    'pick-week': [dateKey: string, split: boolean];
+    'pick-period': [dateKey: string, split: boolean];
 }>();
 
 const focusedMonth = ref(startOfMonth(new Date()));
@@ -99,7 +99,12 @@ const today = new Date();
                     class="hover:text-primary hover:underline"
                     :title="`Open ${format(focusedMonth, 'MMMM')} monthly note`"
                     @click="
-                        emit('pick-period', dateKeyFor('monthly', focusedMonth))
+                        (event) =>
+                            emit(
+                                'pick-period',
+                                dateKeyFor('monthly', focusedMonth),
+                                event.altKey,
+                            )
                     "
                 >
                     {{ format(focusedMonth, 'MMMM') }}</button
@@ -109,10 +114,12 @@ const today = new Date();
                     class="hover:text-primary hover:underline"
                     :title="`Open Q${format(focusedMonth, 'Q')} quarterly note`"
                     @click="
-                        emit(
-                            'pick-period',
-                            dateKeyFor('quarterly', focusedMonth),
-                        )
+                        (event) =>
+                            emit(
+                                'pick-period',
+                                dateKeyFor('quarterly', focusedMonth),
+                                event.altKey,
+                            )
                     "
                 >
                     Q{{ format(focusedMonth, 'Q') }}</button
@@ -122,7 +129,12 @@ const today = new Date();
                     class="hover:text-primary hover:underline"
                     :title="`Open ${format(focusedMonth, 'yyyy')} yearly note`"
                     @click="
-                        emit('pick-period', dateKeyFor('yearly', focusedMonth))
+                        (event) =>
+                            emit(
+                                'pick-period',
+                                dateKeyFor('yearly', focusedMonth),
+                                event.altKey,
+                            )
                     "
                 >
                     {{ format(focusedMonth, 'yyyy') }}
@@ -167,7 +179,10 @@ const today = new Date();
                     type="button"
                     class="pr-1.5 text-[10px] text-muted-foreground/60 hover:text-primary"
                     :title="`Open weekly note ${week.weekKey}`"
-                    @click="emit('pick-week', week.weekKey)"
+                    @click="
+                        (event) =>
+                            emit('pick-week', week.weekKey, event.altKey)
+                    "
                 >
                     {{ week.weekNumber }}
                 </button>
@@ -185,7 +200,14 @@ const today = new Date();
                                 'bg-primary text-primary-foreground hover:bg-primary',
                         )
                     "
-                    @click="emit('pick-day', dateKeyFor('daily', day))"
+                    @click="
+                        (event) =>
+                            emit(
+                                'pick-day',
+                                dateKeyFor('daily', day),
+                                event.altKey,
+                            )
+                    "
                 >
                     {{ day.getDate() }}
                     <span

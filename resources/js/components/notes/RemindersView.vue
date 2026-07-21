@@ -25,7 +25,7 @@ import {
 } from '@/stores/workspace';
 
 const emit = defineEmits<{
-    'open-note': [noteId: string, line: number];
+    'open-note': [noteId: string, line: number, split: boolean];
 }>();
 
 let db: WorkspaceDb | null = null;
@@ -261,11 +261,13 @@ onBeforeUnmount(() => {
                     type="button"
                     class="min-w-0 flex-1 text-left"
                     @click="
-                        emit(
-                            'open-note',
-                            candidate.noteId,
-                            candidate.line.index,
-                        )
+                        (event) =>
+                            emit(
+                                'open-note',
+                                candidate.noteId,
+                                candidate.line.index,
+                                event.altKey,
+                            )
                     "
                 >
                     <p class="truncate text-sm">{{ candidate.line.title }}</p>

@@ -23,7 +23,7 @@ import {
 } from '@/stores/workspace';
 
 const emit = defineEmits<{
-    'open-note': [noteId: string, line: number];
+    'open-note': [noteId: string, line: number, split: boolean];
 }>();
 
 const active = ref<ReminderCandidate[]>([]);
@@ -131,8 +131,8 @@ async function complete(candidate: ReminderCandidate): Promise<void> {
     await dismiss(candidate);
 }
 
-function openNote(candidate: ReminderCandidate): void {
-    emit('open-note', candidate.noteId, candidate.line.index);
+function openNote(candidate: ReminderCandidate, split = false): void {
+    emit('open-note', candidate.noteId, candidate.line.index, split);
     void dismiss(candidate);
 }
 
@@ -153,7 +153,7 @@ onMounted(() => {
             return;
         }
 
-        emit('open-note', noteId, line);
+        emit('open-note', noteId, line, false);
     });
 
     void scan();
@@ -217,7 +217,9 @@ onBeforeUnmount(() => {
                         size="sm"
                         variant="outline"
                         class="h-7 gap-1 px-2 text-xs"
-                        @click="openNote(candidate)"
+                        @click="
+                            (event) => openNote(candidate, event.altKey)
+                        "
                     >
                         <ExternalLink class="size-3.5" /> Open
                     </Button>

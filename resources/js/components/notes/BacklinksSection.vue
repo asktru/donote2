@@ -30,7 +30,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    'open-note': [id: string, line: number];
+    'open-note': [id: string, line: number, split: boolean];
 }>();
 
 const TYPE_ICONS: Record<NoteKind, typeof FileText> = {
@@ -224,7 +224,10 @@ function displayText(line: ParsedLine): string {
                 <button
                     type="button"
                     class="mb-1 flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-                    @click="emit('open-note', group.note.id, 0)"
+                    @click="
+                        (event) =>
+                            emit('open-note', group.note.id, 0, event.altKey)
+                    "
                 >
                     <component
                         :is="group.icon"
@@ -238,7 +241,15 @@ function displayText(line: ParsedLine): string {
                     :key="block.anchor"
                     type="button"
                     class="mb-1.5 block w-full rounded-md border-l-2 border-primary/30 bg-background/60 py-1.5 pr-3 pl-3 text-left hover:border-primary/70 hover:bg-muted/50"
-                    @click="emit('open-note', group.note.id, block.anchor)"
+                    @click="
+                        (event) =>
+                            emit(
+                                'open-note',
+                                group.note.id,
+                                block.anchor,
+                                event.altKey,
+                            )
+                    "
                 >
                     <p
                         v-for="line in block.lines"

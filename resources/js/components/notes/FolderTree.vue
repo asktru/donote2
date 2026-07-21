@@ -430,7 +430,9 @@ async function onDrop(event: DragEvent): Promise<void> {
                         :style="{
                             paddingLeft: `${childDepth * 14 + 8 + (path === '' ? 0 : 18)}px`,
                         }"
-                        @click="emit('open-note', note.id, false)"
+                        @click="
+                            (event) => emit('open-note', note.id, event.altKey)
+                        "
                         @dragstart="(event) => onNoteDragStart(event, note)"
                         @dragend="onDragEnd"
                     >

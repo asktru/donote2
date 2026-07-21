@@ -89,7 +89,7 @@ const emit = defineEmits<{
     'open-calendar': [dateKey: string, split: boolean];
     'open-tag': [tag: string, split: boolean];
     'open-mention': [mention: string, split: boolean];
-    'open-note-line': [id: string, line: number];
+    'open-note-line': [id: string, line: number, split?: boolean];
     close: [];
 }>();
 
@@ -647,13 +647,19 @@ defineExpose({ focusEditor });
             >
                 <EventsList :google-connected="googleConnected ?? false" />
                 <DueTasksSection
-                    @open-note="(id, line) => emit('open-note-line', id, line)"
+                    @open-note="
+                        (id, line, split) =>
+                            emit('open-note-line', id, line, split)
+                    "
                 />
             </div>
 
             <BacklinksSection
                 :note-id="note?.id ?? null"
-                @open-note="(id, line) => emit('open-note-line', id, line)"
+                @open-note="
+                    (id, line, split) =>
+                        emit('open-note-line', id, line, split)
+                "
             />
         </div>
 
