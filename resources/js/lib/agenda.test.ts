@@ -55,10 +55,17 @@ describe('parseAgendaConfig', () => {
     it('parses agenda/me/others/range', () => {
         const config = parseAgendaConfig(AGENDA_FM);
         expect(config).not.toBeNull();
-        expect(config!.agenda).toBe('Ivan');
+        expect(config!.agenda).toEqual(['Ivan']);
         expect(config!.me).toEqual(['Антон Скляр', 'Антон Скліар', 'Anton Skliar']);
         expect(config!.others).toEqual([{ substring: 'Іван', mention: '@IvanYakubyshyn' }]);
         expect(config!.days).toBe(7);
+    });
+
+    it('parses multiple comma-separated agenda substrings', () => {
+        const config = parseAgendaConfig(
+            '---\nagenda: Fellowship, Weekly sync\n---\n',
+        );
+        expect(config!.agenda).toEqual(['Fellowship', 'Weekly sync']);
     });
 
     it('returns null without an agenda key, and defaults range to 7', () => {
@@ -164,6 +171,22 @@ describe('selectMeetings', () => {
         const meetings = [MEETING('Ivan <> Anton -- 2026-04-21', '2026-04-21')];
         const agenda = `${AGENDA_FM}\n- [[Ivan <> Anton -- 2026-04-21 | 2026-04-21]]`;
         expect(selectMeetings(meetings, config, agenda, '2026-04-22')).toHaveLength(0);
+    });
+
+    it('matches any of several comma-separated agenda substrings', () => {
+        const multi = parseAgendaConfig(
+            '---\nagenda: Ivan, Natalie\nme: Anton\nrange: 14\n---\n',
+        ) as AgendaConfig;
+        const meetings = [
+            MEETING('Ivan <> Anton -- 2026-04-21', '2026-04-21'),
+            MEETING('Natalie <> Anton -- 2026-04-20', '2026-04-20'),
+            MEETING('Bob <> Anton -- 2026-04-19', '2026-04-19'), // matches neither
+        ];
+        const selected = selectMeetings(meetings, multi, '', '2026-04-22');
+        expect(selected.map((s) => s.meeting.title)).toEqual([
+            'Natalie <> Anton -- 2026-04-20',
+            'Ivan <> Anton -- 2026-04-21',
+        ]);
     });
 
     it('includes a meeting dated exactly today', () => {

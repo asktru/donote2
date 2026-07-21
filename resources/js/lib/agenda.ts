@@ -4,18 +4,20 @@ import { parseNoteMeta } from '@/core/frontmatter';
  * "Fetch agenda" bubbles action items from recent meeting notes into an
  * agenda note. It is driven entirely by the agenda note's front matter:
  *
- *   agenda: Anastasiia            # substring to find in meeting titles
- *   me: Антон Скляр, Anton Skliar # names that represent me
+ *   agenda: Anastasiia, Weekly sync # substring(s) to find in meeting titles
+ *   me: Антон Скляр, Anton Skliar   # names that represent me
  *   others: Анастасія : @AnastasiiaBoiko
- *   range: 7                      # days back to scan (optional, default 7)
+ *   range: 7                        # days back to scan (optional, default 7)
  *
- * Meetings are matched from the "Meetings" folder by title substring within
- * the date range. Each meeting's `## Action Items` section is split by its
- * `### Person` sub-headings; my items become tasks, everyone else's become
- * checklist items (with a mention when the person is listed in `others`).
+ * Meetings are matched from the "Meetings" folder when their title contains
+ * any of the comma-separated `agenda` substrings, within the date range. Each
+ * meeting's `## Action Items` section is split by its per-person headings; my
+ * items become tasks, everyone else's become checklist items (with a mention
+ * when the person is listed in `others`).
  */
 export interface AgendaConfig {
-    agenda: string;
+    /** Title substrings to match; a meeting matches if it contains any. */
+    agenda: string[];
     me: string[];
     others: { substring: string; mention: string }[];
     days: number;
@@ -31,9 +33,9 @@ export interface AgendaMeeting {
 /** Parse the agenda front matter, or null when it isn't an agenda note. */
 export function parseAgendaConfig(content: string): AgendaConfig | null {
     const props = parseNoteMeta(content).properties;
-    const agenda = (props.agenda ?? '').trim();
+    const agenda = splitList(props.agenda);
 
-    if (agenda === '') {
+    if (agenda.length === 0) {
         return null;
     }
 
@@ -93,12 +95,16 @@ export function selectMeetings(
     agendaContent: string,
     today: string,
 ): { meeting: AgendaMeeting; date: string }[] {
-    const needle = config.agenda.toLowerCase();
+    const needles = config.agenda.map((a) => a.toLowerCase());
     const cutoff = addDays(today, -config.days);
 
     return meetings
         .filter((m) => m.folder === 'Meetings' || m.folder.startsWith('Meetings/'))
-        .filter((m) => m.title.toLowerCase().includes(needle))
+        .filter((m) => {
+            const title = m.title.toLowerCase();
+
+            return needles.some((needle) => title.includes(needle));
+        })
         .map((meeting) => ({ meeting, date: meetingDate(meeting) }))
         .filter(
             (row): row is { meeting: AgendaMeeting; date: string } =>
