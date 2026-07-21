@@ -93,6 +93,53 @@ test('the job drops the summary when the user no longer belongs to the team', fu
     expect(Note::query()->where('team_id', $team->id)->count())->toBe(0);
 });
 
+test('it accepts Bluedot object attendees and the meeting.summary.created type', function () {
+    Queue::fake();
+    $user = User::factory()->create();
+    $token = $user->createToken('bluedot-webhook')->plainTextToken;
+
+    $payload = bluedotPayload([
+        'type' => 'meeting.summary.created',
+        'attendees' => [
+            ['email' => 'anton@example.com'],
+            ['email' => 'olga@example.com'],
+        ],
+        'owner' => ['email' => 'anton@example.com'],
+    ]);
+
+    $this->postJson("/webhooks/bluedot?token={$token}", $payload)
+        ->assertStatus(202)
+        ->assertJsonPath('status', 'queued');
+
+    Queue::assertPushed(ProcessBluedotSummary::class);
+});
+
+test('the job records attendee emails from object attendees', function () {
+    $user = User::factory()->create();
+    $team = $user->currentTeam;
+
+    $payload = bluedotPayload([
+        'type' => 'meeting.summary.created',
+        'attendees' => [
+            ['email' => 'anton@example.com'],
+            ['email' => 'olga@example.com'],
+        ],
+    ]);
+
+    (new ProcessBluedotSummary($user->id, $team->id, $payload))->handle(
+        app(WriteNote::class),
+        app(AppendUnderHeading::class),
+        app(FormatBluedotSummary::class),
+    );
+
+    $note = Note::query()->forWorkspace($team, $user)
+        ->where('folder', 'Meetings')->firstOrFail();
+
+    expect($note->content)->toContain(
+        'attendees: anton@example.com, olga@example.com',
+    );
+});
+
 test('non-summary events are ignored', function () {
     Queue::fake();
     $user = User::factory()->create();

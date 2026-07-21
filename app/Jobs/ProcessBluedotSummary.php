@@ -53,7 +53,7 @@ class ProcessBluedotSummary implements ShouldQueue
         $frontMatter = implode("\n", [
             '---',
             'meeting-date: '.$dateKey,
-            'attendees: '.implode(', ', (array) ($this->payload['attendees'] ?? [])),
+            'attendees: '.$this->attendeeEmails(),
             'meeting-id: '.(string) ($this->payload['meetingId'] ?? ''),
             'video-id: '.$videoId,
             'source: bluedot',
@@ -99,6 +99,29 @@ class ProcessBluedotSummary implements ShouldQueue
         }
 
         return $title;
+    }
+
+    /**
+     * Bluedot sends attendees as `{"email": ...}` objects; older payloads
+     * used bare strings. Normalise both to a comma-separated email list.
+     */
+    private function attendeeEmails(): string
+    {
+        $emails = [];
+
+        foreach ((array) ($this->payload['attendees'] ?? []) as $attendee) {
+            if (is_array($attendee)) {
+                $email = $attendee['email'] ?? null;
+
+                if (is_string($email) && $email !== '') {
+                    $emails[] = $email;
+                }
+            } elseif (is_string($attendee) && $attendee !== '') {
+                $emails[] = $attendee;
+            }
+        }
+
+        return implode(', ', $emails);
     }
 
     private function linkFromDailyNote(

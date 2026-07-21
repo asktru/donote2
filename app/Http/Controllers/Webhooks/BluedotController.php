@@ -34,16 +34,20 @@ class BluedotController extends Controller
             'summary' => ['nullable', 'string'],
             'summaryV2' => ['nullable', 'string'],
             'createdAt' => ['nullable', 'integer'],
+            // Bluedot sends attendees as objects ({"email": ...}); older/other
+            // payloads may send bare strings. Accept either — the job
+            // normalises them to a list of emails.
             'attendees' => ['nullable', 'array'],
-            'attendees.*' => ['string'],
             'meetingId' => ['nullable', 'string'],
             'videoId' => ['nullable', 'string'],
         ]);
 
-        // Only summary-ready events carry a transcript worth storing.
-        $type = $validated['type'] ?? 'video.summary.created';
+        // Only summary-ready events carry a transcript worth storing. Bluedot
+        // labels these `meeting.summary.created` (formerly `video.summary.created`);
+        // accept any `*.summary.created`, ignore everything else.
+        $type = $validated['type'] ?? 'meeting.summary.created';
 
-        if ($type !== 'video.summary.created') {
+        if (! str_ends_with($type, 'summary.created')) {
             return response()->json(['status' => 'ignored', 'type' => $type], 202);
         }
 
