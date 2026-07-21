@@ -109,9 +109,13 @@ export function selectMeetings(
 }
 
 const PERSON_HEADING_RE = /^#{2,4}\s+(.+?)\s*$/;
+// Bluedot labels each person under Action Items either as a `### Heading` or,
+// depending on the summary, as a plain bold line (`**Anton Skliar**`). Accept
+// both so the person's items are grouped either way.
+const PERSON_BOLD_RE = /^\*\*(.+?)\*\*$/;
 const ITEM_RE = /^\s*(?:[-*+]\s+(?:\[[ xX>-]\]\s+)?)(.+?)\s*$/;
 
-/** Action items in a meeting note, grouped by their `### Person` heading. */
+/** Action items in a meeting note, grouped by their per-person heading. */
 export function extractActionItems(
     content: string,
 ): { person: string; items: string[] }[] {
@@ -134,7 +138,8 @@ export function extractActionItems(
             continue;
         }
 
-        const heading = PERSON_HEADING_RE.exec(line);
+        const heading =
+            PERSON_HEADING_RE.exec(line) ?? PERSON_BOLD_RE.exec(line.trim());
 
         if (heading) {
             current = { person: heading[1].trim(), items: [] };

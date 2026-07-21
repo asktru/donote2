@@ -79,6 +79,38 @@ describe('extractActionItems', () => {
         // Topic bullets are not action items.
         expect(groups.every((g) => !g.items.includes('detail'))).toBe(true);
     });
+
+    it('groups items under bold person labels (Bluedot Action Items format)', () => {
+        const content = [
+            '---',
+            'meeting-date: 2026-07-16',
+            'source: bluedot',
+            '---',
+            '## Overview',
+            '- recap',
+            '',
+            '## Action Items',
+            '',
+            '**Anton Skliar**',
+            '',
+            '+ [ ] Remind PMs about cross-team notices',
+            '',
+            '**Pavlo Harashchenko**',
+            '',
+            '+ [ ] Share the B2B docs',
+            '',
+            '## Topics',
+            '- a topic',
+        ].join('\n');
+
+        const groups = extractActionItems(content);
+        expect(groups.map((g) => g.person)).toEqual([
+            'Anton Skliar',
+            'Pavlo Harashchenko',
+        ]);
+        expect(groups[0].items).toEqual(['Remind PMs about cross-team notices']);
+        expect(groups[1].items).toEqual(['Share the B2B docs']);
+    });
 });
 
 describe('classifyPerson', () => {
