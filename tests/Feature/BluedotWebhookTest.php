@@ -133,7 +133,7 @@ test('the job records attendee emails from object attendees', function () {
     );
 
     $note = Note::query()->forWorkspace($team, $user)
-        ->where('folder', 'Meetings')->firstOrFail();
+        ->where('folder', 'Meetings/2025/03/04')->firstOrFail();
 
     expect($note->content)->toContain(
         'attendees: anton@example.com, olga@example.com',
@@ -163,11 +163,15 @@ test('the job stores a meeting note and links it from the daily note', function 
     );
 
     $note = Note::query()->forWorkspace($team, $user)
-        ->where('folder', 'Meetings')->firstOrFail();
+        ->where('folder', 'Meetings/2025/03/04')->firstOrFail();
 
-    expect($note->title)->toBe('Ivan <> Anton')
+    expect($note->title)->toBe('Ivan <> Anton -- 2025-03-04')
         ->and($note->content)->toContain('meeting-date: 2025-03-04')
-        ->and($note->content)->toContain('video-id: 67c6e169960cdc0b315d42ec')
+        ->and($note->content)->toContain(
+            'bluedot-link: https://app.bluedothq.com/preview/67c6e169960cdc0b315d42ec',
+        )
+        // The spent Google Meet link is dropped after the meeting.
+        ->and($note->content)->not->toContain('meet.google.com')
         // Action-item bullet became a checklist item; topics stayed bullets.
         ->and($note->content)->toContain('+ [ ] Ship the thing')
         ->and($note->content)->toContain('### Growth')
@@ -177,7 +181,7 @@ test('the job stores a meeting note and links it from the daily note', function 
         ->where('type', 'daily')->where('date_key', '2025-03-04')->firstOrFail();
 
     expect($daily->content)->toContain('## Meetings')
-        ->and($daily->content)->toContain('- [[Ivan <> Anton]]');
+        ->and($daily->content)->toContain('- [[Ivan <> Anton -- 2025-03-04]]');
 });
 
 test('a re-sent summary updates the same note without duplicating', function () {
@@ -193,14 +197,14 @@ test('a re-sent summary updates the same note without duplicating', function () 
     $run(bluedotPayload());
     $run(bluedotPayload(['summaryV2' => "## Overview\nUpdated recap.\n\n## Action Items\n\n### Ivan\n- Revised"]));
 
-    $notes = Note::query()->forWorkspace($team, $user)->where('folder', 'Meetings')->get();
+    $notes = Note::query()->forWorkspace($team, $user)->where('folder', 'Meetings/2025/03/04')->get();
     expect($notes)->toHaveCount(1)
         ->and($notes->first()->content)->toContain('Updated recap');
 
     $daily = Note::query()->forWorkspace($team, $user)
         ->where('type', 'daily')->where('date_key', '2025-03-04')->firstOrFail();
     // The daily link appears exactly once despite the resend.
-    expect(substr_count($daily->content, '- [[Ivan <> Anton]]'))->toBe(1);
+    expect(substr_count($daily->content, '- [[Ivan <> Anton -- 2025-03-04]]'))->toBe(1);
 });
 
 test('an opaque id title falls back to a dated title', function () {
@@ -213,8 +217,8 @@ test('an opaque id title falls back to a dated title', function () {
         app(FormatBluedotSummary::class),
     );
 
-    $note = Note::query()->forWorkspace($team, $user)->where('folder', 'Meetings')->firstOrFail();
-    expect($note->title)->toBe('Meeting — 2025-03-04');
+    $note = Note::query()->forWorkspace($team, $user)->where('folder', 'Meetings/2025/03/04')->firstOrFail();
+    expect($note->title)->toBe('Meeting -- 2025-03-04');
 });
 
 test('the bluedot url command mints a working webhook url', function () {

@@ -44,39 +44,54 @@ class ProcessBluedotSummary implements ShouldQueue
             (int) ($this->payload['createdAt'] ?? now()->timestamp),
         );
         $dateKey = $createdAt->toDateString();
-        $title = $this->resolveTitle($dateKey);
+        $title = $this->resolveTitle().' -- '.$dateKey;
+
+        // Filed by date so a busy team's meetings stay browsable:
+        // Meetings/2026/07/21.
+        $folder = 'Meetings/'.str_replace('-', '/', $dateKey);
+
+        // The Bluedot recap lives at a stable preview URL keyed by the video
+        // id — far more useful after the fact than the spent Google Meet link.
+        $bluedotLink = $videoId !== ''
+            ? 'https://app.bluedothq.com/preview/'.$videoId
+            : '';
 
         $summary = (string) (
             $this->payload['summaryV2'] ?? $this->payload['summary'] ?? ''
         );
 
-        $frontMatter = implode("\n", [
+        $frontMatterLines = [
             '---',
             'meeting-date: '.$dateKey,
             'attendees: '.$this->attendeeEmails(),
-            'meeting-id: '.(string) ($this->payload['meetingId'] ?? ''),
-            'video-id: '.$videoId,
-            'source: bluedot',
-            '---',
-        ]);
+        ];
 
-        $content = $frontMatter."\n".$formatSummary->execute($summary);
+        if ($bluedotLink !== '') {
+            $frontMatterLines[] = 'bluedot-link: '.$bluedotLink;
+        }
 
-        // Bluedot can re-send the same summary; match on the video id so a
-        // retry updates the existing note instead of duplicating it.
-        $existing = $videoId !== ''
+        $frontMatterLines[] = 'source: bluedot';
+        $frontMatterLines[] = '---';
+
+        $content = implode("\n", $frontMatterLines)
+            ."\n".$formatSummary->execute($summary);
+
+        // Bluedot can re-send the same summary; match on the preview link
+        // (which carries the video id) so a retry updates the existing note
+        // instead of duplicating it.
+        $existing = $bluedotLink !== ''
             ? Note::query()
                 ->forWorkspace($team, $user)
                 ->where('type', 'note')
-                ->where('folder', 'Meetings')
-                ->where('content', 'like', '%video-id: '.$videoId.'%')
+                ->where('folder', $folder)
+                ->where('content', 'like', '%preview/'.$videoId.'%')
                 ->first()
             : null;
 
         $note = $writeNote->execute($team, $user, $existing, [
             'title' => $title,
             'content' => $content,
-            'folder' => 'Meetings',
+            'folder' => $folder,
         ]);
 
         $this->linkFromDailyNote(
@@ -89,13 +104,17 @@ class ProcessBluedotSummary implements ShouldQueue
         );
     }
 
-    /** Bluedot usually sends the real meeting name; fall back for opaque ids. */
-    private function resolveTitle(string $dateKey): string
+    /**
+     * Bluedot usually sends the real meeting name; fall back to a generic
+     * label for empty or opaque (Mongo ObjectId) titles. The caller appends
+     * the date, so this returns the name part only.
+     */
+    private function resolveTitle(): string
     {
         $title = trim((string) ($this->payload['title'] ?? ''));
 
         if ($title === '' || preg_match('/^[0-9a-f]{24}$/i', $title) === 1) {
-            return "Meeting — {$dateKey}";
+            return 'Meeting';
         }
 
         return $title;
