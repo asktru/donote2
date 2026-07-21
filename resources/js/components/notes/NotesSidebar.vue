@@ -48,7 +48,7 @@ import UserMenuContent from '@/components/UserMenuContent.vue';
 import { todayKey } from '@/core/dates';
 import type { CalendarKind } from '@/core/dates';
 import type { NoteKind } from '@/core/frontmatter';
-import { isMacDesktopShell } from '@/lib/platform';
+import { isMacDesktopShell, openNoteWindow } from '@/lib/platform';
 import { acceptTreeDrop, TREE_DND_MIME } from '@/lib/treeDnd';
 import { cn } from '@/lib/utils';
 import { promptText } from '@/stores/prompt';
@@ -142,6 +142,18 @@ function isActive(view: MainView['kind']): boolean {
 async function newNote(): Promise<void> {
     const note = await createNote({ title: '' });
     openNote(note.id);
+}
+
+/**
+ * Sidebar note-row click: Cmd opens a new shell window, Opt opens a split,
+ * a plain click navigates the current pane.
+ */
+function onNoteClick(event: MouseEvent, id: string): void {
+    if (event.metaKey && openNoteWindow(id)) {
+        return;
+    }
+
+    openNote(id, { split: event.altKey });
 }
 
 async function newFolder(): Promise<void> {
@@ -351,7 +363,7 @@ const syncLabel = computed(() => {
                     <button
                         type="button"
                         class="min-w-0 flex-1 truncate text-left"
-                        @click="openNote(note.id, { split: $event.altKey })"
+                        @click="(event) => onNoteClick(event, note.id)"
                     >
                         {{ note.title || 'Untitled' }}
                     </button>
@@ -390,7 +402,7 @@ const syncLabel = computed(() => {
                                 : 'text-foreground/80',
                         )
                     "
-                    @click="openNote(note.id, { split: $event.altKey })"
+                    @click="(event) => onNoteClick(event, note.id)"
                 >
                     <Pin class="size-4 shrink-0 text-muted-foreground" />
                     <span class="truncate">{{ note.title || 'Untitled' }}</span>
@@ -474,7 +486,7 @@ const syncLabel = computed(() => {
                                     : 'text-foreground/90',
                             )
                         "
-                        @click="openNote(shared.id, { split: $event.altKey })"
+                        @click="(event) => onNoteClick(event, shared.id)"
                     >
                         <FileText class="size-4 shrink-0 text-muted-foreground" />
                         <span class="min-w-0 flex-1 truncate">{{

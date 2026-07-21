@@ -66,7 +66,7 @@ import { filePreview, lightboxImage, syncedLinePanel } from '@/stores/ui';
 
 export interface EditorCallbacks {
     /** Open a wiki link target ([[Title]] or [[2026-07-11]]). */
-    onOpenLink: (target: string, split: boolean) => void;
+    onOpenLink: (target: string, split: boolean, newWindow?: boolean) => void;
     /** Open a calendar note for a >date token. */
     onOpenDate: (dateKey: string, split: boolean) => void;
     /** Open a tag or mention view. */
@@ -2440,7 +2440,11 @@ function clickHandlers(callbacks: EditorCallbacks): Extension {
             }
 
             if (tokenEl.classList.contains('cm-wikilink')) {
-                callbacks.onOpenLink(tokenEl.dataset.wikiTarget ?? '', split);
+                callbacks.onOpenLink(
+                    tokenEl.dataset.wikiTarget ?? '',
+                    split,
+                    event.metaKey,
+                );
             } else if (tokenEl.classList.contains('cm-due-pill')) {
                 // Editing the due date always wins over navigation.
                 view.dispatch({

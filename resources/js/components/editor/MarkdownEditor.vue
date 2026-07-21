@@ -43,7 +43,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     'update:modelValue': [value: string];
-    'open-link': [target: string, split: boolean];
+    'open-link': [target: string, split: boolean, newWindow?: boolean];
     'open-date': [dateKey: string, split: boolean];
     'open-tag': [tag: string, split: boolean];
     'open-mention': [mention: string, split: boolean];
@@ -95,8 +95,8 @@ function createView(): void {
             selection: { anchor: initialCursor },
             extensions: [
                 donoteMarkdown({
-                    onOpenLink: (target, split) =>
-                        emit('open-link', target, split),
+                    onOpenLink: (target, split, newWindow) =>
+                        emit('open-link', target, split, newWindow),
                     onOpenDate: (dateKey, split) =>
                         emit('open-date', dateKey, split),
                     onOpenTag: (tag, split) => emit('open-tag', tag, split),

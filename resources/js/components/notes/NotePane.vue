@@ -45,7 +45,7 @@ import {
 } from '@/core/frontmatter';
 import type { NoteKind } from '@/core/frontmatter';
 import { canEditNote } from '@/lib/noteAccess';
-import { isMacDesktopShell } from '@/lib/platform';
+import { isMacDesktopShell, openNoteWindow } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import { openDatePicker } from '@/stores/datePicker';
 import type { LocalNote } from '@/stores/db';
@@ -310,12 +310,23 @@ function onTitleInput(event: Event): void {
     }
 }
 
-async function onOpenLink(target: string, split: boolean): Promise<void> {
+async function onOpenLink(
+    target: string,
+    split: boolean,
+    newWindow = false,
+): Promise<void> {
     const resolved = resolveWikiTarget(target);
 
     if (resolved.calendarKey !== null) {
         emit('open-calendar', resolved.calendarKey, split);
 
+        return;
+    }
+
+    // Cmd-click opens an existing linked note in a new shell window. A link
+    // to a note that doesn't exist yet has nothing to point a window at, so
+    // fall through and materialize it in the current pane.
+    if (newWindow && resolved.note && openNoteWindow(resolved.note.id)) {
         return;
     }
 

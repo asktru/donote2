@@ -37,6 +37,7 @@ import {
 import { daysUntil, startsInFuture } from '@/core/frontmatter';
 import type { NoteKind, NoteMeta } from '@/core/frontmatter';
 import { isTemplateNote } from '@/lib/noteTemplates';
+import { openNoteWindow } from '@/lib/platform';
 import { acceptTreeDrop, TREE_DND_MIME } from '@/lib/treeDnd';
 import { cn } from '@/lib/utils';
 import type { LocalNote } from '@/stores/db';
@@ -312,6 +313,18 @@ function onDragEnd(event: DragEvent): void {
     (event.currentTarget as HTMLElement | null)?.blur();
 }
 
+/**
+ * Note-row click: Cmd opens a new shell window, Opt opens a split, a plain
+ * click navigates the current pane.
+ */
+function onNoteClick(event: MouseEvent, id: string): void {
+    if (event.metaKey && openNoteWindow(id)) {
+        return;
+    }
+
+    emit('open-note', id, event.altKey);
+}
+
 async function onDrop(event: DragEvent): Promise<void> {
     dropTarget.value = false;
     const payload = event.dataTransfer?.getData(TREE_DND_MIME);
@@ -430,9 +443,7 @@ async function onDrop(event: DragEvent): Promise<void> {
                         :style="{
                             paddingLeft: `${childDepth * 14 + 8 + (path === '' ? 0 : 18)}px`,
                         }"
-                        @click="
-                            (event) => emit('open-note', note.id, event.altKey)
-                        "
+                        @click="(event) => onNoteClick(event, note.id)"
                         @dragstart="(event) => onNoteDragStart(event, note)"
                         @dragend="onDragEnd"
                     >

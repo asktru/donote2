@@ -20,11 +20,28 @@ const APP_URL = process.env.DONOTE_URL || 'https://donote.on-forge.com';
  *  long-running shell from pinning a week-old deploy. */
 const STALE_RELOAD_MS = 12 * 60 * 60 * 1000;
 
-let mainWindow = null;
-let lastLoadAt = Date.now();
+/** Every open shell window. Each is independent; the app supports many. */
+const windows = new Set();
+/** Per-window timestamp of the last successful load, for stale-reload. */
+const lastLoadAt = new WeakMap();
 
-function createWindow() {
-    mainWindow = new BrowserWindow({
+/** The window a deep link or menu action should target: the focused one,
+ *  falling back to the most recently opened. */
+function primaryWindow() {
+    return (
+        BrowserWindow.getFocusedWindow() ??
+        [...windows].at(-1) ??
+        null
+    );
+}
+
+/**
+ * Open a shell window. Defaults to the app root; pass a same-origin URL to
+ * land directly on a note (Cmd-click "open in new window", deep links).
+ * Windows cascade automatically and manage their own lifecycle.
+ */
+function createWindow(targetUrl = APP_URL) {
+    const win = new BrowserWindow({
         width: 1440,
         height: 940,
         minWidth: 900,
@@ -40,17 +57,19 @@ function createWindow() {
         },
     });
 
+    windows.add(win);
+
     // target=_blank links (Google Calendar events, external URLs) open in
     // the system browser; everything else stays in the shell.
-    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    win.webContents.setWindowOpenHandler(({ url }) => {
         shell.openExternal(url);
 
         return { action: 'deny' };
     });
 
-    mainWindow.webContents.on('did-fail-load', (_event, code, description) => {
+    win.webContents.on('did-fail-load', (_event, code, description) => {
         if (code !== -3) {
-            mainWindow.loadFile(path.join(__dirname, 'offline.html'), {
+            win.loadFile(path.join(__dirname, 'offline.html'), {
                 query: { url: APP_URL, error: description },
             });
         }
@@ -60,7 +79,7 @@ function createWindow() {
     // (Meet/Preply participants on speakers or AirPods) with the mic.
     // 'loopback' captures system output via ScreenCaptureKit; the video
     // track is discarded by the renderer immediately.
-    mainWindow.webContents.session.setDisplayMediaRequestHandler(
+    win.webContents.session.setDisplayMediaRequestHandler(
         (_request, callback) => {
             desktopCapturer
                 .getSources({ types: ['screen'] })
@@ -71,26 +90,55 @@ function createWindow() {
         },
     );
 
-    mainWindow.loadURL(APP_URL);
-    lastLoadAt = Date.now();
+    win.loadURL(targetUrl);
+    lastLoadAt.set(win, Date.now());
 
-    mainWindow.webContents.on('did-finish-load', () => {
-        lastLoadAt = Date.now();
+    win.webContents.on('did-finish-load', () => {
+        lastLoadAt.set(win, Date.now());
     });
 
     // The app runs for weeks; without this it would keep serving whatever
     // bundle was current at launch. When focus returns after half a day,
     // pull fresh assets — local notes and the last view survive reloads.
-    mainWindow.on('focus', () => {
-        if (Date.now() - lastLoadAt > STALE_RELOAD_MS) {
-            mainWindow?.webContents.reloadIgnoringCache();
+    win.on('focus', () => {
+        if (Date.now() - (lastLoadAt.get(win) ?? 0) > STALE_RELOAD_MS) {
+            win.webContents.reloadIgnoringCache();
         }
     });
 
-    mainWindow.on('closed', () => {
-        mainWindow = null;
+    win.on('closed', () => {
+        windows.delete(win);
     });
+
+    return win;
 }
+
+/**
+ * Cmd-click "open in a new window": the renderer passes an app-relative
+ * path (e.g. /n/<id>). Resolve it against APP_URL and refuse anything that
+ * isn't same-origin, then open it in a fresh window.
+ */
+const APP_ORIGIN = new URL(APP_URL).origin;
+
+ipcMain.handle('donote:open-window', (_event, path) => {
+    if (typeof path !== 'string') {
+        return;
+    }
+
+    let target;
+
+    try {
+        target = new URL(path, APP_URL);
+    } catch {
+        return;
+    }
+
+    if (target.origin !== APP_ORIGIN) {
+        return;
+    }
+
+    createWindow(target.toString());
+});
 
 /**
  * A deliberately minimal menu: no File > New Window etc., so shortcuts
@@ -129,7 +177,8 @@ function buildMenu() {
                     {
                         label: 'Reload',
                         accelerator: 'CmdOrCtrl+R',
-                        click: () => mainWindow?.webContents.reload(),
+                        click: () =>
+                            BrowserWindow.getFocusedWindow()?.webContents.reload(),
                     },
                     {
                         // ⌘⇧R belongs to voice recording in the app, so the
@@ -137,13 +186,14 @@ function buildMenu() {
                         label: 'Force Reload (Skip Cache)',
                         accelerator: 'CmdOrCtrl+Alt+R',
                         click: () =>
-                            mainWindow?.webContents.reloadIgnoringCache(),
+                            BrowserWindow.getFocusedWindow()?.webContents.reloadIgnoringCache(),
                     },
                     {
                         label: 'Clear Cache and Reload',
                         click: async () => {
-                            await mainWindow?.webContents.session.clearCache();
-                            mainWindow?.webContents.reloadIgnoringCache();
+                            const win = BrowserWindow.getFocusedWindow();
+                            await win?.webContents.session.clearCache();
+                            win?.webContents.reloadIgnoringCache();
                         },
                     },
                     { role: 'toggleDevTools' },
@@ -157,7 +207,17 @@ function buildMenu() {
             },
             {
                 label: 'Window',
-                submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'close' }],
+                submenu: [
+                    {
+                        label: 'New Window',
+                        accelerator: 'CmdOrCtrl+Alt+N',
+                        click: () => createWindow(),
+                    },
+                    { type: 'separator' },
+                    { role: 'minimize' },
+                    { role: 'zoom' },
+                    { role: 'close' },
+                ],
             },
         ]),
     );
@@ -233,14 +293,16 @@ function openDeepLink(rawUrl) {
         return;
     }
 
-    if (mainWindow) {
-        mainWindow.loadURL(target);
+    const win = primaryWindow();
 
-        if (mainWindow.isMinimized()) {
-            mainWindow.restore();
+    if (win) {
+        win.loadURL(target);
+
+        if (win.isMinimized()) {
+            win.restore();
         }
 
-        mainWindow.focus();
+        win.focus();
     } else {
         pendingDeepLink = target;
     }
@@ -259,23 +321,24 @@ if (!hasLock) {
     app.quit();
 } else {
     app.on('second-instance', () => {
-        if (mainWindow) {
-            if (mainWindow.isMinimized()) {
-                mainWindow.restore();
+        const win = primaryWindow();
+
+        if (win) {
+            if (win.isMinimized()) {
+                win.restore();
             }
 
-            mainWindow.focus();
+            win.focus();
         }
     });
 
     app.whenReady().then(() => {
         buildMenu();
-        createWindow();
 
-        if (pendingDeepLink && mainWindow) {
-            mainWindow.loadURL(pendingDeepLink);
-            pendingDeepLink = null;
-        }
+        // A deep link that arrived before launch decides the first window's
+        // destination; otherwise open the app root.
+        createWindow(pendingDeepLink ?? APP_URL);
+        pendingDeepLink = null;
 
         app.on('activate', () => {
             if (BrowserWindow.getAllWindows().length === 0) {

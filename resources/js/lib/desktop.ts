@@ -38,6 +38,8 @@ interface DonoteDesktop {
         calendars: () => Promise<AppleCalendar[]>;
         events: (fromIso: string, toIso: string) => Promise<AppleEvent[]>;
     };
+    /** Open an app-relative path in a new shell window (Cmd-click). */
+    openWindow?: (path: string) => Promise<void>;
 }
 
 export const donoteDesktop: DonoteDesktop | null =

@@ -13,4 +13,7 @@ contextBridge.exposeInMainWorld('donoteDesktop', {
         events: (fromIso, toIso) =>
             ipcRenderer.invoke('apple-calendar:events', fromIso, toIso),
     },
+    // Open an app-relative path (e.g. /n/<id>) in a new shell window —
+    // Cmd-click "open in a new window".
+    openWindow: (path) => ipcRenderer.invoke('donote:open-window', path),
 });

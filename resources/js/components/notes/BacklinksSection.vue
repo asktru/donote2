@@ -15,6 +15,7 @@ import { humanizeKey, keyStartDate } from '@/core/dates';
 import type { NoteKind } from '@/core/frontmatter';
 import { childrenOf } from '@/core/parser';
 import type { ParsedLine } from '@/core/parser';
+import { openNoteWindow } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import type { LocalNote } from '@/stores/db';
 import { isSectionCollapsed, toggleSection } from '@/stores/uiSections';
@@ -70,6 +71,22 @@ function readArchivePref(): boolean {
 }
 
 const includeArchive = ref(readArchivePref());
+
+/**
+ * Reference click: Cmd opens the note in a new shell window, Opt in a
+ * split, a plain click navigates the current pane.
+ */
+function onReferenceClick(
+    event: MouseEvent,
+    id: string,
+    line: number,
+): void {
+    if (event.metaKey && openNoteWindow(id)) {
+        return;
+    }
+
+    emit('open-note', id, line, event.altKey);
+}
 
 function toggleArchivePref(): void {
     includeArchive.value = !includeArchive.value;
@@ -225,8 +242,7 @@ function displayText(line: ParsedLine): string {
                     type="button"
                     class="mb-1 flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
                     @click="
-                        (event) =>
-                            emit('open-note', group.note.id, 0, event.altKey)
+                        (event) => onReferenceClick(event, group.note.id, 0)
                     "
                 >
                     <component
@@ -243,12 +259,7 @@ function displayText(line: ParsedLine): string {
                     class="mb-1.5 block w-full rounded-md border-l-2 border-primary/30 bg-background/60 py-1.5 pr-3 pl-3 text-left hover:border-primary/70 hover:bg-muted/50"
                     @click="
                         (event) =>
-                            emit(
-                                'open-note',
-                                group.note.id,
-                                block.anchor,
-                                event.altKey,
-                            )
+                            onReferenceClick(event, group.note.id, block.anchor)
                     "
                 >
                     <p

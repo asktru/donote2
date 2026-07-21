@@ -28,6 +28,22 @@ export function isNarrowViewport(): boolean {
     );
 }
 
+/**
+ * Cmd-click "open in a new window": in the Electron shell, open the note in
+ * a separate window via the `/n/<id>` deep link (which resolves the right
+ * team and view). Returns true when it handled the open — the caller should
+ * then skip its normal in-app navigation. A no-op returning false elsewhere.
+ */
+export function openNoteWindow(id: string): boolean {
+    if (donoteDesktop?.openWindow) {
+        void donoteDesktop.openWindow(`/n/${id}`);
+
+        return true;
+    }
+
+    return false;
+}
+
 interface CapacitorGlobal {
     isNativePlatform?: () => boolean;
     getPlatform?: () => string;
