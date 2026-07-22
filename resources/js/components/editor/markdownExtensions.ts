@@ -2251,26 +2251,87 @@ function rewriteLineMarker(view: EditorView, marker: string): boolean {
     return true;
 }
 
-/** ⌘L — toggle the current line between task and plain text. */
-const makeTaskCommand = (view: EditorView): boolean => {
-    const { parsed } = parsedAt(view.state, view.state.selection.main.head);
-
-    return rewriteLineMarker(view, parsed.kind === 'task' ? '' : '- [ ] ');
+const MARKER_FOR: Record<'task' | 'checklist' | 'bullet', string> = {
+    task: '- [ ] ',
+    checklist: '+ [ ] ',
+    bullet: '- ',
 };
 
-/** ⌘⇧L — toggle the current line between checklist and plain text. */
-const makeChecklistCommand = (view: EditorView): boolean => {
-    const { parsed } = parsedAt(view.state, view.state.selection.main.head);
+/**
+ * Toggle every line of the selection to/from a marker kind. When the
+ * selection spans a single line it keeps the caret-preserving single-line
+ * behaviour; across multiple lines it rewrites each non-blank line, adding
+ * the marker unless they're all already that kind (then it strips them). The
+ * existing selection is mapped through the edit so it still covers the block.
+ */
+function toggleLinesMarker(
+    view: EditorView,
+    kind: 'task' | 'checklist' | 'bullet',
+): boolean {
+    const { state } = view;
+    const range = state.selection.main;
+    const startLine = state.doc.lineAt(range.from);
+    const endLine = state.doc.lineAt(range.to);
 
-    return rewriteLineMarker(view, parsed.kind === 'checklist' ? '' : '+ [ ] ');
-};
+    if (startLine.number === endLine.number) {
+        const { parsed } = parsedAt(state, range.head);
 
-/** Toggle the current line between a plain bullet and plain text. */
-const makeBulletCommand = (view: EditorView): boolean => {
-    const { parsed } = parsedAt(view.state, view.state.selection.main.head);
+        return rewriteLineMarker(
+            view,
+            parsed.kind === kind ? '' : MARKER_FOR[kind],
+        );
+    }
 
-    return rewriteLineMarker(view, parsed.kind === 'bullet' ? '' : '- ');
-};
+    const lines = [];
+
+    for (let n = startLine.number; n <= endLine.number; n++) {
+        const line = state.doc.line(n);
+
+        if (line.text.trim() !== '') {
+            lines.push(line);
+        }
+    }
+
+    if (lines.length === 0) {
+        return false;
+    }
+
+    const allAlready = lines.every(
+        (line) => parseLine(line.text).kind === kind,
+    );
+    const marker = allAlready ? '' : MARKER_FOR[kind];
+
+    const changes = lines.map((line) => {
+        const indent = line.text.match(/^\s*/)?.[0] ?? '';
+        const taskMatch = line.text.match(MARKER_RE);
+        const bulletMatch = line.text.match(/^(\s*)([-*+])\s(.*)$/);
+        const body = taskMatch
+            ? line.text.slice(taskMatch[0].length)
+            : bulletMatch
+              ? bulletMatch[3]
+              : line.text.trimStart().replace(/^#{1,6}\s+/, '');
+
+        return { from: line.from, to: line.to, insert: `${indent}${marker}${body}` };
+    });
+
+    // No explicit selection: CodeMirror maps the current one through the
+    // edits so it stays over the same lines.
+    view.dispatch({ changes });
+
+    return true;
+}
+
+/** ⌘L — toggle the selected line(s) between task and plain text. */
+const makeTaskCommand = (view: EditorView): boolean =>
+    toggleLinesMarker(view, 'task');
+
+/** ⌘⇧L — toggle the selected line(s) between checklist and plain text. */
+const makeChecklistCommand = (view: EditorView): boolean =>
+    toggleLinesMarker(view, 'checklist');
+
+/** Toggle the selected line(s) between a plain bullet and plain text. */
+const makeBulletCommand = (view: EditorView): boolean =>
+    toggleLinesMarker(view, 'bullet');
 
 /** Cycle the current line's heading level: none → # → ## → ### → none. */
 const cycleHeadingCommand = (view: EditorView): boolean => {

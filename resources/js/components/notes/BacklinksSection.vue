@@ -15,6 +15,12 @@ import { humanizeKey, keyStartDate } from '@/core/dates';
 import type { NoteKind } from '@/core/frontmatter';
 import { childrenOf } from '@/core/parser';
 import type { ParsedLine } from '@/core/parser';
+import {
+    isTableRow,
+    splitTableRow,
+    tableAligns,
+} from '@/lib/markdownTable';
+import type { ColumnAlign } from '@/lib/markdownTable';
 import { openNoteWindow } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import type { LocalNote } from '@/stores/db';
@@ -41,9 +47,68 @@ const TYPE_ICONS: Record<NoteKind, typeof FileText> = {
     prompt: Sparkles,
 };
 
+/** One rendered row of a reference block: a normal line, or a table. */
+type RenderItem =
+    | { kind: 'line'; key: number; line: ParsedLine }
+    | {
+          kind: 'table';
+          key: number;
+          header: string[];
+          rows: string[][];
+          aligns: ColumnAlign[];
+      };
+
+/**
+ * Group a block's parsed lines for display, folding a GFM pipe table (a row
+ * followed by a `|---|` delimiter, plus its body rows) into a single table
+ * item so it renders as a table rather than raw pipes.
+ */
+function buildRenderItems(lines: ParsedLine[]): RenderItem[] {
+    const items: RenderItem[] = [];
+    let i = 0;
+
+    while (i < lines.length) {
+        const line = lines[i];
+        const next = lines[i + 1];
+        const aligns =
+            next && isTableRow(line.raw) ? tableAligns(next.raw) : null;
+
+        if (aligns !== null) {
+            const rows: string[][] = [];
+            let j = i + 2;
+
+            while (
+                j < lines.length &&
+                isTableRow(lines[j].raw) &&
+                tableAligns(lines[j].raw) === null
+            ) {
+                rows.push(splitTableRow(lines[j].raw));
+                j += 1;
+            }
+
+            items.push({
+                kind: 'table',
+                key: line.index,
+                header: splitTableRow(line.raw),
+                rows,
+                aligns,
+            });
+            i = j;
+
+            continue;
+        }
+
+        items.push({ kind: 'line', key: line.index, line });
+        i += 1;
+    }
+
+    return items;
+}
+
 interface ReferenceBlock {
     /** The line containing the wiki link plus its full nested subtree. */
     lines: ParsedLine[];
+    items: RenderItem[];
     anchor: number;
     baseIndent: number;
 }
@@ -114,11 +179,19 @@ const allGroups = computed<ReferenceGroup[]>(() => {
                 note.type !== 'note' && note.dateKey !== null
                     ? humanizeKey(note.dateKey)
                     : note.title || 'Untitled',
-            blocks: lines.map((line) => ({
-                lines: [line, ...childrenOf(allLines, line.index)],
-                anchor: line.index,
-                baseIndent: line.indent,
-            })),
+            blocks: lines.map((line) => {
+                const blockLines = [
+                    line,
+                    ...childrenOf(allLines, line.index),
+                ];
+
+                return {
+                    lines: blockLines,
+                    items: buildRenderItems(blockLines),
+                    anchor: line.index,
+                    baseIndent: line.indent,
+                };
+            }),
         };
     });
 });
@@ -262,38 +335,96 @@ function displayText(line: ParsedLine): string {
                             onReferenceClick(event, group.note.id, block.anchor)
                     "
                 >
-                    <p
-                        v-for="line in block.lines"
-                        :key="line.index"
-                        :class="
-                            cn(
-                                'text-sm leading-6',
-                                line.state === 'done' &&
-                                    'text-muted-foreground line-through',
-                                line.state === 'cancelled' &&
-                                    'text-muted-foreground/70 line-through',
-                                line.kind === 'heading' && 'font-semibold',
-                            )
-                        "
-                        :style="{
-                            paddingLeft: `${Math.max(0, line.indent - block.baseIndent) * 6}px`,
-                        }"
-                    >
-                        <span
-                            v-if="glyph(line)"
+                    <template v-for="item in block.items" :key="item.key">
+                        <table
+                            v-if="item.kind === 'table'"
+                            class="reference-table my-1 border-collapse text-sm"
+                        >
+                            <thead>
+                                <tr>
+                                    <th
+                                        v-for="(cell, i) in item.header"
+                                        :key="i"
+                                        :style="{
+                                            textAlign:
+                                                item.aligns[i] ?? undefined,
+                                        }"
+                                    >
+                                        <TaskTitle :text="cell" />
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr
+                                    v-for="(row, r) in item.rows"
+                                    :key="r"
+                                >
+                                    <td
+                                        v-for="(cell, i) in item.header"
+                                        :key="i"
+                                        :style="{
+                                            textAlign:
+                                                item.aligns[i] ?? undefined,
+                                        }"
+                                    >
+                                        <TaskTitle :text="row[i] ?? ''" />
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <p
+                            v-else
                             :class="
                                 cn(
-                                    'mr-1.5 inline-block w-3.5 text-center',
-                                    line.state === 'done'
-                                        ? 'text-primary'
-                                        : 'text-muted-foreground',
+                                    'text-sm leading-6',
+                                    item.line.state === 'done' &&
+                                        'text-muted-foreground line-through',
+                                    item.line.state === 'cancelled' &&
+                                        'text-muted-foreground/70 line-through',
+                                    item.line.kind === 'heading' &&
+                                        'font-semibold',
                                 )
                             "
-                            >{{ glyph(line) }}</span
-                        ><TaskTitle :text="displayText(line)" />
-                    </p>
+                            :style="{
+                                paddingLeft: `${Math.max(0, item.line.indent - block.baseIndent) * 6}px`,
+                            }"
+                        >
+                            <span
+                                v-if="glyph(item.line)"
+                                :class="
+                                    cn(
+                                        'mr-1.5 inline-block w-3.5 text-center',
+                                        item.line.state === 'done'
+                                            ? 'text-primary'
+                                            : 'text-muted-foreground',
+                                    )
+                                "
+                                >{{ glyph(item.line) }}</span
+                            ><TaskTitle :text="displayText(item.line)" />
+                        </p>
+                    </template>
                 </button>
             </div>
         </div>
     </section>
 </template>
+
+<style scoped>
+.reference-table th,
+.reference-table td {
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.reference-table th {
+    font-weight: 600;
+    background-color: color-mix(in oklab, var(--muted) 55%, transparent);
+}
+
+.reference-table tbody tr:nth-child(even) {
+    background-color: color-mix(in oklab, var(--muted) 22%, transparent);
+}
+</style>
