@@ -60,6 +60,13 @@ import type { ParsedLine, Priority, TaskState } from '@/core/parser';
 import { PRIORITY_COLORS } from '@/core/priority';
 import { buildNextOccurrenceLine } from '@/core/repeat';
 import { generateSyncId } from '@/core/syncedLines';
+import { inlineSegments } from '@/lib/inlineTitle';
+import {
+    isTableRow,
+    splitTableRow,
+    tableAligns,
+} from '@/lib/markdownTable';
+import type { ColumnAlign } from '@/lib/markdownTable';
 import { pasteAsMarkdownLink } from '@/lib/pasteLinks';
 import { openDatePicker } from '@/stores/datePicker';
 import { filePreview, lightboxImage, syncedLinePanel } from '@/stores/ui';
@@ -1498,6 +1505,233 @@ const mermaidField = StateField.define<DecorationSet>({
     provide: (field) => EditorView.decorations.from(field),
 });
 
+/* ------------------------------------------------------------------ */
+/* Markdown tables (GFM pipe tables)                                   */
+/* ------------------------------------------------------------------ */
+
+class TableWidget extends WidgetType {
+    constructor(
+        readonly rows: string[][],
+        readonly aligns: ColumnAlign[],
+    ) {
+        super();
+    }
+
+    override eq(other: TableWidget): boolean {
+        return (
+            this.aligns.join(',') === other.aligns.join(',') &&
+            JSON.stringify(this.rows) === JSON.stringify(other.rows)
+        );
+    }
+
+    override get estimatedHeight(): number {
+        return Math.max(1, this.rows.length) * 32;
+    }
+
+    private cell(
+        tag: 'th' | 'td',
+        text: string,
+        align: ColumnAlign,
+    ): HTMLElement {
+        const el = document.createElement(tag);
+
+        if (align) {
+            el.style.textAlign = align;
+        }
+
+        // inlineSegments sets textContent (never innerHTML), so cell content
+        // can't inject markup — it only ever styles known token kinds.
+        for (const seg of inlineSegments(text)) {
+            if (seg.kind === 'plain') {
+                el.appendChild(document.createTextNode(seg.text));
+
+                continue;
+            }
+
+            const span = document.createElement('span');
+            span.textContent = seg.text;
+
+            switch (seg.kind) {
+                case 'bold':
+                    span.style.fontWeight = '600';
+                    break;
+                case 'italic':
+                    span.style.fontStyle = 'italic';
+                    break;
+                case 'code':
+                    span.className = 'cm-code';
+                    break;
+                case 'highlight':
+                    span.className = 'cm-highlight';
+                    break;
+                case 'tag':
+                    span.className = 'cm-hashtag';
+                    break;
+                case 'mention':
+                    span.className = 'cm-mention';
+                    break;
+                case 'wikilink':
+                    span.className = 'cm-wikilink';
+                    break;
+                case 'link':
+                    span.className = 'cm-md-link';
+                    break;
+            }
+
+            el.appendChild(span);
+        }
+
+        return el;
+    }
+
+    toDOM(view: EditorView): HTMLElement {
+        const wrap = document.createElement('div');
+        wrap.className = 'cm-md-table-wrap';
+        wrap.title = 'Click to edit the table';
+
+        const table = document.createElement('table');
+        table.className = 'cm-md-table';
+
+        const [head, ...body] = this.rows;
+        const columns = head?.length ?? this.aligns.length;
+        const alignAt = (i: number): ColumnAlign => this.aligns[i] ?? null;
+
+        if (head) {
+            const thead = document.createElement('thead');
+            const tr = document.createElement('tr');
+
+            for (let i = 0; i < columns; i++) {
+                tr.appendChild(this.cell('th', head[i] ?? '', alignAt(i)));
+            }
+
+            thead.appendChild(tr);
+            table.appendChild(thead);
+        }
+
+        if (body.length > 0) {
+            const tbody = document.createElement('tbody');
+
+            for (const row of body) {
+                const tr = document.createElement('tr');
+
+                for (let i = 0; i < columns; i++) {
+                    tr.appendChild(this.cell('td', row[i] ?? '', alignAt(i)));
+                }
+
+                tbody.appendChild(tr);
+            }
+
+            table.appendChild(tbody);
+        }
+
+        wrap.appendChild(table);
+
+        // Clicking drops the caret into the block, which reveals the source
+        // (the field stops replacing it once the selection is inside).
+        wrap.addEventListener('mousedown', (event) => {
+            event.preventDefault();
+            const pos = view.posAtDOM(wrap);
+            view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+            view.focus();
+        });
+
+        return wrap;
+    }
+
+    override ignoreEvent(): boolean {
+        return false;
+    }
+}
+
+/**
+ * Block-level replace decorations for GFM pipe tables: a header row followed
+ * immediately by a delimiter row (`|---|---|`), plus any body rows beneath.
+ * Rendered as an HTML table unless the selection is inside it, in which case
+ * the raw markdown stays visible for editing. Detected by hand (not the Lezer
+ * tree) so it's independent of whether the GFM table extension is on, and it
+ * never fires inside front matter or fenced code.
+ */
+function buildTables(state: EditorState): DecorationSet {
+    const builder = new RangeSetBuilder<Decoration>();
+    const doc = state.doc;
+    const fmEnd = frontMatterEnd(state);
+    let inFence = false;
+    let n = 1;
+
+    while (n <= doc.lines) {
+        const line = doc.line(n);
+
+        if (/^\s*(?:```|~~~)/.test(line.text)) {
+            inFence = !inFence;
+            n += 1;
+
+            continue;
+        }
+
+        if (inFence || (fmEnd !== -1 && n <= fmEnd) || n >= doc.lines) {
+            n += 1;
+
+            continue;
+        }
+
+        const aligns = isTableRow(line.text)
+            ? tableAligns(doc.line(n + 1).text)
+            : null;
+
+        if (aligns === null) {
+            n += 1;
+
+            continue;
+        }
+
+        // Body rows run until a blank line, a non-pipe line, or EOF.
+        let last = n + 1;
+
+        while (
+            last + 1 <= doc.lines &&
+            isTableRow(doc.line(last + 1).text) &&
+            tableAligns(doc.line(last + 1).text) === null
+        ) {
+            last += 1;
+        }
+
+        const rows: string[][] = [splitTableRow(line.text)];
+
+        for (let r = n + 2; r <= last; r++) {
+            rows.push(splitTableRow(doc.line(r).text));
+        }
+
+        const lastLine = doc.line(last);
+
+        if (!selectionTouches(state, line.from, lastLine.to)) {
+            builder.add(
+                line.from,
+                lastLine.to,
+                Decoration.replace({
+                    block: true,
+                    widget: new TableWidget(rows, aligns),
+                }),
+            );
+        }
+
+        n = last + 1;
+    }
+
+    return builder.finish();
+}
+
+const tableField = StateField.define<DecorationSet>({
+    create: buildTables,
+    update(value, transaction) {
+        if (transaction.docChanged || transaction.selection) {
+            return buildTables(transaction.state);
+        }
+
+        return value;
+    },
+    provide: (field) => EditorView.decorations.from(field),
+});
+
 /**
  * Fenced code blocks: one contiguous rectangle with dimmed ``` fences,
  * a copy-whole-block button on the opening fence, and per-line copy
@@ -2807,6 +3041,31 @@ const editorTheme = EditorView.theme({
         fontSize: '0.72em',
         color: 'var(--muted-foreground)',
     },
+
+    // Rendered GFM pipe tables (replaces the raw markdown when not editing).
+    '.cm-md-table-wrap': {
+        margin: '0.5em 0',
+        overflowX: 'auto',
+        cursor: 'pointer',
+    },
+    '.cm-md-table': {
+        borderCollapse: 'collapse',
+        fontSize: '0.95em',
+        lineHeight: '1.4',
+    },
+    '.cm-md-table th, .cm-md-table td': {
+        border: '1px solid var(--border)',
+        padding: '4px 10px',
+        textAlign: 'left',
+        verticalAlign: 'top',
+    },
+    '.cm-md-table th': {
+        backgroundColor: 'color-mix(in oklab, var(--muted) 55%, transparent)',
+        fontWeight: '600',
+    },
+    '.cm-md-table tbody tr:nth-child(even)': {
+        backgroundColor: 'color-mix(in oklab, var(--muted) 22%, transparent)',
+    },
     // Links in front matter (e.g. bluedot-link) look clickable.
     '.cm-frontmatter-link': {
         color: 'var(--token-link)',
@@ -3314,6 +3573,7 @@ export function donoteMarkdown(callbacks: EditorCallbacks): Extension {
         decorationsField,
         strikeField,
         mermaidField,
+        tableField,
         codeBlockPlugin,
         foldPersistence,
         codeFolding({
