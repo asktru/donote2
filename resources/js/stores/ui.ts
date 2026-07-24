@@ -125,6 +125,8 @@ export function collapseAllFolders(): void {
 
 /** Fullscreen image viewer (clicked inline previews). */
 export const lightboxImage = ref<{ url: string; alt: string } | null>(null);
+/** Fullscreen mermaid diagram viewer — holds the diagram source to render. */
+export const mermaidPreview = ref<string | null>(null);
 /** Clicked ⟲ glyph: which synced line, and where to anchor the panel. */
 export const syncedLinePanel = ref<{
     syncId: string;

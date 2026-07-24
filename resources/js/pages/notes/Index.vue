@@ -11,6 +11,7 @@ import EventsList from '@/components/notes/EventsList.vue';
 import FilePreview from '@/components/notes/FilePreview.vue';
 import GraphView from '@/components/notes/GraphView.vue';
 import ImageLightbox from '@/components/notes/ImageLightbox.vue';
+import MermaidLightbox from '@/components/notes/MermaidLightbox.vue';
 import MiniCalendar from '@/components/notes/MiniCalendar.vue';
 import NotePane from '@/components/notes/NotePane.vue';
 import NotesSidebar from '@/components/notes/NotesSidebar.vue';
@@ -643,6 +644,7 @@ onBeforeUnmount(() => {
                 <AiPromptDialog />
                 <TemplateDialog @open-note="(id) => handleOpenNote(id)" />
                 <ImageLightbox />
+                <MermaidLightbox />
                 <FilePreview />
                 <SyncedLineLocations />
                 <PromptDialog />

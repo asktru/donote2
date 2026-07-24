@@ -52,7 +52,6 @@ import type { DecorationSet, ViewUpdate } from '@codemirror/view';
 import type { SyntaxNode } from '@lezer/common';
 import { tags } from '@lezer/highlight';
 
-import type { Mermaid } from 'mermaid';
 import { todayDailyKey } from '@/core/dates';
 import { COMMENT_RE, parseLine } from '@/core/parser';
 import type { ParsedLine, Priority, TaskState } from '@/core/parser';
@@ -67,9 +66,15 @@ import {
     tableAligns,
 } from '@/lib/markdownTable';
 import type { ColumnAlign } from '@/lib/markdownTable';
+import { renderMermaid } from '@/lib/mermaid';
 import { pasteAsMarkdownLink } from '@/lib/pasteLinks';
 import { openDatePicker } from '@/stores/datePicker';
-import { filePreview, lightboxImage, syncedLinePanel } from '@/stores/ui';
+import {
+    filePreview,
+    lightboxImage,
+    mermaidPreview,
+    syncedLinePanel,
+} from '@/stores/ui';
 
 export interface EditorCallbacks {
     /** Open a wiki link target ([[Title]] or [[2026-07-11]]). */
@@ -1364,31 +1369,6 @@ function fenceLanguage(text: string): string {
     );
 }
 
-let mermaidLoader: Promise<Mermaid> | null = null;
-let mermaidRenderSeq = 0;
-
-/** Load mermaid once, lazily — it's ~500 KB, so keep it out of the main bundle. */
-function loadMermaid(): Promise<Mermaid> {
-    if (mermaidLoader === null) {
-        mermaidLoader = import('mermaid').then((module) => {
-            const mermaid = module.default;
-            mermaid.initialize({
-                startOnLoad: false,
-                // Untrusted note content — never let a diagram inject scripts.
-                securityLevel: 'strict',
-                theme: document.documentElement.classList.contains('dark')
-                    ? 'dark'
-                    : 'default',
-                fontFamily: 'inherit',
-            });
-
-            return mermaid;
-        });
-    }
-
-    return mermaidLoader;
-}
-
 /** A ```mermaid block rendered as a diagram while the cursor is away. */
 class MermaidWidget extends WidgetType {
     constructor(
@@ -1409,28 +1389,46 @@ class MermaidWidget extends WidgetType {
     toDOM(view: EditorView): HTMLElement {
         const wrap = document.createElement('div');
         wrap.className = 'cm-mermaid';
-        wrap.title = 'Click to edit the diagram source';
-        wrap.textContent = 'Rendering diagram…';
 
-        // Clicking drops the caret into the block, which reveals the source
-        // (the field stops replacing it once the selection is inside).
-        wrap.addEventListener('mousedown', (event) => {
+        const diagram = document.createElement('div');
+        diagram.className = 'cm-mermaid-diagram';
+        diagram.title = 'Click to edit the diagram source';
+        diagram.textContent = 'Rendering diagram…';
+        wrap.appendChild(diagram);
+
+        // Clicking the diagram drops the caret into the block, which reveals
+        // the source (the field stops replacing it once selection is inside).
+        diagram.addEventListener('mousedown', (event) => {
             event.preventDefault();
             const pos = view.posAtDOM(wrap);
             view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
             view.focus();
         });
 
-        const code = this.code;
-        void loadMermaid()
-            .then(async (mermaid) => {
-                const id = `donote-mermaid-${(mermaidRenderSeq += 1)}`;
-                const { svg } = await mermaid.render(id, code);
-                wrap.innerHTML = svg;
+        // Expand button: open the diagram full-screen (a tiny inline render is
+        // unreadable for anything but the simplest graphs).
+        const expand = document.createElement('button');
+        expand.type = 'button';
+        expand.className = 'cm-mermaid-expand';
+        expand.title = 'Open full screen';
+        expand.setAttribute('aria-label', 'Open diagram full screen');
+        expand.innerHTML =
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>';
+        expand.addEventListener('mousedown', (event) => {
+            // Beat the diagram's own mousedown (which would enter edit mode).
+            event.preventDefault();
+            event.stopPropagation();
+            mermaidPreview.value = this.code;
+        });
+        wrap.appendChild(expand);
+
+        void renderMermaid(this.code)
+            .then((svg) => {
+                diagram.innerHTML = svg;
             })
             .catch((error: unknown) => {
-                wrap.classList.add('cm-mermaid-error');
-                wrap.textContent = `Diagram error: ${
+                diagram.classList.add('cm-mermaid-error');
+                diagram.textContent = `Diagram error: ${
                     error instanceof Error ? error.message : 'could not render'
                 }`;
             });
@@ -3183,6 +3181,7 @@ const editorTheme = EditorView.theme({
     },
 
     '.cm-mermaid': {
+        position: 'relative',
         display: 'flex',
         justifyContent: 'center',
         padding: '12px',
@@ -3190,15 +3189,38 @@ const editorTheme = EditorView.theme({
         borderRadius: '8px',
         border: '1px solid var(--border)',
         backgroundColor: 'color-mix(in oklab, var(--muted) 35%, transparent)',
-        cursor: 'pointer',
         overflowX: 'auto',
+    },
+    '.cm-mermaid-diagram': {
+        cursor: 'pointer',
+        maxWidth: '100%',
     },
     '.cm-mermaid svg': {
         maxWidth: '100%',
         height: 'auto',
     },
+    '.cm-mermaid-expand': {
+        position: 'absolute',
+        top: '6px',
+        right: '6px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '26px',
+        height: '26px',
+        padding: '0',
+        borderRadius: '6px',
+        border: '1px solid var(--border)',
+        backgroundColor: 'var(--background)',
+        color: 'var(--muted-foreground)',
+        opacity: '0',
+        transition: 'opacity 120ms ease, color 120ms ease',
+        cursor: 'pointer',
+    },
+    '.cm-mermaid-expand svg': { width: '15px', height: '15px' },
+    '.cm-mermaid:hover .cm-mermaid-expand': { opacity: '1' },
+    '.cm-mermaid-expand:hover': { color: 'var(--foreground)' },
     '.cm-mermaid-error': {
-        justifyContent: 'flex-start',
         fontFamily:
             "ui-monospace, SFMono-Regular, Menlo, Monaco, 'Cascadia Mono', monospace",
         fontSize: '0.82em',
