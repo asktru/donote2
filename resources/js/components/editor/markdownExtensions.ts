@@ -1730,6 +1730,82 @@ const tableField = StateField.define<DecorationSet>({
     provide: (field) => EditorView.decorations.from(field),
 });
 
+/* ------------------------------------------------------------------ */
+/* Trailing block guard                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A block widget (a mermaid diagram or a table) that is the very last thing in
+ * the note leaves no line below it, so there's no way to place the caret past
+ * it to add more content. Detect that case so we can keep an empty line after.
+ */
+function docEndsInBlockWidget(state: EditorState): boolean {
+    const doc = state.doc;
+    const last = doc.line(doc.lines);
+
+    // A blank final line is already a navigable spot — nothing to do.
+    if (last.text.trim() === '') {
+        return false;
+    }
+
+    // Terminal ```mermaid block: its closing fence is the last line.
+    if (/^\s*(?:```|~~~)/.test(last.text)) {
+        let terminalMermaid = false;
+
+        syntaxTree(state).iterate({
+            enter(node) {
+                if (
+                    node.name === 'FencedCode' &&
+                    doc.lineAt(node.to).number === doc.lines &&
+                    fenceLanguage(doc.lineAt(node.from).text) === 'mermaid'
+                ) {
+                    terminalMermaid = true;
+                }
+            },
+        });
+
+        if (terminalMermaid) {
+            return true;
+        }
+    }
+
+    // Terminal GFM table: the last line is a table row whose block has a
+    // delimiter row (header + `|---|`) above it.
+    if (isTableRow(last.text)) {
+        let start = doc.lines;
+
+        while (start > 1 && isTableRow(doc.line(start - 1).text)) {
+            start -= 1;
+        }
+
+        if (doc.lines > start && tableAligns(doc.line(start + 1).text) !== null) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/** Append a trailing newline when the note ends in a block widget. */
+function ensureTrailingBlockLine(view: EditorView): void {
+    if (!docEndsInBlockWidget(view.state)) {
+        return;
+    }
+
+    view.dispatch({ changes: { from: view.state.doc.length, insert: '\n' } });
+}
+
+/**
+ * Keep an empty line after a terminal mermaid/table block as the note is
+ * edited, so content can always be added below it. A dispatch is illegal
+ * inside the update cycle, so defer it.
+ */
+const trailingBlockGuard = EditorView.updateListener.of((update) => {
+    if (update.docChanged && docEndsInBlockWidget(update.state)) {
+        queueMicrotask(() => ensureTrailingBlockLine(update.view));
+    }
+});
+
 /**
  * Fenced code blocks: one contiguous rectangle with dimmed ``` fences,
  * a copy-whole-block button on the opening fence, and per-line copy
@@ -1979,6 +2055,10 @@ export function applyPersistedFolds(view: EditorView): void {
     if (effects.length > 0) {
         view.dispatch({ effects });
     }
+
+    // Existing notes that end in a mermaid/table block have no line below the
+    // widget; add one on open so content can be appended past it.
+    ensureTrailingBlockLine(view);
 }
 
 /**
@@ -3657,6 +3737,7 @@ export function donoteMarkdown(callbacks: EditorCallbacks): Extension {
         strikeField,
         mermaidField,
         tableField,
+        trailingBlockGuard,
         codeBlockPlugin,
         foldPersistence,
         codeFolding({
