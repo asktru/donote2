@@ -66,7 +66,7 @@ import {
     tableAligns,
 } from '@/lib/markdownTable';
 import type { ColumnAlign } from '@/lib/markdownTable';
-import { renderMermaid } from '@/lib/mermaid';
+import { downloadMermaidPng, renderMermaid } from '@/lib/mermaid';
 import { pasteAsMarkdownLink } from '@/lib/pasteLinks';
 import { openDatePicker } from '@/stores/datePicker';
 import {
@@ -1404,6 +1404,22 @@ class MermaidWidget extends WidgetType {
             view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
             view.focus();
         });
+
+        // Download button: rasterize the diagram to a PNG.
+        const download = document.createElement('button');
+        download.type = 'button';
+        download.className = 'cm-mermaid-download';
+        download.title = 'Download as PNG';
+        download.setAttribute('aria-label', 'Download diagram as PNG');
+        download.innerHTML =
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>';
+        download.addEventListener('mousedown', (event) => {
+            // Beat the diagram's own mousedown (which would enter edit mode).
+            event.preventDefault();
+            event.stopPropagation();
+            void downloadMermaidPng(this.code);
+        });
+        wrap.appendChild(download);
 
         // Expand button: open the diagram full-screen (a tiny inline render is
         // unreadable for anything but the simplest graphs).
@@ -3279,10 +3295,9 @@ const editorTheme = EditorView.theme({
         maxWidth: '100%',
         height: 'auto',
     },
-    '.cm-mermaid-expand': {
+    '.cm-mermaid-expand, .cm-mermaid-download': {
         position: 'absolute',
         top: '6px',
-        right: '6px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -3297,9 +3312,17 @@ const editorTheme = EditorView.theme({
         transition: 'opacity 120ms ease, color 120ms ease',
         cursor: 'pointer',
     },
-    '.cm-mermaid-expand svg': { width: '15px', height: '15px' },
-    '.cm-mermaid:hover .cm-mermaid-expand': { opacity: '1' },
-    '.cm-mermaid-expand:hover': { color: 'var(--foreground)' },
+    '.cm-mermaid-expand': { right: '6px' },
+    '.cm-mermaid-download': { right: '38px' },
+    '.cm-mermaid-expand svg, .cm-mermaid-download svg': {
+        width: '15px',
+        height: '15px',
+    },
+    '.cm-mermaid:hover .cm-mermaid-expand, .cm-mermaid:hover .cm-mermaid-download':
+        { opacity: '1' },
+    '.cm-mermaid-expand:hover, .cm-mermaid-download:hover': {
+        color: 'var(--foreground)',
+    },
     '.cm-mermaid-error': {
         fontFamily:
             "ui-monospace, SFMono-Regular, Menlo, Monaco, 'Cascadia Mono', monospace",

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Minus, Plus, RotateCcw, X } from '@lucide/vue';
+import { Download, Minus, Plus, RotateCcw, X } from '@lucide/vue';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
-import { renderMermaid } from '@/lib/mermaid';
+import { downloadMermaidPng, renderMermaid } from '@/lib/mermaid';
 import { mermaidPreview } from '@/stores/ui';
 
 const stage = ref<HTMLDivElement | null>(null);
@@ -24,6 +24,12 @@ function reset(): void {
     scale.value = 1;
     tx.value = 0;
     ty.value = 0;
+}
+
+function download(): void {
+    if (mermaidPreview.value !== null) {
+        void downloadMermaidPng(mermaidPreview.value);
+    }
 }
 
 function clampScale(value: number): number {
@@ -181,6 +187,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, true));
             </div>
 
             <div class="absolute top-4 right-4 flex gap-2">
+                <button
+                    type="button"
+                    class="flex size-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/25"
+                    title="Download as PNG"
+                    aria-label="Download as PNG"
+                    @click="download"
+                >
+                    <Download class="size-4.5" />
+                </button>
                 <button
                     type="button"
                     class="flex size-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/25"
