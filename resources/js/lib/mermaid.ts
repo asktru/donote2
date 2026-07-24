@@ -82,6 +82,13 @@ export async function downloadMermaidPng(
     svg.setAttribute('height', String(height));
     svg.style.maxWidth = 'none';
 
+    // Mermaid renders with `font-family: inherit`; inline it inherits the app
+    // font, but a standalone SVG has no parent to inherit from and falls back
+    // to a serif default. Pin the app's resolved font so the PNG matches.
+    svg.style.fontFamily =
+        getComputedStyle(document.body).fontFamily ||
+        'ui-sans-serif, system-ui, sans-serif';
+
     if (!svg.getAttribute('xmlns')) {
         svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
     }
@@ -118,7 +125,13 @@ export async function downloadMermaidPng(
                 const anchor = document.createElement('a');
                 anchor.href = URL.createObjectURL(blob);
                 anchor.download = filename;
+                // The anchor must be in the DOM for the `download` filename to
+                // be honored on blob: URLs (otherwise Chromium/Electron saves
+                // it under the blob's uuid with no extension).
+                anchor.style.display = 'none';
+                document.body.appendChild(anchor);
                 anchor.click();
+                anchor.remove();
                 setTimeout(() => URL.revokeObjectURL(anchor.href), 10000);
             }
 
