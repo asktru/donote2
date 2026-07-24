@@ -62,7 +62,12 @@ watch(
     { immediate: true },
 );
 
-/** Wheel zooms toward the cursor; keeps the point under the pointer stable. */
+/**
+ * Trackpad-native gestures: a two-finger pinch arrives as a wheel event with
+ * `ctrlKey` set — that zooms toward the cursor. A plain two-finger scroll pans
+ * (the natural gesture for moving around a large diagram), matching how you'd
+ * scroll a big image.
+ */
 function onWheel(event: WheelEvent): void {
     event.preventDefault();
     const el = stage.value;
@@ -71,10 +76,18 @@ function onWheel(event: WheelEvent): void {
         return;
     }
 
+    if (!event.ctrlKey) {
+        // Plain scroll → pan.
+        tx.value -= event.deltaX;
+        ty.value -= event.deltaY;
+
+        return;
+    }
+
     const rect = el.getBoundingClientRect();
     const cx = event.clientX - rect.left - rect.width / 2;
     const cy = event.clientY - rect.top - rect.height / 2;
-    const factor = Math.exp(-event.deltaY * 0.0015);
+    const factor = Math.exp(-event.deltaY * 0.01);
     const next = clampScale(scale.value * factor);
     const ratio = next / scale.value;
 
@@ -209,7 +222,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, true));
             <p
                 class="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1 text-xs text-white/70"
             >
-                Scroll to zoom · drag to pan
+                Pinch to zoom · scroll or drag to pan
             </p>
         </div>
     </Teleport>
