@@ -91,6 +91,8 @@ let startTx = 0;
 let startTy = 0;
 
 function onPointerDown(event: PointerEvent): void {
+    // Stop the drag from starting a text selection on the diagram's labels.
+    event.preventDefault();
     dragging = true;
     startX = event.clientX;
     startY = event.clientY;
@@ -141,7 +143,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, true));
         >
             <div
                 ref="stage"
-                class="relative min-h-0 flex-1 cursor-grab touch-none overflow-hidden active:cursor-grabbing"
+                class="relative min-h-0 flex-1 cursor-grab touch-none overflow-hidden select-none active:cursor-grabbing"
                 @wheel="onWheel"
                 @pointerdown="onPointerDown"
                 @pointermove="onPointerMove"
