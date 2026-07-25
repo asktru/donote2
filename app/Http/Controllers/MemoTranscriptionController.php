@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -43,25 +42,37 @@ class MemoTranscriptionController extends Controller
 
         try {
             $response = Http::withToken($key)
-                ->connectTimeout(15)
-                ->timeout(180)
+                ->connectTimeout(10)
+                // Stay comfortably under the web server's gateway timeout
+                // (Forge nginx defaults to 60s) so a slow provider produces a
+                // clean JSON error the client can show and retry — rather than
+                // php-fpm being killed and nginx returning an opaque 502.
+                ->timeout(45)
                 ->attach('file', $contents, $audio->getClientOriginalName() ?: 'memo.webm')
                 ->post('https://api.openai.com/v1/audio/transcriptions', [
                     'model' => is_string($model) ? $model : 'gpt-4o-transcribe',
                 ]);
-        } catch (ConnectionException $exception) {
-            // A timeout or dropped connection to the provider — the memo is
-            // still queued locally, so surface a clear, retryable message
-            // instead of letting an uncaught exception become a 500.
+        } catch (\Throwable $exception) {
+            // Any failure reaching or using the provider (timeout, dropped
+            // connection, transport error). The memo stays queued locally, so
+            // return a clear, retryable message with a NON-gateway status —
+            // 502/504 can be swallowed by a proxy's own error page, which is
+            // exactly what turned a real reason into an opaque "502 Upload
+            // failed" for the user.
+            report($exception);
+
             return response()->json([
-                'message' => 'Transcription timed out reaching the provider — it will retry.',
-            ], 504);
+                'message' => 'Transcription could not reach the provider — it will retry.',
+            ], 503);
         }
 
         if ($response->failed()) {
+            // A provider-side error (rate limit, bad request, 5xx). Use 422 so
+            // the JSON message reaches the client instead of being hidden
+            // behind a gateway error page; the client shows it and retries.
             return response()->json([
                 'message' => 'Transcription failed: '.($response->json('error.message') ?? 'provider error'),
-            ], 502);
+            ], 422);
         }
 
         $text = $response->json('text');

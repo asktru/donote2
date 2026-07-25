@@ -5,6 +5,10 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 
+// Provider/transport failures must return NON-gateway statuses with a JSON
+// message: a real 502/504 from the app can be replaced by a proxy's own
+// error page, hiding the reason (the opaque "502 Upload failed" bug).
+
 test('guests cannot transcribe memos', function () {
     $user = User::factory()->create();
 
@@ -62,7 +66,7 @@ test('transcription surfaces provider failures', function () {
         ->post(route('memos.transcribe', $user->currentTeam), [
             'audio' => UploadedFile::fake()->create('memo.webm', 100, 'audio/webm'),
         ])
-        ->assertStatus(502)
+        ->assertStatus(422)
         ->assertJsonPath('message', 'Transcription failed: rate limited');
 });
 
@@ -79,10 +83,10 @@ test('a provider timeout returns a retryable message, not a 500', function () {
         ->postJson(route('memos.transcribe', $user->currentTeam), [
             'audio' => UploadedFile::fake()->create('memo.webm', 100, 'audio/webm'),
         ])
-        ->assertStatus(504)
+        ->assertStatus(503)
         ->assertJsonPath(
             'message',
-            'Transcription timed out reaching the provider — it will retry.',
+            'Transcription could not reach the provider — it will retry.',
         );
 });
 
