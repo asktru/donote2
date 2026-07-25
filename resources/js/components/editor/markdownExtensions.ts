@@ -24,6 +24,7 @@ import {
     foldEffect,
     foldGutter,
     foldKeymap,
+    foldNodeProp,
     foldService,
     forceParsing,
     indentUnit,
@@ -3817,7 +3818,18 @@ export function donoteMarkdown(callbacks: EditorCallbacks): Extension {
     return [
         history(),
         indentUnit.of('    '),
-        markdown({ base: markdownLanguage, codeLanguages: languages }),
+        markdown({
+            base: markdownLanguage,
+            codeLanguages: languages,
+            // lang-markdown's GFM extension declares tables foldable, and
+            // foldable() falls back to that syntax folding whenever our own
+            // service declines a line. That put a fold arrow on the table's
+            // first row — visible only while editing it, and attached to the
+            // table instead of its parent line. Folding here is deliberately
+            // structural (front matter, top-level headings, indented
+            // children), so opt tables out.
+            extensions: [{ props: [foldNodeProp.add({ Table: () => null })] }],
+        }),
         syntaxHighlighting(highlightStyle),
         decorationsField,
         strikeField,
