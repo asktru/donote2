@@ -2,24 +2,22 @@
 import {
     Archive,
     ChevronRight,
+    ChevronsDownUp,
+    ChevronsUpDown,
     FileText,
     Layers,
     ListTodo,
     Sparkles,
     Target,
 } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import TaskTitle from '@/components/notes/TaskTitle.vue';
 import { humanizeKey, keyStartDate } from '@/core/dates';
 import type { NoteKind } from '@/core/frontmatter';
 import { childrenOf } from '@/core/parser';
 import type { ParsedLine } from '@/core/parser';
-import {
-    isTableRow,
-    splitTableRow,
-    tableAligns,
-} from '@/lib/markdownTable';
+import { isTableRow, splitTableRow, tableAligns } from '@/lib/markdownTable';
 import type { ColumnAlign } from '@/lib/markdownTable';
 import { openNoteWindow } from '@/lib/platform';
 import { cn } from '@/lib/utils';
@@ -141,11 +139,7 @@ const includeArchive = ref(readArchivePref());
  * Reference click: Cmd opens the note in a new shell window, Opt in a
  * split, a plain click navigates the current pane.
  */
-function onReferenceClick(
-    event: MouseEvent,
-    id: string,
-    line: number,
-): void {
+function onReferenceClick(event: MouseEvent, id: string, line: number): void {
     if (event.metaKey && openNoteWindow(id)) {
         return;
     }
@@ -157,7 +151,10 @@ function toggleArchivePref(): void {
     includeArchive.value = !includeArchive.value;
 
     try {
-        localStorage.setItem(ARCHIVE_PREF_KEY, includeArchive.value ? '1' : '0');
+        localStorage.setItem(
+            ARCHIVE_PREF_KEY,
+            includeArchive.value ? '1' : '0',
+        );
     } catch {
         // Preference just won't survive the session.
     }
@@ -180,10 +177,7 @@ const allGroups = computed<ReferenceGroup[]>(() => {
                     ? humanizeKey(note.dateKey)
                     : note.title || 'Untitled',
             blocks: lines.map((line) => {
-                const blockLines = [
-                    line,
-                    ...childrenOf(allLines, line.index),
-                ];
+                const blockLines = [line, ...childrenOf(allLines, line.index)];
 
                 return {
                     lines: blockLines,
@@ -214,9 +208,7 @@ const groups = computed<ReferenceGroup[]>(() => {
         ? allGroups.value
         : allGroups.value.filter((group) => !isArchivedNote(group.note));
 
-    return [...filtered].sort(
-        (a, b) => recencyOf(b.note) - recencyOf(a.note),
-    );
+    return [...filtered].sort((a, b) => recencyOf(b.note) - recencyOf(a.note));
 });
 
 /** Whether any reference comes from @Archive — drives the toggle. */
@@ -226,6 +218,72 @@ const hasArchived = computed(() =>
 
 const total = computed(() =>
     groups.value.reduce((sum, group) => sum + group.blocks.length, 0),
+);
+
+/* ------------------------------------------------------------------ */
+/* Per-reference collapsing                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Collapsed reference blocks, keyed by source note + anchor line. A collapsed
+ * block shows just the linking line, hiding its nested context — handy when a
+ * note is referenced from long task subtrees. Session state: reset when the
+ * viewed note changes.
+ */
+const collapsedBlocks = ref<Set<string>>(new Set());
+
+function blockKey(noteId: string, anchor: number): string {
+    return `${noteId}:${anchor}`;
+}
+
+function isBlockCollapsed(noteId: string, anchor: number): boolean {
+    return collapsedBlocks.value.has(blockKey(noteId, anchor));
+}
+
+function toggleBlock(noteId: string, anchor: number): void {
+    const key = blockKey(noteId, anchor);
+    const next = new Set(collapsedBlocks.value);
+
+    if (next.has(key)) {
+        next.delete(key);
+    } else {
+        next.add(key);
+    }
+
+    collapsedBlocks.value = next;
+}
+
+/** Only blocks with nested context below the linking line can collapse. */
+const collapsibleKeys = computed<string[]>(() =>
+    groups.value.flatMap((group) =>
+        group.blocks
+            .filter((block) => block.items.length > 1)
+            .map((block) => blockKey(group.note.id, block.anchor)),
+    ),
+);
+
+const allCollapsed = computed<boolean>(
+    () =>
+        collapsibleKeys.value.length > 0 &&
+        collapsibleKeys.value.every((key) => collapsedBlocks.value.has(key)),
+);
+
+function toggleAll(): void {
+    collapsedBlocks.value = allCollapsed.value
+        ? new Set()
+        : new Set(collapsibleKeys.value);
+}
+
+/** Collapsed blocks render their first row (the linking line) only. */
+function visibleItems(block: ReferenceBlock, collapsed: boolean): RenderItem[] {
+    return collapsed ? block.items.slice(0, 1) : block.items;
+}
+
+watch(
+    () => props.noteId,
+    () => {
+        collapsedBlocks.value = new Set();
+    },
 );
 
 /** Leading glyph mirroring the editor's task/checklist/bullet rendering. */
@@ -287,6 +345,26 @@ function displayText(line: ParsedLine): string {
                 {{ total }} Reference{{ total === 1 ? '' : 's' }}
             </button>
             <button
+                v-if="
+                    !isSectionCollapsed('reference') &&
+                    collapsibleKeys.length > 0
+                "
+                type="button"
+                class="mr-3 flex shrink-0 items-center gap-1 rounded px-1 py-0.5 text-[11px] text-muted-foreground/70 hover:text-foreground"
+                :title="
+                    allCollapsed
+                        ? 'Expand all references'
+                        : 'Collapse all references'
+                "
+                @click="toggleAll"
+            >
+                <component
+                    :is="allCollapsed ? ChevronsUpDown : ChevronsDownUp"
+                    class="size-3"
+                />
+                {{ allCollapsed ? 'Expand all' : 'Collapse all' }}
+            </button>
+            <button
                 v-if="hasArchived"
                 type="button"
                 :class="
@@ -309,7 +387,10 @@ function displayText(line: ParsedLine): string {
             </button>
         </div>
 
-        <div v-if="!isSectionCollapsed('reference')" class="space-y-4 px-4 pb-4">
+        <div
+            v-if="!isSectionCollapsed('reference')"
+            class="space-y-4 px-4 pb-4"
+        >
             <div v-for="group in groups" :key="group.note.id">
                 <button
                     type="button"
@@ -325,86 +406,131 @@ function displayText(line: ParsedLine): string {
                     {{ group.label }}
                 </button>
 
-                <button
+                <div
                     v-for="block in group.blocks"
                     :key="block.anchor"
-                    type="button"
-                    class="mb-1.5 block w-full rounded-md border-l-2 border-primary/30 bg-background/60 py-1.5 pr-3 pl-3 text-left hover:border-primary/70 hover:bg-muted/50"
-                    @click="
-                        (event) =>
-                            onReferenceClick(event, group.note.id, block.anchor)
-                    "
+                    class="mb-1.5 flex w-full items-start gap-1 rounded-md border-l-2 border-primary/30 bg-background/60 py-1.5 pr-3 pl-1 hover:border-primary/70 hover:bg-muted/50"
                 >
-                    <template v-for="item in block.items" :key="item.key">
-                        <table
-                            v-if="item.kind === 'table'"
-                            class="reference-table my-1 border-collapse text-sm"
-                        >
-                            <thead>
-                                <tr>
-                                    <th
-                                        v-for="(cell, i) in item.header"
-                                        :key="i"
-                                        :style="{
-                                            textAlign:
-                                                item.aligns[i] ?? undefined,
-                                        }"
-                                    >
-                                        <TaskTitle :text="cell" />
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr
-                                    v-for="(row, r) in item.rows"
-                                    :key="r"
-                                >
-                                    <td
-                                        v-for="(cell, i) in item.header"
-                                        :key="i"
-                                        :style="{
-                                            textAlign:
-                                                item.aligns[i] ?? undefined,
-                                        }"
-                                    >
-                                        <TaskTitle :text="row[i] ?? ''" />
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-
-                        <p
-                            v-else
+                    <!-- Sibling of the open-note button, not nested inside it,
+                         so collapsing never navigates. -->
+                    <button
+                        v-if="block.items.length > 1"
+                        type="button"
+                        class="mt-1 shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                        :title="
+                            isBlockCollapsed(group.note.id, block.anchor)
+                                ? 'Expand this reference'
+                                : 'Collapse this reference'
+                        "
+                        @click="toggleBlock(group.note.id, block.anchor)"
+                    >
+                        <ChevronRight
                             :class="
                                 cn(
-                                    'text-sm leading-6',
-                                    item.line.state === 'done' &&
-                                        'text-muted-foreground line-through',
-                                    item.line.state === 'cancelled' &&
-                                        'text-muted-foreground/70 line-through',
-                                    item.line.kind === 'heading' &&
-                                        'font-semibold',
+                                    'size-3 transition-transform',
+                                    !isBlockCollapsed(
+                                        group.note.id,
+                                        block.anchor,
+                                    ) && 'rotate-90',
                                 )
                             "
-                            :style="{
-                                paddingLeft: `${Math.max(0, item.line.indent - block.baseIndent) * 6}px`,
-                            }"
+                        />
+                    </button>
+                    <span v-else class="mt-1 size-4 shrink-0" />
+
+                    <button
+                        type="button"
+                        class="min-w-0 flex-1 text-left"
+                        @click="
+                            (event) =>
+                                onReferenceClick(
+                                    event,
+                                    group.note.id,
+                                    block.anchor,
+                                )
+                        "
+                    >
+                        <template
+                            v-for="item in visibleItems(
+                                block,
+                                isBlockCollapsed(group.note.id, block.anchor),
+                            )"
+                            :key="item.key"
                         >
-                            <span
-                                v-if="glyph(item.line)"
+                            <table
+                                v-if="item.kind === 'table'"
+                                class="reference-table my-1 border-collapse text-sm"
+                            >
+                                <thead>
+                                    <tr>
+                                        <th
+                                            v-for="(cell, i) in item.header"
+                                            :key="i"
+                                            :style="{
+                                                textAlign:
+                                                    item.aligns[i] ?? undefined,
+                                            }"
+                                        >
+                                            <TaskTitle :text="cell" />
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(row, r) in item.rows" :key="r">
+                                        <td
+                                            v-for="(cell, i) in item.header"
+                                            :key="i"
+                                            :style="{
+                                                textAlign:
+                                                    item.aligns[i] ?? undefined,
+                                            }"
+                                        >
+                                            <TaskTitle :text="row[i] ?? ''" />
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <p
+                                v-else
                                 :class="
                                     cn(
-                                        'mr-1.5 inline-block w-3.5 text-center',
-                                        item.line.state === 'done'
-                                            ? 'text-primary'
-                                            : 'text-muted-foreground',
+                                        'text-sm leading-6',
+                                        item.line.state === 'done' &&
+                                            'text-muted-foreground line-through',
+                                        item.line.state === 'cancelled' &&
+                                            'text-muted-foreground/70 line-through',
+                                        item.line.kind === 'heading' &&
+                                            'font-semibold',
                                     )
                                 "
-                                >{{ glyph(item.line) }}</span
-                            ><TaskTitle :text="displayText(item.line)" />
+                                :style="{
+                                    paddingLeft: `${Math.max(0, item.line.indent - block.baseIndent) * 6}px`,
+                                }"
+                            >
+                                <span
+                                    v-if="glyph(item.line)"
+                                    :class="
+                                        cn(
+                                            'mr-1.5 inline-block w-3.5 text-center',
+                                            item.line.state === 'done'
+                                                ? 'text-primary'
+                                                : 'text-muted-foreground',
+                                        )
+                                    "
+                                    >{{ glyph(item.line) }}</span
+                                ><TaskTitle :text="displayText(item.line)" />
+                            </p>
+                        </template>
+
+                        <p
+                            v-if="isBlockCollapsed(group.note.id, block.anchor)"
+                            class="mt-0.5 text-xs text-muted-foreground/70"
+                        >
+                            +{{ block.items.length - 1 }} more
                         </p>
-                    </template>
-                </button>
+                    </button>
+                </div>
             </div>
         </div>
     </section>
