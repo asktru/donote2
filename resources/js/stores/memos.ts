@@ -20,6 +20,7 @@ import {
     createNote,
     getNote,
     openCalendarNote,
+    titleIndex,
     updateNoteContent,
     workspaceConfig,
 } from '@/stores/workspace';
@@ -789,7 +790,7 @@ export async function chooseDestination(
         }
     }
 
-    await finalizeGroup(groupId);
+    await fileGroup(groupId);
 }
 
 /** Keyboard-friendly start/stop switch. */
@@ -852,28 +853,11 @@ export async function cancelMemoGroup(groupId: string): Promise<void> {
     }
 }
 
-async function appendTranscript(
-    firstPart: MemoRecord,
-    text: string,
-): Promise<void> {
-    const dateKey = safeDailyKey(firstPart.dateKey, todayDailyKey());
-    const note = await openCalendarNote('daily', dateKey);
-    const current = getNote(note.id) ?? note;
-    const time = new Date(firstPart.createdAt).toLocaleTimeString([], {
+function memoTime(iso: string): string {
+    return new Date(iso).toLocaleTimeString([], {
         hour: '2-digit',
         minute: '2-digit',
     });
-    const line = `${time} — ${text}`;
-
-    // Idempotent: never double-file the same transcript.
-    if (current.content.includes(line)) {
-        return;
-    }
-
-    await updateNoteContent(
-        note.id,
-        appendUnderAudioMemo(current.content, line),
-    );
 }
 
 /** Append a wiki link for a freshly created note to today's daily note. */
@@ -887,8 +871,94 @@ export async function appendLinkToTodayNote(title: string): Promise<void> {
     );
 }
 
-/** When every part is transcribed, stitch them in order and file once. */
-async function finalizeGroup(groupId: string): Promise<void> {
+/**
+ * Ensure the daily-note bullet for this recording is present, and report
+ * whether it is *durably* saved — i.e. pushed to the server (the note's
+ * dirty flag has cleared) and still contains the line. Re-appends the line
+ * if a sync overwrote the note (LWW), so a concurrent daily-note edit on
+ * another device can't silently drop the transcript.
+ */
+async function ensureDailyFiled(
+    ordered: MemoRecord[],
+    first: MemoRecord,
+    dateKey: string,
+): Promise<boolean> {
+    const text = stitchTranscript(ordered) || '(empty transcription)';
+    const line = `${memoTime(first.createdAt)} — ${text}`;
+    const note = await openCalendarNote('daily', dateKey);
+    const current = getNote(note.id) ?? note;
+
+    if (!current.content.includes(line)) {
+        await updateNoteContent(
+            note.id,
+            appendUnderAudioMemo(current.content, line),
+        );
+    }
+
+    const saved = getNote(note.id);
+
+    return (
+        saved !== undefined &&
+        saved.dirty === 0 &&
+        saved.content.includes(line)
+    );
+}
+
+/**
+ * Ensure the dedicated transcript note exists (idempotent by title) and is
+ * linked from the daily note; report whether the dedicated note is durably
+ * saved. The transcript body lives in the dedicated note, so its durability
+ * is what gates cleanup.
+ */
+async function ensureDedicatedFiled(
+    ordered: MemoRecord[],
+    first: MemoRecord,
+    dateKey: string,
+): Promise<boolean> {
+    const title = `Audio memo ${dateKey} ${memoTime(first.createdAt)}`;
+    const paragraphs =
+        ordered
+            .map((part) => part.transcript?.trim() ?? '')
+            .filter((paragraph) => paragraph !== '')
+            .join('\n\n') || '(empty transcription)';
+
+    let target = titleIndex.value.get(title.trim().toLowerCase());
+
+    if (target === undefined) {
+        target = await createNote({ title, content: paragraphs });
+    }
+
+    // Best-effort link from the daily note (its loss wouldn't lose content).
+    const daily = await openCalendarNote('daily', dateKey);
+    const dailyCurrent = getNote(daily.id) ?? daily;
+
+    if (!dailyCurrent.content.includes(`[[${title}]]`)) {
+        await updateNoteContent(
+            daily.id,
+            appendUnderAudioMemo(dailyCurrent.content, `[[${title}]]`),
+        );
+    }
+
+    const saved = getNote(target.id);
+
+    return saved !== undefined && saved.dirty === 0;
+}
+
+/** Heal groups for a week; after that, stop touching them (respect edits). */
+const HEAL_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * File a completed recording's transcript into its note, and only retire the
+ * audio once that transcript is confirmed durably persisted on the server.
+ *
+ * This is the safety core: the old code deleted the audio the instant it
+ * *attempted* to file, so a lost note edit — including a last-write-wins sync
+ * overwrite from another device — destroyed the recording. Here the audio is
+ * kept until the note edit has actually been pushed (dirty cleared) with the
+ * transcript intact, and any later overwrite re-appends from the retained
+ * text. Idempotent and safe to call repeatedly.
+ */
+async function fileGroup(groupId: string): Promise<void> {
     const database = workspaceDb();
 
     if (!database || heldGroups.has(groupId)) {
@@ -900,59 +970,58 @@ async function finalizeGroup(groupId: string): Promise<void> {
         .equals(groupId)
         .toArray();
 
-    if (
-        parts.length === 0 ||
-        parts[0].partsTotal === null ||
-        parts.length < parts[0].partsTotal ||
-        parts.some((part) => part.status !== 'done')
-    ) {
+    if (parts.length === 0) {
         return;
     }
 
     const ordered = [...parts].sort((a, b) => a.part - b.part);
-    const text = stitchTranscript(ordered);
     const first = ordered[0];
 
-    if (first.destination === 'note') {
-        const dateKey = safeDailyKey(first.dateKey, todayDailyKey());
-        const time = new Date(first.createdAt).toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-        const title = `Audio memo ${dateKey} ${time}`;
-        const paragraphs = ordered
-            .map((part) => part.transcript?.trim() ?? '')
-            .filter((paragraph) => paragraph !== '')
-            .join('\n\n');
-
-        await createNote({
-            title,
-            content: paragraphs === '' ? '(empty transcription)' : paragraphs,
-        });
-        await appendTranscript(first, `[[${title}]]`);
-    } else {
-        await appendTranscript(
-            first,
-            text === '' ? '(empty transcription)' : text,
-        );
+    // The group must be complete and every part transcribed (done) or already
+    // filed before there's anything to file.
+    if (
+        first.partsTotal === null ||
+        parts.length < first.partsTotal ||
+        parts.some((part) => part.status !== 'done' && part.status !== 'filed')
+    ) {
+        return;
     }
 
-    // Retain, don't destroy. The old hard-delete removed the recording's only
-    // copy the instant filing was attempted, so any filing hiccup (a lost
-    // note edit, a crash between append and delete) was unrecoverable — this
-    // is how the hour-long recording vanished. Instead, mark parts `filed`,
-    // drop the heavy audio blob to reclaim space, and keep the transcript so
-    // the content stays recoverable until purged after a grace period.
-    const emptyBlob = new Blob([]);
+    const allFiled = parts.every((part) => part.status === 'filed');
+    const createdMs = Date.parse(first.createdAt);
 
-    for (const part of parts) {
-        await database.memos.update(part.id, {
-            status: 'filed',
-            blob: emptyBlob,
-        });
+    // A long-settled group is left alone so we never re-add a line the user
+    // has since deliberately deleted; the retained text is purged separately.
+    if (
+        allFiled &&
+        Number.isFinite(createdMs) &&
+        Date.now() - createdMs > HEAL_WINDOW_MS
+    ) {
+        return;
     }
 
-    await refreshQueue();
+    const dateKey = safeDailyKey(first.dateKey, todayDailyKey());
+    const confirmed =
+        first.destination === 'note'
+            ? await ensureDedicatedFiled(ordered, first, dateKey)
+            : await ensureDailyFiled(ordered, first, dateKey);
+
+    // Only now — once the transcript is provably on the server — is it safe to
+    // drop the audio. Keep the transcript text as a further recoverable copy.
+    if (confirmed && !allFiled) {
+        const emptyBlob = new Blob([]);
+
+        for (const part of parts) {
+            if (part.status !== 'filed') {
+                await database.memos.update(part.id, {
+                    status: 'filed',
+                    blob: emptyBlob,
+                });
+            }
+        }
+
+        await refreshQueue();
+    }
 }
 
 const FILED_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -1013,7 +1082,7 @@ async function uploadMemo(memo: MemoRecord): Promise<void> {
             status: 'done',
             transcript: text,
         });
-        await finalizeGroup(memo.groupId);
+        await fileGroup(memo.groupId);
     } catch (error) {
         await database.memos.update(memo.id, {
             status: 'failed',
@@ -1040,15 +1109,27 @@ export async function processQueue(): Promise<void> {
 
     const queued = await database.memos.orderBy('createdAt').toArray();
 
+    // Upload anything not yet transcribed. `filed` is retired; `done` is
+    // handled by the reconciliation pass below.
     for (const memo of queued) {
-        if (memo.status === 'done') {
-            // A group can be left un-finalized if the app closed between
-            // the last part's upload and the note append.
-            await finalizeGroup(memo.groupId);
-        } else if (memo.status !== 'filed' && !uploadsInFlight.has(memo.id)) {
-            // pending / uploading / failed → (re)upload. `filed` is retired.
+        if (
+            (memo.status === 'pending' ||
+                memo.status === 'uploading' ||
+                memo.status === 'failed') &&
+            !uploadsInFlight.has(memo.id)
+        ) {
             await uploadMemo(memo);
         }
+    }
+
+    // Reconcile every group: file completed ones, and re-heal any whose
+    // transcript went missing from its note (e.g. a sync overwrote it).
+    const groupIds = new Set(
+        (await database.memos.toArray()).map((memo) => memo.groupId),
+    );
+
+    for (const groupId of groupIds) {
+        await fileGroup(groupId);
     }
 }
 
