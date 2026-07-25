@@ -48,6 +48,45 @@ export function appendUnderAudioMemo(content: string, entry: string): string {
     return lines.join('\n');
 }
 
+/**
+ * Append `line` under an `## {heading}` H2, creating the heading (at the end of
+ * the note) when it's missing. New lines go after the heading's existing
+ * contiguous list, so repeated appends stack in order.
+ */
+export function appendUnderHeading(
+    content: string,
+    heading: string,
+    line: string,
+): string {
+    const headingLine = `## ${heading}`;
+    const lines = content === '' ? [] : content.split('\n');
+    const index = lines.findIndex((l) => l.trimEnd() === headingLine);
+
+    if (index === -1) {
+        while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+            lines.pop();
+        }
+
+        if (lines.length > 0) {
+            lines.push('');
+        }
+
+        lines.push(headingLine, line, '');
+
+        return lines.join('\n');
+    }
+
+    let insertAt = index + 1;
+
+    while (insertAt < lines.length && lines[insertAt].trim() !== '') {
+        insertAt += 1;
+    }
+
+    lines.splice(insertAt, 0, line);
+
+    return lines.join('\n');
+}
+
 /** Stitch a recording group's part transcripts, in part order, into one line. */
 export function stitchTranscript(
     parts: { part: number; transcript: string | null }[],

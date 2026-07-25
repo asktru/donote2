@@ -1,12 +1,7 @@
 import { computed, ref } from 'vue';
 
 import { dateKeyFor, todayDailyKey } from '@/core/dates';
-import {
-    appendLine,
-    appendUnderAudioMemo,
-    safeDailyKey,
-    stitchTranscript,
-} from '@/core/memoNote';
+import { appendLine, appendUnderHeading, safeDailyKey } from '@/core/memoNote';
 import { apiUpload } from '@/lib/api';
 import { donoteDesktop } from '@/lib/desktop';
 import { nativeRecorder, readSegmentBlob } from '@/lib/nativeRecorder';
@@ -28,13 +23,16 @@ import {
 /**
  * Voice memos: recorded (mic + system audio in the desktop shell), queued
  * in IndexedDB so offline recordings survive reloads, then uploaded for
- * transcription and appended to the daily note of the recording day.
+ * transcription.
  *
  * Long recordings (meetings can run hours) rotate the recorder every
  * SEGMENT_MS: each segment is persisted immediately — a crash loses at
  * most the current segment — and uploads independently under provider
- * size limits. The group's transcripts are stitched in part order into
- * a single bullet once every part is transcribed.
+ * size limits. Once every part is transcribed the group is filed into its
+ * own note in the Transcripts folder, linked from the daily note's
+ * "## Audio Memos" heading. The audio blob is retired only after that note
+ * is durably saved (pushed to the server), so a filing hiccup can never lose
+ * the recording; the transcript text is kept on the queue until purged.
  */
 
 /** Upper time bound on a segment — mostly a fallback for near-silent audio;
@@ -48,8 +46,8 @@ const SEGMENT_MS = 10 * 60 * 1000;
 const MAX_SEGMENT_BYTES = 800 * 1024;
 /** Voice-optimized bitrate: ~800 KB ≈ 3.4 minutes of speech per segment. */
 const AUDIO_BITS_PER_SECOND = 32000;
-/** Recordings at least this long prompt for a transcript destination. */
-const LONG_RECORDING_SEC = 10 * 60;
+/** Transcripts are filed as their own notes in this folder. */
+const TRANSCRIPTS_FOLDER = 'Transcripts';
 
 interface ActiveRecording {
     recorder: MediaRecorder;
@@ -94,16 +92,6 @@ export const isRecording = ref(false);
 export const recordingSeconds = ref(0);
 export const recordingHasSystemAudio = ref(false);
 export const memoQueue = ref<MemoRecord[]>([]);
-/**
- * Set after stopping a long (multi-segment) recording: the UI asks where
- * the transcript should go. Finalization holds until the user answers or
- * the app reloads (then the daily-note default applies).
- */
-export const pendingDestination = ref<{
-    groupId: string;
-    durationSec: number;
-} | null>(null);
-const heldGroups = new Set<string>();
 
 export interface MemoGroup {
     groupId: string;
@@ -453,14 +441,6 @@ async function handleNativeStopped(event: NativeStoppedEvent): Promise<void> {
         await refreshQueue();
     }
 
-    if (event.durationSec >= LONG_RECORDING_SEC) {
-        heldGroups.add(event.groupId);
-        pendingDestination.value = {
-            groupId: event.groupId,
-            durationSec: event.durationSec,
-        };
-    }
-
     void processQueue();
 }
 
@@ -753,44 +733,7 @@ export async function stopRecording(): Promise<void> {
         await refreshQueue();
     }
 
-    const durationSec = Math.round((Date.now() - current.startedAt) / 1000);
-
-    if (durationSec >= LONG_RECORDING_SEC) {
-        // Long recording — let the user pick where the transcript goes.
-        // Gated on real duration, not part count: segments now rotate by
-        // size, so a short memo can span several parts.
-        heldGroups.add(current.groupId);
-        pendingDestination.value = {
-            groupId: current.groupId,
-            durationSec,
-        };
-    }
-
     void processQueue();
-}
-
-/** Resolve the destination question for a long recording. */
-export async function chooseDestination(
-    groupId: string,
-    destination: 'daily' | 'note',
-): Promise<void> {
-    pendingDestination.value = null;
-    heldGroups.delete(groupId);
-
-    const database = workspaceDb();
-
-    if (database) {
-        const parts = await database.memos
-            .where('groupId')
-            .equals(groupId)
-            .toArray();
-
-        for (const part of parts) {
-            await database.memos.update(part.id, { destination });
-        }
-    }
-
-    await fileGroup(groupId);
 }
 
 /** Keyboard-friendly start/stop switch. */
@@ -853,13 +796,6 @@ export async function cancelMemoGroup(groupId: string): Promise<void> {
     }
 }
 
-function memoTime(iso: string): string {
-    return new Date(iso).toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-    });
-}
-
 /** Append a wiki link for a freshly created note to today's daily note. */
 export async function appendLinkToTodayNote(title: string): Promise<void> {
     const note = await openCalendarNote('daily', todayDailyKey());
@@ -871,97 +807,33 @@ export async function appendLinkToTodayNote(title: string): Promise<void> {
     );
 }
 
-/**
- * Ensure the daily-note bullet for this recording is present, and report
- * whether it is *durably* saved — i.e. pushed to the server (the note's
- * dirty flag has cleared) and still contains the line. Re-appends the line
- * if a sync overwrote the note (LWW), so a concurrent daily-note edit on
- * another device can't silently drop the transcript.
- */
-async function ensureDailyFiled(
-    ordered: MemoRecord[],
-    first: MemoRecord,
-    dateKey: string,
-): Promise<boolean> {
-    const text = stitchTranscript(ordered) || '(empty transcription)';
-    const line = `${memoTime(first.createdAt)} — ${text}`;
-    const note = await openCalendarNote('daily', dateKey);
-    const current = getNote(note.id) ?? note;
+/** The transcript note's title, e.g. "Audio memo 2026-07-25 07:03:27". */
+function transcriptTitle(first: MemoRecord): string {
+    const started = new Date(first.createdAt);
+    const pad = (n: number): string => String(n).padStart(2, '0');
+    const date = safeDailyKey(first.dateKey, todayDailyKey());
+    const time = `${pad(started.getHours())}:${pad(started.getMinutes())}:${pad(
+        started.getSeconds(),
+    )}`;
 
-    if (!current.content.includes(line)) {
-        await updateNoteContent(
-            note.id,
-            appendUnderAudioMemo(current.content, line),
-        );
-    }
-
-    const saved = getNote(note.id);
-
-    return (
-        saved !== undefined &&
-        saved.dirty === 0 &&
-        saved.content.includes(line)
-    );
+    return `Audio memo ${date} ${time}`;
 }
 
 /**
- * Ensure the dedicated transcript note exists (idempotent by title) and is
- * linked from the daily note; report whether the dedicated note is durably
- * saved. The transcript body lives in the dedicated note, so its durability
- * is what gates cleanup.
- */
-async function ensureDedicatedFiled(
-    ordered: MemoRecord[],
-    first: MemoRecord,
-    dateKey: string,
-): Promise<boolean> {
-    const title = `Audio memo ${dateKey} ${memoTime(first.createdAt)}`;
-    const paragraphs =
-        ordered
-            .map((part) => part.transcript?.trim() ?? '')
-            .filter((paragraph) => paragraph !== '')
-            .join('\n\n') || '(empty transcription)';
-
-    let target = titleIndex.value.get(title.trim().toLowerCase());
-
-    if (target === undefined) {
-        target = await createNote({ title, content: paragraphs });
-    }
-
-    // Best-effort link from the daily note (its loss wouldn't lose content).
-    const daily = await openCalendarNote('daily', dateKey);
-    const dailyCurrent = getNote(daily.id) ?? daily;
-
-    if (!dailyCurrent.content.includes(`[[${title}]]`)) {
-        await updateNoteContent(
-            daily.id,
-            appendUnderAudioMemo(dailyCurrent.content, `[[${title}]]`),
-        );
-    }
-
-    const saved = getNote(target.id);
-
-    return saved !== undefined && saved.dirty === 0;
-}
-
-/** Heal groups for a week; after that, stop touching them (respect edits). */
-const HEAL_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-
-/**
- * File a completed recording's transcript into its note, and only retire the
- * audio once that transcript is confirmed durably persisted on the server.
+ * File a completed recording into its own note in the Transcripts folder and
+ * link it from the daily note's "## Audio Memos" heading. Retire the audio
+ * only once that note is durably saved (pushed to the server).
  *
- * This is the safety core: the old code deleted the audio the instant it
- * *attempted* to file, so a lost note edit — including a last-write-wins sync
- * overwrite from another device — destroyed the recording. Here the audio is
- * kept until the note edit has actually been pushed (dirty cleared) with the
- * transcript intact, and any later overwrite re-appends from the retained
- * text. Idempotent and safe to call repeatedly.
+ * Transcripts live in pipeline-owned notes so they can never collide with the
+ * user's edits: the daily-note link can be replaced with a summary, or the
+ * transcript post-processed, and the recorder neither re-adds nor loses
+ * anything. The link is written exactly once (at creation); it is never
+ * re-healed. Idempotent and safe to call repeatedly.
  */
 async function fileGroup(groupId: string): Promise<void> {
     const database = workspaceDb();
 
-    if (!database || heldGroups.has(groupId)) {
+    if (!database) {
         return;
     }
 
@@ -977,8 +849,7 @@ async function fileGroup(groupId: string): Promise<void> {
     const ordered = [...parts].sort((a, b) => a.part - b.part);
     const first = ordered[0];
 
-    // The group must be complete and every part transcribed (done) or already
-    // filed before there's anything to file.
+    // Act only once the group is complete and every part is transcribed.
     if (
         first.partsTotal === null ||
         parts.length < first.partsTotal ||
@@ -987,28 +858,64 @@ async function fileGroup(groupId: string): Promise<void> {
         return;
     }
 
-    const allFiled = parts.every((part) => part.status === 'filed');
-    const createdMs = Date.parse(first.createdAt);
-
-    // A long-settled group is left alone so we never re-add a line the user
-    // has since deliberately deleted; the retained text is purged separately.
-    if (
-        allFiled &&
-        Number.isFinite(createdMs) &&
-        Date.now() - createdMs > HEAL_WINDOW_MS
-    ) {
+    // Already filed and retired.
+    if (parts.every((part) => part.status === 'filed')) {
         return;
     }
 
     const dateKey = safeDailyKey(first.dateKey, todayDailyKey());
-    const confirmed =
-        first.destination === 'note'
-            ? await ensureDedicatedFiled(ordered, first, dateKey)
-            : await ensureDailyFiled(ordered, first, dateKey);
+    const title = transcriptTitle(first);
 
-    // Only now — once the transcript is provably on the server — is it safe to
-    // drop the audio. Keep the transcript text as a further recoverable copy.
-    if (confirmed && !allFiled) {
+    // Locate the transcript note: by the id we recorded, else by title (covers
+    // a crash that lost the id before it was stamped on the parts).
+    let note = first.noteId !== undefined ? getNote(first.noteId) : undefined;
+
+    if (note === undefined) {
+        note = titleIndex.value.get(title.trim().toLowerCase());
+    }
+
+    // Create it once, and link it from the daily note a single time.
+    if (note === undefined) {
+        const paragraphs =
+            ordered
+                .map((part) => part.transcript?.trim() ?? '')
+                .filter((paragraph) => paragraph !== '')
+                .join('\n\n') || '(empty transcription)';
+
+        note = await createNote({
+            title,
+            folder: TRANSCRIPTS_FOLDER,
+            content: paragraphs,
+        });
+
+        const daily = await openCalendarNote('daily', dateKey);
+        const dailyCurrent = getNote(daily.id) ?? daily;
+        await updateNoteContent(
+            daily.id,
+            appendUnderHeading(
+                dailyCurrent.content,
+                'Audio Memos',
+                `- [[${title}]]`,
+            ),
+        );
+    }
+
+    const noteId = note.id;
+
+    // Stamp the note id on every part so retries never create a duplicate.
+    for (const part of parts) {
+        if (part.noteId !== noteId) {
+            await database.memos.update(part.id, { noteId });
+        }
+    }
+
+    // Retire the audio only once the transcript note is durably saved (pushed
+    // to the server, so dirty has cleared) — or if the user has deleted it.
+    // The transcript text stays on the parts as a further backup until purge.
+    const saved = getNote(noteId);
+    const confirmed = saved === undefined || saved.dirty === 0;
+
+    if (confirmed) {
         const emptyBlob = new Blob([]);
 
         for (const part of parts) {
@@ -1019,9 +926,9 @@ async function fileGroup(groupId: string): Promise<void> {
                 });
             }
         }
-
-        await refreshQueue();
     }
+
+    await refreshQueue();
 }
 
 const FILED_TTL_MS = 30 * 24 * 60 * 60 * 1000;

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     appendLine,
     appendUnderAudioMemo,
+    appendUnderHeading,
     safeDailyKey,
     stitchTranscript,
 } from './memoNote';
@@ -78,5 +79,26 @@ describe('safeDailyKey', () => {
     it('falls back for epoch/bogus or malformed keys', () => {
         expect(safeDailyKey('1970-01-01', '2026-07-25')).toBe('2026-07-25');
         expect(safeDailyKey('not-a-date', '2026-07-25')).toBe('2026-07-25');
+    });
+});
+
+describe('appendUnderHeading', () => {
+    it('creates the heading in an empty note', () => {
+        expect(appendUnderHeading('', 'Audio Memos', '- [[Audio memo A]]')).toBe(
+            '## Audio Memos\n- [[Audio memo A]]\n',
+        );
+    });
+
+    it('stacks new links under an existing heading, in order', () => {
+        const first = appendUnderHeading('', 'Audio Memos', '- [[A]]');
+        expect(appendUnderHeading(first, 'Audio Memos', '- [[B]]')).toBe(
+            '## Audio Memos\n- [[A]]\n- [[B]]\n',
+        );
+    });
+
+    it('appends the heading block after existing content', () => {
+        expect(
+            appendUnderHeading('# Day\n\nnotes\n', 'Audio Memos', '- [[A]]'),
+        ).toBe('# Day\n\nnotes\n\n## Audio Memos\n- [[A]]\n');
     });
 });

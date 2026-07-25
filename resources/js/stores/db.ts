@@ -64,11 +64,12 @@ export interface MemoRecord {
     /** Transcribed text, set when this part reaches 'done'. */
     transcript: string | null;
     /**
-     * Where the finished transcript goes: inline under [[Audio memo]] in
-     * the daily note (default) or into a dedicated linked note — offered
-     * for recordings longer than one segment.
+     * The dedicated transcript note this recording was filed into (in the
+     * Transcripts folder). Set once the note is created; used to confirm the
+     * transcript is durably saved before the audio blob is cleared, and to
+     * avoid creating duplicate notes on retry.
      */
-    destination?: 'daily' | 'note';
+    noteId?: string;
     error: string | null;
     attempts: number;
     createdAt: string;

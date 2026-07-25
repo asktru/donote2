@@ -19,20 +19,31 @@ import {
     seedStarterPrompts,
 } from '@/stores/aiPrompts';
 import { activeEditor } from '@/stores/editorRegistry';
-import { workspaceConfig } from '@/stores/workspace';
+import { resolveWikiTarget, workspaceConfig } from '@/stores/workspace';
 
 /**
  * Runs a prompt against the current editor selection (or the whole note
  * when nothing is selected), previews the result, and lets the user
  * discard it, copy it, or apply it to the editor.
+ *
+ * When the selection contains a wiki link (e.g. a link to an audio-memo
+ * transcript), the prompt runs on the *linked note's* content instead of the
+ * selected text — so you can summarize a transcript in place — while the
+ * result still replaces the original selection.
  */
 
 interface Target {
+    /** The text fed to the prompt. */
     text: string;
+    /** Selection range to replace with the result. */
     from: number;
     to: number;
     wholeNote: boolean;
+    /** Set when `text` came from a wiki-linked note rather than the selection. */
+    linkedTitle?: string;
 }
+
+const WIKILINK_RE = /\[\[([^\]|\n]+?)(?:\s*\|[^\]\n]*)?\]\]/;
 
 const target = ref<Target | null>(null);
 const customPrompt = ref('');
@@ -49,6 +60,10 @@ const targetLabel = computed(() => {
     }
 
     const words = target.value.text.split(/\s+/).filter(Boolean).length;
+
+    if (target.value.linkedTitle !== undefined) {
+        return `Linked note “${target.value.linkedTitle}” · ${words} words`;
+    }
 
     return target.value.wholeNote
         ? `Whole note · ${words} words`
@@ -75,15 +90,40 @@ watch(aiDialogOpen, (open) => {
 
     const { from, to } = view.state.selection.main;
 
-    target.value =
-        from === to
-            ? {
-                  text: view.state.doc.toString(),
-                  from: 0,
-                  to: view.state.doc.length,
-                  wholeNote: true,
-              }
-            : { text: view.state.sliceDoc(from, to), from, to, wholeNote: false };
+    if (from === to) {
+        target.value = {
+            text: view.state.doc.toString(),
+            from: 0,
+            to: view.state.doc.length,
+            wholeNote: true,
+        };
+
+        return;
+    }
+
+    const selected = view.state.sliceDoc(from, to);
+
+    // If the selection references a note via a wiki link, run the prompt on
+    // that note's content (e.g. a transcript) rather than the link text — but
+    // still replace the original selection with the result.
+    const linkMatch = WIKILINK_RE.exec(selected);
+    const linked = linkMatch
+        ? resolveWikiTarget(linkMatch[1].trim()).note
+        : undefined;
+
+    if (linked && linked.content.trim() !== '') {
+        target.value = {
+            text: linked.content,
+            from,
+            to,
+            wholeNote: false,
+            linkedTitle: linked.title || linkMatch?.[1].trim() || 'linked note',
+        };
+
+        return;
+    }
+
+    target.value = { text: selected, from, to, wholeNote: false };
 });
 
 async function run(prompt: string): Promise<void> {
@@ -209,7 +249,9 @@ async function saveCurrentPrompt(): Promise<void> {
                         <Button
                             size="sm"
                             class="h-7 gap-1.5 px-2.5 text-xs"
-                            :disabled="running || !target || customPrompt.trim() === ''"
+                            :disabled="
+                                running || !target || customPrompt.trim() === ''
+                            "
                             @click="run(customPrompt)"
                         >
                             <Play class="size-3.5" /> Run
@@ -264,8 +306,7 @@ async function saveCurrentPrompt(): Promise<void> {
                                 'font-sans text-sm break-words whitespace-pre-wrap',
                             )
                         "
-                        >{{ result }}</pre
-                    >
+                        >{{ result }}</pre>
                     <div class="flex items-center gap-2">
                         <Button
                             size="sm"
