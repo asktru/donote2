@@ -60,11 +60,7 @@ import { PRIORITY_COLORS } from '@/core/priority';
 import { buildNextOccurrenceLine } from '@/core/repeat';
 import { generateSyncId } from '@/core/syncedLines';
 import { inlineSegments } from '@/lib/inlineTitle';
-import {
-    isTableRow,
-    splitTableRow,
-    tableAligns,
-} from '@/lib/markdownTable';
+import { isTableRow, splitTableRow, tableAligns } from '@/lib/markdownTable';
 import type { ColumnAlign } from '@/lib/markdownTable';
 import { downloadMermaidPng, renderMermaid } from '@/lib/mermaid';
 import { pasteAsMarkdownLink } from '@/lib/pasteLinks';
@@ -257,19 +253,13 @@ const BARE_URL_RE = /https?:\/\/[^\s)]+/g;
  */
 function mdLinkUrlAt(text: string, offset: number): string | null {
     for (const match of text.matchAll(LINK_URL_RE)) {
-        if (
-            match.index <= offset &&
-            offset <= match.index + match[0].length
-        ) {
+        if (match.index <= offset && offset <= match.index + match[0].length) {
             return match[2];
         }
     }
 
     for (const match of text.matchAll(BARE_URL_RE)) {
-        if (
-            match.index <= offset &&
-            offset <= match.index + match[0].length
-        ) {
+        if (match.index <= offset && offset <= match.index + match[0].length) {
             return match[0];
         }
     }
@@ -1085,7 +1075,11 @@ function buildDecorations(state: EditorState): DecorationSet {
                 decoration: Decoration.mark({
                     class: isDue ? 'cm-meta-pill cm-due-pill' : 'cm-meta-pill',
                     ...(isDue
-                        ? { attributes: { title: 'Click to edit the due date' } }
+                        ? {
+                              attributes: {
+                                  title: 'Click to edit the due date',
+                              },
+                          }
                         : {}),
                 }),
             });
@@ -1342,9 +1336,7 @@ class CopyWidget extends WidgetType {
         button.innerHTML =
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
 
-        button.addEventListener('mousedown', (event) =>
-            event.preventDefault(),
-        );
+        button.addEventListener('mousedown', (event) => event.preventDefault());
         button.addEventListener('click', (event) => {
             event.preventDefault();
             void navigator.clipboard.writeText(this.text);
@@ -1363,9 +1355,7 @@ class CopyWidget extends WidgetType {
 /** Language of a fenced code block from its opening line, lowercased. */
 function fenceLanguage(text: string): string {
     return (
-        text
-            .match(/^\s*(?:`{3,}|~{3,})\s*([\w-]+)/)?.[1]
-            ?.toLowerCase() ?? ''
+        text.match(/^\s*(?:`{3,}|~{3,})\s*([\w-]+)/)?.[1]?.toLowerCase() ?? ''
     );
 }
 
@@ -1527,6 +1517,8 @@ class TableWidget extends WidgetType {
     constructor(
         readonly rows: string[][],
         readonly aligns: ColumnAlign[],
+        /** Leading whitespace of the table's markdown, reproduced as indent. */
+        readonly indent: string,
     ) {
         super();
     }
@@ -1534,6 +1526,7 @@ class TableWidget extends WidgetType {
     override eq(other: TableWidget): boolean {
         return (
             this.aligns.join(',') === other.aligns.join(',') &&
+            this.indent === other.indent &&
             JSON.stringify(this.rows) === JSON.stringify(other.rows)
         );
     }
@@ -1638,7 +1631,23 @@ class TableWidget extends WidgetType {
             table.appendChild(tbody);
         }
 
-        wrap.appendChild(table);
+        // Reproduce the markdown's leading whitespace as real spaces carrying
+        // the same tracking the indent guides use, so a nested table lines up
+        // with its sibling lines — and keeps doing so under any font, with no
+        // hard-coded pixel step. Sits outside the scroller so it stays put
+        // when a wide table scrolls.
+        if (this.indent !== '') {
+            const indent = document.createElement('span');
+            indent.className = 'cm-md-table-indent';
+            indent.setAttribute('aria-hidden', 'true');
+            indent.textContent = this.indent;
+            wrap.appendChild(indent);
+        }
+
+        const scroller = document.createElement('div');
+        scroller.className = 'cm-md-table-scroll';
+        scroller.appendChild(table);
+        wrap.appendChild(scroller);
 
         // Clicking drops the caret into the block, which reveals the source
         // (the field stops replacing it once the selection is inside).
@@ -1723,7 +1732,11 @@ function buildTables(state: EditorState): DecorationSet {
                 lastLine.to,
                 Decoration.replace({
                     block: true,
-                    widget: new TableWidget(rows, aligns),
+                    widget: new TableWidget(
+                        rows,
+                        aligns,
+                        /^[ \t]*/.exec(line.text)?.[0] ?? '',
+                    ),
                 }),
             );
         }
@@ -1794,7 +1807,10 @@ function docEndsInBlockWidget(state: EditorState): boolean {
             start -= 1;
         }
 
-        if (doc.lines > start && tableAligns(doc.line(start + 1).text) !== null) {
+        if (
+            doc.lines > start &&
+            tableAligns(doc.line(start + 1).text) !== null
+        ) {
             return true;
         }
     }
@@ -1950,9 +1966,7 @@ function setFrontMatterCollapsed(collapsed: boolean): void {
 
 /** Is `from` the fold range of a front matter block (opens on line 1)? */
 function isFrontMatterFold(state: EditorState, from: number): boolean {
-    return (
-        state.doc.lineAt(from).number === 1 && frontMatterEnd(state) > 1
-    );
+    return state.doc.lineAt(from).number === 1 && frontMatterEnd(state) > 1;
 }
 
 /**
@@ -2117,8 +2131,7 @@ const decorationsField = StateField.define<DecorationSet>({
             // gain their Link/Emphasis nodes after later parse batches,
             // each landing as a transaction. Without this, syntax marks
             // far from the top render raw until the first edit.
-            syntaxTree(transaction.state) !==
-                syntaxTree(transaction.startState)
+            syntaxTree(transaction.state) !== syntaxTree(transaction.startState)
         ) {
             return buildDecorations(transaction.state);
         }
@@ -2200,7 +2213,11 @@ export function selectionBlock(state: EditorState): {
     }
 
     const line = state.doc.lineAt(sel.head);
-    const to = endOfChildrenBlock(state, line.number, parseLine(line.text).indent);
+    const to = endOfChildrenBlock(
+        state,
+        line.number,
+        parseLine(line.text).indent,
+    );
 
     return { from: line.from, to, text: state.sliceDoc(line.from, to) };
 }
@@ -2405,7 +2422,11 @@ function toggleLinesMarker(
               ? bulletMatch[3]
               : line.text.trimStart().replace(/^#{1,6}\s+/, '');
 
-        return { from: line.from, to: line.to, insert: `${indent}${marker}${body}` };
+        return {
+            from: line.from,
+            to: line.to,
+            insert: `${indent}${marker}${body}`,
+        };
     });
 
     // No explicit selection: CodeMirror maps the current one through the
@@ -2438,7 +2459,8 @@ const cycleHeadingCommand = (view: EditorView): boolean => {
         .replace(/^#{1,6}\s+/, '')
         .replace(/^[-*+]\s\[[ xX>-]\]\s/, '')
         .replace(/^[-*+]\s/, '');
-    const prefix = level === 0 ? '# ' : level === 1 ? '## ' : level === 2 ? '### ' : '';
+    const prefix =
+        level === 0 ? '# ' : level === 1 ? '## ' : level === 2 ? '### ' : '';
 
     const bodyOffset = Math.max(0, head - (line.to - body.length));
     const anchor =
@@ -2448,7 +2470,11 @@ const cycleHeadingCommand = (view: EditorView): boolean => {
         Math.min(bodyOffset, body.length);
 
     view.dispatch({
-        changes: { from: line.from, to: line.to, insert: `${indent}${prefix}${body}` },
+        changes: {
+            from: line.from,
+            to: line.to,
+            insert: `${indent}${prefix}${body}`,
+        },
         selection: { anchor },
     });
 
@@ -2657,7 +2683,11 @@ function setLineToken(
     const prefix = line.text.endsWith(' ') || line.text === '' ? '' : ' ';
 
     view.dispatch({
-        changes: { from: insertAt, to: insertAt, insert: `${prefix}${replacement}` },
+        changes: {
+            from: insertAt,
+            to: insertAt,
+            insert: `${prefix}${replacement}`,
+        },
         userEvent: 'input',
     });
 }
@@ -2675,7 +2705,10 @@ function applyDueValue(view: EditorView, key: string | null): void {
  * has none), then open the date picker pre-filled with the current value.
  * Wired to ⌘⇧S / ⌘⇧D and to clicking a schedule/due token.
  */
-export function openDateEditor(view: EditorView, mode: 'schedule' | 'due'): void {
+export function openDateEditor(
+    view: EditorView,
+    mode: 'schedule' | 'due',
+): void {
     const read = mode === 'schedule' ? readScheduleValue : readDueValue;
     const apply = mode === 'schedule' ? applyScheduleValue : applyDueValue;
 
@@ -3045,12 +3078,28 @@ const highlightStyle = HighlightStyle.define([
     { tag: tags.processingInstruction, class: 'cm-md-mark' },
     // Code tokens inside fenced blocks (nested language parses).
     { tag: tags.keyword, color: 'var(--token-mention)' },
-    { tag: [tags.string, tags.special(tags.string)], color: 'var(--token-tag)' },
+    {
+        tag: [tags.string, tags.special(tags.string)],
+        color: 'var(--token-tag)',
+    },
     { tag: [tags.number, tags.bool, tags.atom], color: '#eb8909' },
-    { tag: tags.comment, color: 'var(--muted-foreground)', fontStyle: 'italic' },
-    { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: 'var(--token-link)' },
+    {
+        tag: tags.comment,
+        color: 'var(--muted-foreground)',
+        fontStyle: 'italic',
+    },
+    {
+        tag: [
+            tags.function(tags.variableName),
+            tags.function(tags.propertyName),
+        ],
+        color: 'var(--token-link)',
+    },
     { tag: [tags.typeName, tags.className, tags.tagName], color: '#dc4c3e' },
-    { tag: [tags.operator, tags.punctuation], color: 'var(--muted-foreground)' },
+    {
+        tag: [tags.operator, tags.punctuation],
+        color: 'var(--muted-foreground)',
+    },
     { tag: tags.propertyName, color: 'var(--token-link)' },
 ]);
 
@@ -3199,10 +3248,24 @@ const editorTheme = EditorView.theme({
 
     // Rendered GFM pipe tables (replaces the raw markdown when not editing).
     '.cm-md-table-wrap': {
+        display: 'flex',
+        alignItems: 'flex-start',
         margin: '0.5em 0',
-        overflowX: 'auto',
+        // Match .cm-line's horizontal padding so a table lines up with the
+        // text lines around it rather than sitting 4px to their left.
+        paddingLeft: '4px',
         cursor: 'pointer',
     },
+    // Indent of a nested table: the markdown's own leading spaces, tracked
+    // exactly like .cm-indent-guide so the width matches sibling lines.
+    '.cm-md-table-indent': {
+        flex: '0 0 auto',
+        whiteSpace: 'pre',
+        letterSpacing: '0.35em',
+        userSelect: 'none',
+    },
+    // Only the table scrolls; the indent above stays anchored.
+    '.cm-md-table-scroll': { minWidth: '0', overflowX: 'auto' },
     '.cm-md-table': {
         borderCollapse: 'collapse',
         fontSize: '0.95em',
@@ -3625,7 +3688,7 @@ const hangingIndents = ViewPlugin.fromClass(
             const seen = new Set<number>();
 
             for (const range of view.visibleRanges) {
-                for (let pos = range.from; pos <= range.to; ) {
+                for (let pos = range.from; pos <= range.to;) {
                     const line = view.state.doc.lineAt(pos);
                     pos = line.to + 1;
 
@@ -3686,7 +3749,7 @@ const hangingIndents = ViewPlugin.fromClass(
             const missing: { pos: number; end: number; prefix: string }[] = [];
 
             for (const range of view.visibleRanges) {
-                for (let pos = range.from; pos <= range.to; ) {
+                for (let pos = range.from; pos <= range.to;) {
                     const line = view.state.doc.lineAt(pos);
                     pos = line.to + 1;
                     const prefix = this.prefixOf(line.text);

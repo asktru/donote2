@@ -54,6 +54,8 @@ type RenderItem =
           header: string[];
           rows: string[][];
           aligns: ColumnAlign[];
+          /** Markdown indent of the table, so it nests like the text rows. */
+          indent: number;
       };
 
 /**
@@ -90,6 +92,7 @@ function buildRenderItems(lines: ParsedLine[]): RenderItem[] {
                 header: splitTableRow(line.raw),
                 rows,
                 aligns,
+                indent: line.indent,
             });
             i = j;
 
@@ -482,6 +485,9 @@ function displayText(line: ParsedLine): string {
                             <table
                                 v-if="item.kind === 'table'"
                                 class="reference-table my-1 border-collapse text-sm"
+                                :style="{
+                                    marginLeft: `${Math.max(0, item.indent - block.baseIndent) * 6}px`,
+                                }"
                             >
                                 <thead>
                                     <tr>
