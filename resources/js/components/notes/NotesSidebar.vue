@@ -263,7 +263,11 @@ const syncLabel = computed(() => {
             >
         </button>
 
-        <div class="mt-3 min-h-0 flex-1 space-y-4 overflow-y-auto px-3 pb-4">
+        <!-- select-none: a long-press drag on touch devices must move the row,
+             not start selecting the note/folder label text. -->
+        <div
+            class="mt-3 min-h-0 flex-1 space-y-4 overflow-y-auto px-3 pb-4 select-none"
+        >
             <Link
                 v-if="calendarHref"
                 :href="calendarHref"
