@@ -308,6 +308,28 @@ function glyph(line: ParsedLine): string {
     return '';
 }
 
+/** Width of the leading glyph column: w-3.5 (14px) + mr-1.5 (6px). */
+const GLYPH_WIDTH_PX = 20;
+
+/**
+ * Nesting indent plus a hanging indent, so a wrapped bullet/task continues
+ * under its own text instead of falling back to the far-left edge (the editor
+ * aligns wrapped lines the same way). Rows without a glyph — headings, plain
+ * paragraphs — just get the nesting indent.
+ */
+function lineStyle(
+    line: ParsedLine,
+    baseIndent: number,
+): Record<string, string> {
+    const depth = Math.max(0, line.indent - baseIndent) * 6;
+    const hanging = glyph(line) === '' ? 0 : GLYPH_WIDTH_PX;
+
+    return {
+        paddingLeft: `${depth + hanging}px`,
+        textIndent: `${-hanging}px`,
+    };
+}
+
 /**
  * Reader-friendly text: leading markers stripped. Inline markdown (bold,
  * wiki links, tags, …) is left in place — TaskTitle renders it styled.
@@ -504,9 +526,7 @@ function displayText(line: ParsedLine): string {
                                             'font-semibold',
                                     )
                                 "
-                                :style="{
-                                    paddingLeft: `${Math.max(0, item.line.indent - block.baseIndent) * 6}px`,
-                                }"
+                                :style="lineStyle(item.line, block.baseIndent)"
                             >
                                 <span
                                     v-if="glyph(item.line)"
