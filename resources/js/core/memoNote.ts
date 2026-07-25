@@ -48,6 +48,35 @@ export function appendUnderAudioMemo(content: string, entry: string): string {
     return lines.join('\n');
 }
 
+/** Stitch a recording group's part transcripts, in part order, into one line. */
+export function stitchTranscript(
+    parts: { part: number; transcript: string | null }[],
+): string {
+    return [...parts]
+        .sort((a, b) => a.part - b.part)
+        .map((part) => part.transcript ?? '')
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+/**
+ * A daily key we trust to be a real, current-era date. A bogus epoch/NaN
+ * date (e.g. from a malformed segment timestamp) would otherwise file a
+ * transcript into an invisible 1970 note — fall back to today instead.
+ */
+export function safeDailyKey(dateKey: string, fallback: string): string {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+
+    if (match === null) {
+        return fallback;
+    }
+
+    const year = Number(match[1]);
+
+    return year >= 2020 && year <= 2100 ? dateKey : fallback;
+}
+
 /** Append a top-level line (e.g. a wiki link) at the end of a note. */
 export function appendLine(content: string, line: string): string {
     const lines = content === '' ? [] : content.split('\n');

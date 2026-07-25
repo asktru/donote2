@@ -1,7 +1,12 @@
 import { computed, ref } from 'vue';
 
 import { dateKeyFor, todayDailyKey } from '@/core/dates';
-import { appendLine, appendUnderAudioMemo } from '@/core/memoNote';
+import {
+    appendLine,
+    appendUnderAudioMemo,
+    safeDailyKey,
+    stitchTranscript,
+} from '@/core/memoNote';
 import { apiUpload } from '@/lib/api';
 import { donoteDesktop } from '@/lib/desktop';
 import { nativeRecorder, readSegmentBlob } from '@/lib/nativeRecorder';
@@ -120,25 +125,34 @@ export const memoGroups = computed<MemoGroup[]>(() => {
         groups.set(memo.groupId, list);
     }
 
-    return [...groups.values()].map((parts) => {
-        const sorted = [...parts].sort((a, b) => a.part - b.part);
-        const failed = sorted.find((memo) => memo.status === 'failed');
+    return (
+        [...groups.values()]
+            // A fully filed group is done and retained silently — off the sidebar.
+            .filter((parts) => parts.some((memo) => memo.status !== 'filed'))
+            .map((parts) => {
+                const sorted = [...parts].sort((a, b) => a.part - b.part);
+                const failed = sorted.find((memo) => memo.status === 'failed');
 
-        return {
-            groupId: sorted[0].groupId,
-            createdAt: sorted[0].createdAt,
-            durationSec: sorted.reduce((sum, m) => sum + m.durationSec, 0),
-            partsDone: sorted.filter((memo) => memo.status === 'done').length,
-            partsKnown: sorted[0].partsTotal ?? sorted.length,
-            finished: sorted[0].partsTotal !== null,
-            status: sorted.some((memo) => memo.status === 'uploading')
-                ? 'uploading'
-                : failed
-                  ? 'failed'
-                  : 'pending',
-            error: failed?.error ?? null,
-        };
-    });
+                return {
+                    groupId: sorted[0].groupId,
+                    createdAt: sorted[0].createdAt,
+                    durationSec: sorted.reduce(
+                        (sum, m) => sum + m.durationSec,
+                        0,
+                    ),
+                    partsDone: sorted.filter((memo) => memo.status === 'done')
+                        .length,
+                    partsKnown: sorted[0].partsTotal ?? sorted.length,
+                    finished: sorted[0].partsTotal !== null,
+                    status: sorted.some((memo) => memo.status === 'uploading')
+                        ? 'uploading'
+                        : failed
+                          ? 'failed'
+                          : 'pending',
+                    error: failed?.error ?? null,
+                };
+            })
+    );
 });
 
 export const activeMemoCount = computed(
@@ -338,7 +352,10 @@ async function rotateSegment(): Promise<void> {
         current.segmentStartedAt = Date.now();
         current.recorder = makeRecorder(current.stream);
         attachRecorder(current);
-        current.segmentTimer = setTimeout(() => void rotateSegment(), SEGMENT_MS);
+        current.segmentTimer = setTimeout(
+            () => void rotateSegment(),
+            SEGMENT_MS,
+        );
     } finally {
         rotating = false;
     }
@@ -839,16 +856,23 @@ async function appendTranscript(
     firstPart: MemoRecord,
     text: string,
 ): Promise<void> {
-    const note = await openCalendarNote('daily', firstPart.dateKey);
+    const dateKey = safeDailyKey(firstPart.dateKey, todayDailyKey());
+    const note = await openCalendarNote('daily', dateKey);
     const current = getNote(note.id) ?? note;
     const time = new Date(firstPart.createdAt).toLocaleTimeString([], {
         hour: '2-digit',
         minute: '2-digit',
     });
+    const line = `${time} — ${text}`;
+
+    // Idempotent: never double-file the same transcript.
+    if (current.content.includes(line)) {
+        return;
+    }
 
     await updateNoteContent(
         note.id,
-        appendUnderAudioMemo(current.content, `${time} — ${text}`),
+        appendUnderAudioMemo(current.content, line),
     );
 }
 
@@ -886,20 +910,16 @@ async function finalizeGroup(groupId: string): Promise<void> {
     }
 
     const ordered = [...parts].sort((a, b) => a.part - b.part);
-    const text = ordered
-        .map((part) => part.transcript ?? '')
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-
+    const text = stitchTranscript(ordered);
     const first = ordered[0];
 
     if (first.destination === 'note') {
+        const dateKey = safeDailyKey(first.dateKey, todayDailyKey());
         const time = new Date(first.createdAt).toLocaleTimeString([], {
             hour: '2-digit',
             minute: '2-digit',
         });
-        const title = `Audio memo ${first.dateKey} ${time}`;
+        const title = `Audio memo ${dateKey} ${time}`;
         const paragraphs = ordered
             .map((part) => part.transcript?.trim() ?? '')
             .filter((paragraph) => paragraph !== '')
@@ -917,8 +937,45 @@ async function finalizeGroup(groupId: string): Promise<void> {
         );
     }
 
-    await database.memos.where('groupId').equals(groupId).delete();
+    // Retain, don't destroy. The old hard-delete removed the recording's only
+    // copy the instant filing was attempted, so any filing hiccup (a lost
+    // note edit, a crash between append and delete) was unrecoverable — this
+    // is how the hour-long recording vanished. Instead, mark parts `filed`,
+    // drop the heavy audio blob to reclaim space, and keep the transcript so
+    // the content stays recoverable until purged after a grace period.
+    const emptyBlob = new Blob([]);
+
+    for (const part of parts) {
+        await database.memos.update(part.id, {
+            status: 'filed',
+            blob: emptyBlob,
+        });
+    }
+
     await refreshQueue();
+}
+
+const FILED_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Drop filed memos once they're old enough that the note edit has synced. */
+async function purgeFiledMemos(): Promise<void> {
+    const database = workspaceDb();
+
+    if (!database) {
+        return;
+    }
+
+    const cutoff = Date.now() - FILED_TTL_MS;
+    const filed = await database.memos
+        .where('status')
+        .equals('filed')
+        .toArray();
+
+    for (const memo of filed) {
+        if (Date.parse(memo.createdAt) < cutoff) {
+            await database.memos.delete(memo.id);
+        }
+    }
 }
 
 async function uploadMemo(memo: MemoRecord): Promise<void> {
@@ -947,6 +1004,9 @@ async function uploadMemo(memo: MemoRecord): Promise<void> {
         const { text } = await apiUpload<{ text: string }>(
             `/api/${config.teamSlug}/memos/transcriptions`,
             form,
+            // Never let a stalled transcription wedge the queue forever — the
+            // hung part is what tempts a risky app relaunch. Fail and retry.
+            { timeoutMs: 4 * 60 * 1000 },
         );
 
         await database.memos.update(memo.id, {
@@ -981,12 +1041,13 @@ export async function processQueue(): Promise<void> {
     const queued = await database.memos.orderBy('createdAt').toArray();
 
     for (const memo of queued) {
-        if (memo.status !== 'done' && !uploadsInFlight.has(memo.id)) {
-            await uploadMemo(memo);
-        } else if (memo.status === 'done') {
+        if (memo.status === 'done') {
             // A group can be left un-finalized if the app closed between
             // the last part's upload and the note append.
             await finalizeGroup(memo.groupId);
+        } else if (memo.status !== 'filed' && !uploadsInFlight.has(memo.id)) {
+            // pending / uploading / failed → (re)upload. `filed` is retired.
+            await uploadMemo(memo);
         }
     }
 }
@@ -1071,6 +1132,7 @@ export function startMemoUploader(): void {
     // recording stopped while suspended needs its segments swept in.
     void syncNativeRecorder()
         .then(adoptOrphanedGroups)
+        .then(purgeFiledMemos)
         .then(refreshQueue)
         .then(processQueue);
 

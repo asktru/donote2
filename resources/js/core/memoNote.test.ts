@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { appendLine, appendUnderAudioMemo } from './memoNote';
+import {
+    appendLine,
+    appendUnderAudioMemo,
+    safeDailyKey,
+    stitchTranscript,
+} from './memoNote';
 
 describe('appendUnderAudioMemo', () => {
     it('creates the parent bullet in an empty note', () => {
@@ -40,5 +45,38 @@ describe('appendLine', () => {
         expect(appendLine('# Day\n\n', '- [[Idea]]')).toBe(
             '# Day\n- [[Idea]]\n',
         );
+    });
+});
+
+describe('stitchTranscript', () => {
+    it('joins parts in part order, collapsing whitespace', () => {
+        expect(
+            stitchTranscript([
+                { part: 2, transcript: 'world' },
+                { part: 0, transcript: 'hello  ' },
+                { part: 1, transcript: '\n big' },
+            ]),
+        ).toBe('hello big world');
+    });
+
+    it('tolerates missing part transcripts', () => {
+        expect(
+            stitchTranscript([
+                { part: 0, transcript: 'a' },
+                { part: 1, transcript: null },
+                { part: 2, transcript: 'b' },
+            ]),
+        ).toBe('a b');
+    });
+});
+
+describe('safeDailyKey', () => {
+    it('keeps a plausible current-era date', () => {
+        expect(safeDailyKey('2026-07-24', '2026-07-25')).toBe('2026-07-24');
+    });
+
+    it('falls back for epoch/bogus or malformed keys', () => {
+        expect(safeDailyKey('1970-01-01', '2026-07-25')).toBe('2026-07-25');
+        expect(safeDailyKey('not-a-date', '2026-07-25')).toBe('2026-07-25');
     });
 });

@@ -53,7 +53,14 @@ export interface MemoRecord {
     blob: Blob;
     mimeType: string;
     durationSec: number;
-    status: 'pending' | 'uploading' | 'failed' | 'done';
+    /**
+     * `filed` is a retired part whose transcript has been written to a note.
+     * Its heavy audio blob is cleared, but the transcript text is retained
+     * (purged after a grace period) so a recording is never destroyed the
+     * instant it's filed — the earlier hard-delete made any filing hiccup
+     * unrecoverable.
+     */
+    status: 'pending' | 'uploading' | 'failed' | 'done' | 'filed';
     /** Transcribed text, set when this part reaches 'done'. */
     transcript: string | null;
     /**
