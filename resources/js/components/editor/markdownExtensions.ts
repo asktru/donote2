@@ -54,7 +54,12 @@ import type { SyntaxNode } from '@lezer/common';
 import { tags } from '@lezer/highlight';
 
 import { todayDailyKey } from '@/core/dates';
-import { COMMENT_RE, parseLine, parseNote } from '@/core/parser';
+import {
+    COMMENT_RE,
+    FOLD_MARKER_RE,
+    parseLine,
+    parseNote,
+} from '@/core/parser';
 import type { ParsedLine, Priority, TaskState } from '@/core/parser';
 
 import { PRIORITY_COLORS } from '@/core/priority';
@@ -1944,8 +1949,12 @@ function buildCodeBlocks(view: EditorView): DecorationSet {
 /* Fold persistence (NotePlan-compatible trailing ellipsis)            */
 /* ------------------------------------------------------------------ */
 
-/** NotePlan marks collapsed lines with a trailing " …". */
-export const FOLD_MARKER_RE = /[ \t]…[ \t]*$/;
+/**
+ * NotePlan marks collapsed lines with a trailing " …". It lives in the parser
+ * (it is part of the dialect, and `core/` reads it too) and is re-exported
+ * here, where fold persistence is implemented.
+ */
+export { FOLD_MARKER_RE } from '@/core/parser';
 
 const FRONT_MATTER_FOLD_KEY = 'donote:frontmatter-collapsed';
 

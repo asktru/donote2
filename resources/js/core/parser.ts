@@ -71,6 +71,8 @@ const MENTION_RE = /(^|[^\w@.])@([A-Za-z][\w/.-]*)/g;
 const WIKI_LINK_RE = /\[\[([^\]|\n]+?)(?:\s*\|\s*([^\]\n]*?))?\]\]/g;
 const PRIORITY_RE = /^(!{1,3})\s+/;
 export const SYNC_ID_RE = /\s\^([a-z0-9]{4,12})\s*$/;
+/** NotePlan marks a collapsed line with a trailing " …" — folds ride in the text. */
+export const FOLD_MARKER_RE = /[ \t]…[ \t]*$/;
 /** `// comment` — requires start-of-text or whitespace so URLs stay intact. */
 export const COMMENT_RE = /(^|\s)\/\/.*$/;
 
