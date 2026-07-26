@@ -1,9 +1,15 @@
 <script setup lang="ts">
 import { AlarmClock, Check, ExternalLink } from '@lucide/vue';
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 import { Button } from '@/components/ui/button';
-import { formatReminderToken, reminderCandidates } from '@/core/reminders';
+import {
+    formatReminderToken,
+    isReminderDue,
+    refreshDueReminders,
+    reminderCandidates,
+    reminderSlot,
+} from '@/core/reminders';
 import type { ReminderCandidate } from '@/core/reminders';
 import { onNotificationTap } from '@/lib/notifications';
 import { openWorkspaceDb } from '@/stores/db';
@@ -30,14 +36,11 @@ const active = ref<ReminderCandidate[]>([]);
 
 let db: WorkspaceDb | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
-async function scan(): Promise<void> {
-    if (!db) {
-        return;
-    }
-
-    const now = Date.now();
-    const candidates: ReminderCandidate[] = [];
+/** Every reminder the workspace currently holds, keyed by the task it sits on. */
+function liveCandidates(): Map<string, ReminderCandidate> {
+    const live = new Map<string, ReminderCandidate>();
 
     for (const note of liveNotes.value) {
         // Archived notes are dormant — their reminders never pop up.
@@ -45,20 +48,43 @@ async function scan(): Promise<void> {
             continue;
         }
 
-        candidates.push(...reminderCandidates(note.id, parsedNote(note.id)));
+        for (const candidate of reminderCandidates(
+            note.id,
+            parsedNote(note.id),
+        )) {
+            live.set(reminderSlot(candidate), candidate);
+        }
     }
 
-    // Future reminders are scheduled as OS notifications by the app-wide
-    // reminderScheduler; this host only surfaces past-due ones in-app.
-    for (const candidate of candidates) {
-        const fireAt = candidate.at.getTime();
+    return live;
+}
 
-        // Fire reminders due within the last 12 hours (missed while away) up to now.
-        if (fireAt > now || now - fireAt > 12 * 3600 * 1000) {
+async function scan(): Promise<void> {
+    if (!db) {
+        return;
+    }
+
+    const now = Date.now();
+    const live = liveCandidates();
+
+    // Anything already on screen tracks its task: completing, cancelling,
+    // deleting or rescheduling it takes the popup down, and editing the task
+    // updates the popup in place.
+    active.value = refreshDueReminders(active.value, live, now);
+
+    // Future reminders are scheduled as OS notifications by the app-wide
+    // reminderScheduler; this host only surfaces past-due ones in-app —
+    // including ones missed while away, up to the grace window.
+    for (const candidate of live.values()) {
+        if (!isReminderDue(candidate, now)) {
             continue;
         }
 
-        if (active.value.some((entry) => entry.key === candidate.key)) {
+        if (
+            active.value.some(
+                (entry) => reminderSlot(entry) === reminderSlot(candidate),
+            )
+        ) {
             continue;
         }
 
@@ -160,9 +186,24 @@ onMounted(() => {
     timer = setInterval(() => void scan(), 30000);
 });
 
+// Notes change on every keystroke as well as on each pull from the server, so
+// coalesce the bursts — a popup that lags a moment behind an edit is fine, a
+// full workspace scan per keystroke is not.
+watch(liveNotes, () => {
+    if (refreshTimer !== null) {
+        clearTimeout(refreshTimer);
+    }
+
+    refreshTimer = setTimeout(() => void scan(), 250);
+});
+
 onBeforeUnmount(() => {
     if (timer !== null) {
         clearInterval(timer);
+    }
+
+    if (refreshTimer !== null) {
+        clearTimeout(refreshTimer);
     }
 });
 </script>
@@ -181,7 +222,7 @@ onBeforeUnmount(() => {
         >
             <div
                 v-for="candidate in active"
-                :key="candidate.key"
+                :key="reminderSlot(candidate)"
                 class="rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-lg"
             >
                 <div class="flex items-start gap-2">

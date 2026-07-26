@@ -8,7 +8,10 @@ import { isNativeIos } from '@/lib/platform';
  *
  * Callers hand `reconcile()` the full set of *desired* future reminders; it
  * schedules new ones and cancels any that disappeared (a completed, edited,
- * or deleted task drops out of the set on the next reconcile).
+ * or deleted task drops out of the set on the next reconcile). They also hand
+ * it the ids still backed by an open task, which is what keeps an *already
+ * delivered* notification on screen — one whose task has since been completed
+ * or deleted is withdrawn rather than left sitting there.
  */
 
 export interface DesiredNotification {
@@ -158,20 +161,21 @@ export function notificationId(key: string): number {
 let permissionAsked = false;
 
 /**
- * Pending notification ids that are safe to cancel: entries belonging to the
- * given team (or legacy untagged ones) that are no longer desired. Other
- * teams' reminders are left alone — each workspace only reconciles its own,
- * otherwise opening team B would silently wipe team A's schedule.
+ * Notification ids that are safe to withdraw: entries belonging to the given
+ * team (or legacy untagged ones) that are no longer wanted — pending ones
+ * that dropped out of the desired set, or delivered ones whose task is gone.
+ * Other teams' reminders are left alone: each workspace only reconciles its
+ * own, otherwise opening team B would silently wipe team A's schedule.
  */
 export function staleNotificationIds(
-    pending: { id: number; teamSlug: string | null }[],
-    desiredIds: Set<number>,
+    entries: { id: number; teamSlug: string | null }[],
+    keepIds: Set<number>,
     teamSlug: string,
 ): number[] {
-    return pending
+    return entries
         .filter(
             (entry) =>
-                !desiredIds.has(entry.id) &&
+                !keepIds.has(entry.id) &&
                 (entry.teamSlug === null || entry.teamSlug === teamSlug),
         )
         .map((entry) => entry.id);
@@ -200,6 +204,7 @@ function prepare(desired: DesiredNotification[]): DesiredNotification[] {
 async function reconcileIos(
     teamSlug: string,
     desired: DesiredNotification[],
+    live: Set<number>,
 ): Promise<void> {
     const { LocalNotifications } = await import('@capacitor/local-notifications');
 
@@ -233,6 +238,8 @@ async function reconcileIos(
         await LocalNotifications.cancel({ notifications: stale });
     }
 
+    await removeDeadDeliveredIos(teamSlug, live);
+
     const toSchedule = desired.filter((entry) => !pendingIds.has(entry.id));
 
     if (toSchedule.length > 0) {
@@ -256,6 +263,37 @@ async function reconcileIos(
     }
 }
 
+/**
+ * Pull already-delivered reminders out of Notification Center once their task
+ * is no longer open — a reminder for something the user has since completed
+ * (here or on another device) shouldn't keep sitting there.
+ */
+async function removeDeadDeliveredIos(
+    teamSlug: string,
+    live: Set<number>,
+): Promise<void> {
+    const { LocalNotifications } = await import('@capacitor/local-notifications');
+    const delivered = await LocalNotifications.getDeliveredNotifications();
+
+    const dead = staleNotificationIds(
+        delivered.notifications.map((entry) => ({
+            id: entry.id,
+            teamSlug:
+                (entry.extra as Partial<Target> | undefined)?.teamSlug ?? null,
+        })),
+        live,
+        teamSlug,
+    );
+
+    if (dead.length > 0) {
+        await LocalNotifications.removeDeliveredNotifications({
+            notifications: delivered.notifications.filter((entry) =>
+                dead.includes(entry.id),
+            ),
+        });
+    }
+}
+
 /* ------------------------------------------------------------------ */
 /* Electron / web (in-process timers + Notification API)               */
 /* ------------------------------------------------------------------ */
@@ -265,6 +303,9 @@ const timers = new Map<
     { timer: ReturnType<typeof setTimeout>; teamSlug: string }
 >();
 
+/** Notifications currently on screen, so they can be withdrawn again. */
+const shown = new Map<number, { notification: Notification; teamSlug: string }>();
+
 function notificationsSupported(): boolean {
     return typeof window !== 'undefined' && 'Notification' in window;
 }
@@ -272,6 +313,7 @@ function notificationsSupported(): boolean {
 async function reconcileTimer(
     teamSlug: string,
     desired: DesiredNotification[],
+    live: Set<number>,
 ): Promise<void> {
     if (!notificationsSupported()) {
         return;
@@ -297,6 +339,16 @@ async function reconcileTimer(
         }
     }
 
+    // Withdraw notifications already on screen whose task is no longer open.
+    for (const id of staleNotificationIds(
+        [...shown].map(([id, entry]) => ({ id, teamSlug: entry.teamSlug })),
+        live,
+        teamSlug,
+    )) {
+        shown.get(id)?.notification.close();
+        shown.delete(id);
+    }
+
     const now = Date.now();
 
     for (const entry of desired) {
@@ -313,6 +365,11 @@ async function reconcileTimer(
                         body: entry.body,
                     });
 
+                    shown.set(entry.id, {
+                        notification,
+                        teamSlug: entry.teamSlug,
+                    });
+                    notification.onclose = () => shown.delete(entry.id);
                     notification.onclick = () => {
                         window.focus();
                         deliverTap(entry.noteId, entry.line, entry.teamSlug);
@@ -337,19 +394,26 @@ async function reconcileTimer(
 export async function reconcileNotifications(
     teamSlug: string,
     desired: DesiredNotification[],
+    live: Set<number> = new Set(desired.map((entry) => entry.id)),
 ): Promise<void> {
     const wanted = prepare(desired);
 
-    // Nothing to do and nothing scheduled locally — don't trigger a prompt.
-    if (wanted.length === 0 && timers.size === 0 && !isNativeIos()) {
+    // Nothing to do and nothing scheduled or on screen locally — don't
+    // trigger a permission prompt.
+    if (
+        wanted.length === 0 &&
+        timers.size === 0 &&
+        shown.size === 0 &&
+        !isNativeIos()
+    ) {
         return;
     }
 
     try {
         if (isNativeIos()) {
-            await reconcileIos(teamSlug, wanted);
+            await reconcileIos(teamSlug, wanted, live);
         } else {
-            await reconcileTimer(teamSlug, wanted);
+            await reconcileTimer(teamSlug, wanted, live);
         }
     } catch (error) {
         console.warn('[donote] reminder notification reconcile failed', error);

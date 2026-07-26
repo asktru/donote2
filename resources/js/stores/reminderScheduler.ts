@@ -1,3 +1,5 @@
+import { watch } from 'vue';
+
 import { formatReminderToken, reminderCandidates } from '@/core/reminders';
 import {
     notificationId,
@@ -27,9 +29,12 @@ import {
  */
 
 const RECONCILE_INTERVAL_MS = 30_000;
+const NOTE_CHANGE_DEBOUNCE_MS = 500;
 
 let db: WorkspaceDb | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
+let noteWatchTimer: ReturnType<typeof setTimeout> | null = null;
+let stopNoteWatch: (() => void) | null = null;
 let started = false;
 
 /** Rebuild the desired notification set from every note and apply it. */
@@ -46,6 +51,10 @@ export async function reconcileReminderNotifications(): Promise<void> {
 
     const now = Date.now();
     const desired: DesiredNotification[] = [];
+    // Reminders still backed by an open task, whether or not they have fired
+    // yet. A notification that has already been delivered survives only while
+    // its id is in here — completing the task takes it off the screen.
+    const live = new Set<number>();
 
     for (const note of liveNotes.value) {
         // Archived notes are dormant — their reminders never fire.
@@ -54,12 +63,6 @@ export async function reconcileReminderNotifications(): Promise<void> {
         }
 
         for (const candidate of reminderCandidates(note.id, parsedNote(note.id))) {
-            const fireAt = candidate.at.getTime();
-
-            if (fireAt <= now) {
-                continue; // past-due reminders surface as an in-app popup
-            }
-
             const state = await db.reminders.get(candidate.key);
             const silenced =
                 state?.status === 'dismissed' ||
@@ -71,8 +74,17 @@ export async function reconcileReminderNotifications(): Promise<void> {
                 continue;
             }
 
+            const id = notificationId(candidate.key);
+            live.add(id);
+
+            const fireAt = candidate.at.getTime();
+
+            if (fireAt <= now) {
+                continue; // past-due reminders surface as an in-app popup
+            }
+
             desired.push({
-                id: notificationId(candidate.key),
+                id,
                 at: fireAt,
                 title: candidate.line.title || 'Reminder',
                 body: note.title || 'Task reminder',
@@ -83,7 +95,7 @@ export async function reconcileReminderNotifications(): Promise<void> {
         }
     }
 
-    await reconcileNotifications(config.teamSlug, desired);
+    await reconcileNotifications(config.teamSlug, desired, live);
 }
 
 /**
@@ -175,6 +187,20 @@ export function startReminderScheduler(): void {
         () => void reconcileReminderNotifications(),
         RECONCILE_INTERVAL_MS,
     );
+
+    // Don't make a completed task wait out the interval before its pending
+    // notification is cancelled: reconcile as soon as the notes change, local
+    // edit or sync alike, coalescing the bursts an editing session produces.
+    stopNoteWatch = watch(liveNotes, () => {
+        if (noteWatchTimer !== null) {
+            clearTimeout(noteWatchTimer);
+        }
+
+        noteWatchTimer = setTimeout(
+            () => void reconcileReminderNotifications(),
+            NOTE_CHANGE_DEBOUNCE_MS,
+        );
+    });
 }
 
 export function stopReminderScheduler(): void {
@@ -183,5 +209,12 @@ export function stopReminderScheduler(): void {
         timer = null;
     }
 
+    if (noteWatchTimer !== null) {
+        clearTimeout(noteWatchTimer);
+        noteWatchTimer = null;
+    }
+
+    stopNoteWatch?.();
+    stopNoteWatch = null;
     started = false;
 }

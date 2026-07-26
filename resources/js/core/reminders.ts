@@ -62,6 +62,50 @@ export function formatReminderToken(date: Date): string {
         : `@${hours12}:${String(minutes).padStart(2, '0')}${meridiem}`;
 }
 
+/**
+ * How long after its time a missed reminder still pops up — reminders from
+ * more than half a day ago are stale rather than missed.
+ */
+export const REMINDER_GRACE_MS = 12 * 3600 * 1000;
+
+/** Whether a reminder should be on screen right now. */
+export function isReminderDue(
+    candidate: ReminderCandidate,
+    now: number,
+): boolean {
+    const at = candidate.at.getTime();
+
+    return at <= now && now - at <= REMINDER_GRACE_MS;
+}
+
+/**
+ * The task a popup is pinned to, independent of its text: the popup follows
+ * the line as it's edited instead of being replaced (which would re-fire a
+ * reminder mid-keystroke, since a reminder's key includes its title).
+ */
+export function reminderSlot(candidate: ReminderCandidate): string {
+    return `${candidate.noteId}:${candidate.line.index}`;
+}
+
+/**
+ * Bring the reminders on screen back in line with the notes, as they stand
+ * after an edit or a sync: a reminder whose task was completed, cancelled,
+ * deleted, rescheduled or stripped of its `@time` is dropped, and the ones
+ * that remain are replaced by their current version so the popup shows the
+ * task's live title and time.
+ */
+export function refreshDueReminders(
+    active: ReminderCandidate[],
+    live: Map<string, ReminderCandidate>,
+    now: number,
+): ReminderCandidate[] {
+    return active.flatMap((candidate) => {
+        const fresh = live.get(reminderSlot(candidate));
+
+        return fresh && isReminderDue(fresh, now) ? [fresh] : [];
+    });
+}
+
 /** Collect reminder candidates from a parsed note. */
 export function reminderCandidates(
     noteId: string,

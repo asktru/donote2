@@ -46,6 +46,22 @@ describe('staleNotificationIds', () => {
             ),
         ).toEqual([]);
     });
+
+    it('withdraws a delivered reminder once its task is no longer open', () => {
+        // Delivered notifications are passed the ids still backed by an open
+        // task: one that has fired and whose task is done gets pulled off the
+        // screen, one still waiting on the user stays put.
+        expect(
+            staleNotificationIds(
+                [
+                    { id: 1, teamSlug: 'alpha' }, // task completed since
+                    { id: 2, teamSlug: 'alpha' }, // still open
+                ],
+                new Set([2]),
+                'alpha',
+            ),
+        ).toEqual([1]);
+    });
 });
 
 describe('notificationId', () => {

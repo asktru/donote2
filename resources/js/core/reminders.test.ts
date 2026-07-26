@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { parseLine, parseNote } from './parser';
 import {
     formatReminderToken,
+    isReminderDue,
+    refreshDueReminders,
+    REMINDER_GRACE_MS,
     reminderCandidates,
+    reminderSlot,
     resolveReminderAt,
 } from './reminders';
 
@@ -76,5 +80,95 @@ describe('reminderCandidates', () => {
         expect(candidates).toHaveLength(1);
         expect(candidates[0].key).toContain('note-1');
         expect(candidates[0].at.getHours()).toBe(9);
+    });
+});
+
+/** The reminders a note currently holds, keyed by slot — what a popup tracks. */
+function liveFrom(noteId: string, markdown: string, at = ref) {
+    return new Map(
+        reminderCandidates(noteId, parseNote(markdown), at).map((candidate) => [
+            reminderSlot(candidate),
+            candidate,
+        ]),
+    );
+}
+
+describe('isReminderDue', () => {
+    const [candidate] = reminderCandidates(
+        'note-1',
+        parseNote('- [ ] Standup @9am'),
+        ref,
+    );
+    const at = candidate.at.getTime();
+
+    it('is due from its time until the grace window closes', () => {
+        expect(isReminderDue(candidate, at - 60_000)).toBe(false);
+        expect(isReminderDue(candidate, at)).toBe(true);
+        expect(isReminderDue(candidate, at + REMINDER_GRACE_MS)).toBe(true);
+        expect(isReminderDue(candidate, at + REMINDER_GRACE_MS + 1)).toBe(
+            false,
+        );
+    });
+});
+
+describe('refreshDueReminders', () => {
+    const noteId = 'note-1';
+    const shownAt = new Date(2026, 6, 11, 9, 30).getTime(); // half an hour late
+
+    /** A reminder popped up for "- [ ] Standup @9am". */
+    function shown() {
+        return [...liveFrom(noteId, '- [ ] Standup @9am').values()];
+    }
+
+    it('keeps a reminder whose task is still open', () => {
+        const live = liveFrom(noteId, '- [ ] Standup @9am');
+
+        expect(refreshDueReminders(shown(), live, shownAt)).toHaveLength(1);
+    });
+
+    it.each([
+        ['completed', '- [x] Standup @9am'],
+        ['cancelled', '- [-] Standup @9am'],
+        ['stripped of its reminder', '- [ ] Standup'],
+        ['turned into plain text', 'Standup'],
+    ])('drops a reminder whose task was %s', (_case, markdown) => {
+        const live = liveFrom(noteId, markdown);
+
+        expect(refreshDueReminders(shown(), live, shownAt)).toEqual([]);
+    });
+
+    it('drops a reminder whose note is gone', () => {
+        expect(refreshDueReminders(shown(), new Map(), shownAt)).toEqual([]);
+    });
+
+    it('drops a reminder rescheduled into the future', () => {
+        // Snoozed by rewriting the token — the popup goes away rather than
+        // lingering with the old time.
+        const live = liveFrom(noteId, '- [ ] Standup @11am');
+
+        expect(refreshDueReminders(shown(), live, shownAt)).toEqual([]);
+    });
+
+    it('drops a reminder that has aged past the grace window', () => {
+        const live = liveFrom(noteId, '- [ ] Standup @9am');
+        const stale = shownAt + REMINDER_GRACE_MS;
+
+        expect(refreshDueReminders(shown(), live, stale)).toEqual([]);
+    });
+
+    it('follows an edited task instead of re-firing it', () => {
+        // The key carries the title, so an edit yields a different key — the
+        // popup has to track the line, and pick up the new text in place.
+        const live = liveFrom(noteId, '- [ ] Standup with the team @9am');
+        const [refreshed] = refreshDueReminders(shown(), live, shownAt);
+
+        expect(refreshed.line.title).toBe('Standup with the team');
+        expect(refreshed.key).not.toBe(shown()[0].key);
+    });
+
+    it('keeps each note’s reminders apart', () => {
+        const live = liveFrom('note-2', '- [ ] Standup @9am');
+
+        expect(refreshDueReminders(shown(), live, shownAt)).toEqual([]);
     });
 });
