@@ -53,6 +53,11 @@ they aren't yours to open, hide or edit.
 first in the range when the view holds no future. It never changes the view or
 the anchor: it works within what you're looking at.
 
+There is no in-app editing of an existing event — `EventDraft` only creates —
+so `⏎` opens the event where it *can* be edited: its `htmlLink` in Google
+Calendar, which is what the detail panel's own link does. An event without a
+link (an Apple calendar entry) makes `⏎` a no-op.
+
 **`↑`/`↓`** move to the previous/next event in that order. With nothing
 selected they behave like `N` (`↓`) and select the last event in range (`↑`).
 They stop at the ends rather than wrapping — wrapping in a week view means
@@ -87,7 +92,7 @@ applies to `←`/`→` (input, select and textarea targets).
 | --- | --- |
 | `N` | Select the next event from now |
 | `↑` / `↓` | Previous / next event in view |
-| `⏎` | Edit the selected event |
+| `⏎` | Open the selected event in Google Calendar |
 | `Esc` | Close the detail panel |
 | `H` | Hide the selected event |
 | `⇧H` | Hide all occurrences of it |
