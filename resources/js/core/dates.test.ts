@@ -5,6 +5,7 @@ import {
     compareDateKeys,
     dateKeyFor,
     humanizeKey,
+    isSamePeriodKey,
     keyContainsDay,
     keyRange,
     keyStartDate,
@@ -115,6 +116,25 @@ describe('keyContainsDay', () => {
         expect(keyContainsDay('2026-W28', '2026-07-13')).toBe(false);
         expect(keyContainsDay('2026-Q3', '2026-08-15')).toBe(true);
         expect(keyContainsDay('2026', '2026-01-01')).toBe(true);
+    });
+});
+
+describe('isSamePeriodKey', () => {
+    it('matches only the identical period', () => {
+        expect(isSamePeriodKey('2026-W30', '2026-W30')).toBe(true);
+        expect(isSamePeriodKey('2026-07-22', '2026-07-22')).toBe(true);
+    });
+
+    it('does not match a subperiod (unlike keyContainsDay)', () => {
+        // A day inside the week: contained, but not the same period.
+        expect(keyContainsDay('2026-W30', '2026-07-22')).toBe(true);
+        expect(isSamePeriodKey('2026-07-22', '2026-W30')).toBe(false);
+        expect(isSamePeriodKey('2026-W30', '2026-07')).toBe(false);
+        expect(isSamePeriodKey('2026-07', '2026-Q3')).toBe(false);
+    });
+
+    it('treats a missing key as no match', () => {
+        expect(isSamePeriodKey(null, '2026-W30')).toBe(false);
     });
 });
 

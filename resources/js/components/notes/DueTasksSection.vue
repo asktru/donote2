@@ -3,7 +3,12 @@ import { Archive, ChevronRight } from '@lucide/vue';
 import { format } from 'date-fns';
 import { computed, ref } from 'vue';
 
-import { humanizeKey, keyRange, keyStartDate, todayDailyKey } from '@/core/dates';
+import {
+    humanizeKey,
+    isSamePeriodKey,
+    keyStartDate,
+    todayDailyKey,
+} from '@/core/dates';
 import { priorityColor } from '@/core/priority';
 import { cn } from '@/lib/utils';
 import { currentView } from '@/stores/ui';
@@ -17,10 +22,11 @@ import {
 import type { WorkspaceTask } from '@/stores/workspace';
 
 /**
- * Open tasks that land in the currently viewed period: the day for a
- * daily note, the whole week/month/quarter/year for the other calendar
- * notes. A task lands in the period via its schedule (>date), its
- * @due(date), or the daily note it lives in.
+ * Open tasks scheduled for exactly the currently viewed period — a weekly
+ * note lists what was scheduled for the week itself (`>2026-W30`), not the
+ * items scheduled for its individual days, which belong to those days' own
+ * notes. A task lands in the period via its schedule (>date), its @due(date),
+ * or the daily note it lives in.
  */
 
 const emit = defineEmits<{
@@ -39,19 +45,8 @@ const includeArchive = ref(false);
 
 /** Every open task landing in the viewed period, archived ones included. */
 const periodTasks = computed<WorkspaceTask[]>(() => {
-    const range = keyRange(periodKey.value);
-    const start = range.start.getTime();
-    const end = range.end.getTime();
-
-    const inPeriod = (dayKey: string | null): boolean => {
-        if (dayKey === null) {
-            return false;
-        }
-
-        const time = keyStartDate(dayKey).getTime();
-
-        return time >= start && time < end;
-    };
+    const inPeriod = (key: string | null): boolean =>
+        isSamePeriodKey(key, periodKey.value);
 
     return workspaceTasks.value
         .filter(
@@ -93,7 +88,6 @@ function dueBadge(task: WorkspaceTask): string | null {
 
     return `due ${format(keyStartDate(task.line.due), 'MMM d')}`;
 }
-
 </script>
 
 <template>

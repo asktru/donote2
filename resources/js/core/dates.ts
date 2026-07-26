@@ -213,6 +213,19 @@ export function resolveScheduleToken(
     return kindOfKey(token) !== null ? token : null;
 }
 
+/**
+ * Do two calendar keys name the same period? Deliberately stricter than
+ * `keyContainsDay`: a week does NOT match the days inside it. A calendar
+ * note's task list uses this so a weekly note shows what was scheduled for
+ * the week itself (`>2026-W30`) rather than everything in its subperiods.
+ */
+export function isSamePeriodKey(
+    key: string | null,
+    periodKey: string,
+): boolean {
+    return key !== null && key === periodKey;
+}
+
 /** Does the period of `key` contain the given daily date key? */
 export function keyContainsDay(key: string, dayKey: string): boolean {
     const day = keyStartDate(dayKey);
