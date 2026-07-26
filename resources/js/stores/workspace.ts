@@ -1,5 +1,6 @@
 import { computed, reactive, ref } from 'vue';
 import type { ComputedRef } from 'vue';
+import { toast } from 'vue-sonner';
 
 import { kindOfKey, todayDailyKey, todayKey } from '@/core/dates';
 import type { CalendarKind, NoteType } from '@/core/dates';
@@ -15,8 +16,11 @@ import type { NoteKind, NoteMeta, NoteProgress } from '@/core/frontmatter';
 import { parseNote } from '@/core/parser';
 import type { ParsedLine } from '@/core/parser';
 import { applySyncedLine, changedSyncedLines } from '@/core/syncedLines';
+import { applyTitleRenames } from '@/core/wikiLinks';
+import type { TitleRename } from '@/core/wikiLinks';
 import { buildAgendaAppendix } from '@/lib/agenda';
 import { apiFetch } from '@/lib/api';
+import { canEditNote } from '@/lib/noteAccess';
 import type { NoteAccess } from '@/lib/noteAccess';
 import { openWorkspaceDb } from '@/stores/db';
 import type { LocalNote, WorkspaceDb } from '@/stores/db';
@@ -399,8 +403,100 @@ export async function updateNoteContent(
     }
 }
 
+/**
+ * Titles as they stood before the rename currently under way, per note. The
+ * title field is saved on every keystroke, so the links have to be rewritten
+ * against the title the note had when the user started typing, not against
+ * the half-typed one from a moment ago.
+ */
+const renameOrigins = new Map<string, string>();
+let renameTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** How long a title has to sit still before its links are rewritten. */
+const RENAME_SETTLE_MS = 800;
+
 export async function renameNote(id: string, title: string): Promise<void> {
+    const before = notes.get(id)?.title;
+
+    if (before !== undefined && !renameOrigins.has(id)) {
+        renameOrigins.set(id, before);
+    }
+
     await mutate(id, { title });
+
+    if (renameTimer !== null) {
+        clearTimeout(renameTimer);
+    }
+
+    renameTimer = setTimeout(() => {
+        renameTimer = null;
+        void retargetRenamedLinks();
+    }, RENAME_SETTLE_MS);
+}
+
+/**
+ * Follow the notes that were just renamed: every `[[link]]` pointing at an old
+ * title is repointed at the new one, across the whole workspace, so renaming a
+ * note doesn't strand the notes referencing it.
+ *
+ * Returns the notes rewritten. Waits for the title to settle (see
+ * `renameNote`) so typing a new title doesn't rewrite the workspace once per
+ * keystroke.
+ */
+export async function retargetRenamedLinks(): Promise<number> {
+    const renames: TitleRename[] = [];
+
+    for (const [id, from] of renameOrigins) {
+        const note = notes.get(id);
+
+        // Only regular notes carry a title links can point at, and a rename
+        // out of (or into) an empty title has nothing to match or nothing to
+        // write — the link would end up as `[[]]`.
+        if (
+            note &&
+            note.type === 'note' &&
+            from.trim() !== '' &&
+            note.title.trim() !== '' &&
+            // Compared exactly, so re-casing a title carries into its links —
+            // they resolve either way, but should read like the note does.
+            from.trim() !== note.title.trim()
+        ) {
+            renames.push({ from, to: note.title });
+        }
+    }
+
+    renameOrigins.clear();
+
+    if (renames.length === 0) {
+        return 0;
+    }
+
+    const online = typeof navigator === 'undefined' ? true : navigator.onLine;
+    let rewritten = 0;
+
+    for (const note of liveNotes.value) {
+        // A note the user can't write to is left alone; its links keep
+        // pointing at a title that no longer exists, which is the lesser
+        // evil next to an edit that can't be saved.
+        if (!canEditNote(note.access, online)) {
+            continue;
+        }
+
+        const content = applyTitleRenames(note.content, renames);
+
+        if (content !== note.content) {
+            await mutate(note.id, { content });
+            rewritten++;
+        }
+    }
+
+    if (rewritten > 0) {
+        toast(
+            `Updated links in ${rewritten} note${rewritten === 1 ? '' : 's'}.`,
+        );
+    }
+
+    return rewritten;
 }
 
 export async function moveNoteToFolder(

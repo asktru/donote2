@@ -12,12 +12,14 @@ class WriteNote
     public function __construct(
         private ApplyNoteChange $applyNoteChange,
         private PropagateSyncedLines $propagateSyncedLines,
+        private RetargetWikiLinks $retargetWikiLinks,
     ) {}
 
     /**
      * Write a note through the same pipeline the sync API uses (version and
      * sequence bumps so every client pulls the change), then propagate any
-     * edited synced lines (^id) to their copies in other notes.
+     * edited synced lines (^id) to their copies in other notes and repoint
+     * any `[[wiki link]]` left behind by a rename.
      *
      * @param  array{id?: string, type?: string, date_key?: ?string, title?: string, content: string, folder?: string}  $attributes
      */
@@ -45,12 +47,23 @@ class WriteNote
                 'old_content' => '',
             ];
 
+        $oldTitle = $defaults['title'];
+        $newTitle = $attributes['title'] ?? $oldTitle;
+        // Only regular notes carry a title links can point at; an empty
+        // "before" leaves the rewrite a no-op for calendar notes and for
+        // notes being created.
+        $renamedFrom = ($attributes['type'] ?? $defaults['type']) === 'note' ? $oldTitle : '';
+
+        // The note's own links go in with the write it is already making;
+        // everyone else's are rewritten below.
+        $content = $this->retargetWikiLinks->apply($attributes['content'], $renamedFrom, $newTitle);
+
         $result = $this->applyNoteChange->execute($team, $user, [
             'id' => $attributes['id'] ?? $defaults['id'],
             'type' => $attributes['type'] ?? $defaults['type'],
             'date_key' => $attributes['date_key'] ?? $defaults['date_key'],
-            'title' => $attributes['title'] ?? $defaults['title'],
-            'content' => $attributes['content'],
+            'title' => $newTitle,
+            'content' => $content,
             'folder' => $attributes['folder'] ?? $defaults['folder'],
             'pinned' => $defaults['pinned'],
             'base_version' => $defaults['base_version'],
@@ -62,7 +75,15 @@ class WriteNote
             $team,
             $user,
             $defaults['old_content'],
-            $attributes['content'],
+            $content,
+            $result['note']->id,
+        );
+
+        $this->retargetWikiLinks->execute(
+            $team,
+            $user,
+            $renamedFrom,
+            $newTitle,
             $result['note']->id,
         );
 
