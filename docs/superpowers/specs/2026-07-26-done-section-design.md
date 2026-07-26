@@ -98,11 +98,16 @@ A line moves into Done when all of these hold:
 
 - it is a task or checklist item, and it is **closed**;
 - every descendant of it is closed or neutral;
-- **no list ancestor of it is an open task or checklist item.**
+- **it has no task or checklist ancestor at all.**
 
-The last clause is what keeps a completed subtask under an unfinished parent
-in place: it belongs to live work, and moving it alone would break the
-hierarchy in both places.
+The last clause is what keeps a completed subtask under an unfinished parent in
+place: it belongs to live work, and moving it alone would break the hierarchy
+in both places. It has to exclude *closed* ancestors too, not just open ones —
+consider a done parent with one done and one open child. The parent can't move
+(its subtree isn't finished), so its done child mustn't move either, or it
+would be torn out of a block that is still live. And nothing is lost by the
+stricter rule: when an ancestor *is* movable, it moves first and takes the
+child with it.
 
 When a line qualifies, its **whole subtree** moves with it — including neutral
 descendants (notes, bullets) — and its descendants are not considered
