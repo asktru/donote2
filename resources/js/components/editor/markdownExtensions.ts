@@ -40,7 +40,7 @@ import {
     RangeSetBuilder,
     StateField,
 } from '@codemirror/state';
-import type { EditorState } from '@codemirror/state';
+import type { EditorState, SelectionRange } from '@codemirror/state';
 import type { Extension } from '@codemirror/state';
 import {
     Decoration,
@@ -2558,8 +2558,153 @@ const cyclePriorityCommand = (view: EditorView): boolean => {
 /* Inline formatting + metadata tokens                                 */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Line prefix that inline formatting must never swallow: indentation plus a
+ * heading, blockquote, task/checklist (with its priority) or bullet marker.
+ */
+const INLINE_MARK_PREFIX_RE =
+    /^[ \t]*(?:#{1,6}[ \t]+|>[ \t]+|[-*+][ \t]\[[ xX>-]\][ \t]+(?:!{1,3}[ \t]+)?|[-*+][ \t]+|\d+[.)][ \t]+)?/;
+
+type MarkSegment = { from: number; to: number };
+
+/**
+ * The formattable runs of a multi-line selection: one per line, starting after
+ * the line's marker prefix and trimmed of whitespace. Blank lines and lines
+ * holding nothing but a marker are skipped so no stray marks are left behind.
+ */
+function markableSegments(
+    state: EditorState,
+    from: number,
+    to: number,
+): MarkSegment[] {
+    const segments: MarkSegment[] = [];
+    const lastLine = state.doc.lineAt(to).number;
+
+    for (let n = state.doc.lineAt(from).number; n <= lastLine; n++) {
+        const line = state.doc.line(n);
+        const prefix = line.text.match(INLINE_MARK_PREFIX_RE)?.[0] ?? '';
+        let start = Math.max(from, line.from + prefix.length);
+        let end = Math.min(to, line.to);
+
+        if (end <= start) {
+            continue;
+        }
+
+        const text = state.sliceDoc(start, end);
+        start += text.length - text.trimStart().length;
+        end -= text.length - text.trimEnd().length;
+
+        if (end > start) {
+            segments.push({ from: start, to: end });
+        }
+    }
+
+    return segments;
+}
+
+/**
+ * Format each line of a multi-line selection on its own — markdown marks do
+ * not span paragraphs, so a single pair around the whole selection would only
+ * render on the first and last line.
+ */
+function toggleInlineMarkPerLine(
+    view: EditorView,
+    mark: string,
+    range: SelectionRange,
+    segments: MarkSegment[],
+): boolean {
+    const { state } = view;
+    const wrapped = segments.map((segment) => {
+        const text = state.sliceDoc(segment.from, segment.to);
+
+        if (
+            text.length >= mark.length * 2 &&
+            text.startsWith(mark) &&
+            text.endsWith(mark)
+        ) {
+            return 'inner';
+        }
+
+        return state.sliceDoc(
+            Math.max(0, segment.from - mark.length),
+            segment.from,
+        ) === mark &&
+            state.sliceDoc(segment.to, segment.to + mark.length) === mark
+            ? 'outer'
+            : 'none';
+    });
+
+    const unwrapping = wrapped.every((status) => status !== 'none');
+    const changes: { from: number; to: number; insert: string }[] = [];
+
+    segments.forEach((segment, index) => {
+        if (unwrapping) {
+            const offset = wrapped[index] === 'inner' ? 0 : mark.length;
+
+            changes.push(
+                {
+                    from: segment.from - offset,
+                    to: segment.from - offset + mark.length,
+                    insert: '',
+                },
+                {
+                    from: segment.to + offset - mark.length,
+                    to: segment.to + offset,
+                    insert: '',
+                },
+            );
+
+            return;
+        }
+
+        if (wrapped[index] !== 'none') {
+            return;
+        }
+
+        changes.push(
+            { from: segment.from, to: segment.from, insert: mark },
+            { from: segment.to, to: segment.to, insert: mark },
+        );
+    });
+
+    if (changes.length === 0) {
+        return true;
+    }
+
+    const changeSet = state.changes(changes);
+    const anchor = changeSet.mapPos(range.from, -1);
+    const head = changeSet.mapPos(range.to, 1);
+
+    view.dispatch({
+        changes: changeSet,
+        selection: EditorSelection.single(
+            range.anchor === range.from ? anchor : head,
+            range.anchor === range.from ? head : anchor,
+        ),
+        scrollIntoView: true,
+        userEvent: 'input',
+    });
+
+    return true;
+}
+
 /** Wrap or unwrap every selection range with an inline markdown mark. */
 function toggleInlineMark(view: EditorView, mark: string): boolean {
+    const main = view.state.selection.main;
+
+    if (
+        view.state.selection.ranges.length === 1 &&
+        !main.empty &&
+        view.state.doc.lineAt(main.from).number !==
+            view.state.doc.lineAt(main.to).number
+    ) {
+        const segments = markableSegments(view.state, main.from, main.to);
+
+        if (segments.length > 0) {
+            return toggleInlineMarkPerLine(view, mark, main, segments);
+        }
+    }
+
     const changes = view.state.changeByRange((range) => {
         const { from, to } = range;
         const before = view.state.sliceDoc(

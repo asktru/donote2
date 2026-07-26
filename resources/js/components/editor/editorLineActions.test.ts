@@ -25,7 +25,8 @@ function makeView(doc: string, anchor = 0, head = anchor) {
             const maybeTransaction = input as { state?: EditorState };
             state =
                 maybeTransaction.state ??
-                state.update(input as Parameters<EditorState['update']>[0]).state;
+                state.update(input as Parameters<EditorState['update']>[0])
+                    .state;
         },
         focus() {},
         get doc() {
@@ -34,7 +35,10 @@ function makeView(doc: string, anchor = 0, head = anchor) {
     };
 }
 
-function run(view: ReturnType<typeof makeView>, action: keyof typeof editorLineActions) {
+function run(
+    view: ReturnType<typeof makeView>,
+    action: keyof typeof editorLineActions,
+) {
     editorLineActions[action](view as unknown as EditorView);
 }
 
@@ -162,5 +166,74 @@ describe('editorLineActions', () => {
         const hi = makeView('note', 0, 4); // select "note"
         run(hi, 'highlight');
         expect(hi.doc).toBe('==note==');
+    });
+
+    it('bolds each line of a multi-line selection separately', () => {
+        const doc = ['First para', 'Second para'].join('\n');
+        const view = makeView(doc, 0, doc.length);
+        run(view, 'bold');
+        expect(view.doc).toBe(['**First para**', '**Second para**'].join('\n'));
+        run(view, 'bold');
+        expect(view.doc).toBe(doc);
+    });
+
+    it('keeps line markers outside the marks', () => {
+        const doc = [
+            '# Heading',
+            '- [ ] !! A task',
+            '+ [ ] A checklist item',
+            '    - A nested bullet',
+            '1. Numbered',
+            '> Quoted',
+        ].join('\n');
+        const view = makeView(doc, 0, doc.length);
+        run(view, 'bold');
+
+        expect(view.doc).toBe(
+            [
+                '# **Heading**',
+                '- [ ] !! **A task**',
+                '+ [ ] **A checklist item**',
+                '    - **A nested bullet**',
+                '1. **Numbered**',
+                '> **Quoted**',
+            ].join('\n'),
+        );
+
+        run(view, 'bold');
+        expect(view.doc).toBe(doc);
+    });
+
+    it('skips blank lines and marker-only lines', () => {
+        const doc = ['Alpha', '', '   ', '- [ ] ', 'Bravo'].join('\n');
+        const view = makeView(doc, 0, doc.length);
+        run(view, 'italic');
+
+        expect(view.doc).toBe(
+            ['*Alpha*', '', '   ', '- [ ] ', '*Bravo*'].join('\n'),
+        );
+    });
+
+    it('ignores the trailing newline when the selection ends at a line start', () => {
+        const doc = ['Alpha', 'Bravo'].join('\n');
+        const view = makeView(doc, 0, 6); // "Alpha\n"
+        run(view, 'bold');
+        expect(view.doc).toBe(['**Alpha**', 'Bravo'].join('\n'));
+    });
+
+    it('formats only the lines a partial selection touches, trimming whitespace', () => {
+        const doc = ['One two', 'three four'].join('\n');
+        const view = makeView(doc, 4, 13); // "two\nthree "
+        run(view, 'bold');
+        expect(view.doc).toBe(['One **two**', '**three** four'].join('\n'));
+    });
+
+    it('adds marks to the unformatted lines before unwrapping the whole selection', () => {
+        const doc = ['**Alpha**', 'Bravo'].join('\n');
+        const view = makeView(doc, 0, doc.length);
+        run(view, 'bold');
+        expect(view.doc).toBe(['**Alpha**', '**Bravo**'].join('\n'));
+        run(view, 'bold');
+        expect(view.doc).toBe(['Alpha', 'Bravo'].join('\n'));
     });
 });
