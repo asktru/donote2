@@ -42,6 +42,7 @@ import {
     startShareInboxWatcher,
 } from '@/lib/shareInbox';
 import { resolveSwipeAction } from '@/lib/swipeActions';
+import { cn } from '@/lib/utils';
 import { aiDialogOpen } from '@/stores/aiPrompts';
 import { startMemoUploader, toggleRecording } from '@/stores/memos';
 import { startMoveToNote } from '@/stores/move';
@@ -490,7 +491,17 @@ onBeforeUnmount(() => {
                     <QuickCaptureFab />
                     <div
                         data-swipe-pane
-                        class="flex min-h-0 min-w-0 flex-1 basis-1/2 flex-col border-b border-border/40 lg:border-r lg:border-b-0"
+                        :class="
+                            cn(
+                                'flex min-h-0 min-w-0 flex-1 basis-1/2 flex-col border-b border-border/40 lg:border-r lg:border-b-0',
+                                // Focus mode hides the sidebar that normally
+                                // clears the macOS traffic lights, leaving them
+                                // on top of this pane's header.
+                                isMacDesktopShell &&
+                                    focusMode &&
+                                    'traffic-light-inset',
+                            )
+                        "
                     >
                         <TasksView
                             v-if="currentView.kind === 'tasks'"

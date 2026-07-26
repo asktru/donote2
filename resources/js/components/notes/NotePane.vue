@@ -387,6 +387,7 @@ defineExpose({ focusEditor });
 <template>
     <div class="flex h-full min-h-0 flex-col">
         <header
+            data-pane-header
             :class="
                 cn(
                     'flex h-12 shrink-0 items-center gap-1 border-b border-border/60 px-4',

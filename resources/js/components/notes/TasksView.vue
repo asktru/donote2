@@ -207,6 +207,7 @@ function dueLabel(task: WorkspaceTask): string | null {
 <template>
     <div class="flex h-full min-h-0 flex-col">
         <header
+            data-pane-header
             class="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4"
         >
             <MobileSidebarButton v-if="!isSplit" />

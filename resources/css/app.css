@@ -96,6 +96,17 @@
         -webkit-app-region: no-drag;
     }
 
+    /*
+     * The macOS traffic lights float over the top-left corner of the
+     * frameless shell window. The sidebar reserves a strip for them, so a
+     * pane header only collides once the sidebar is gone (focus mode) — then
+     * the leftmost pane's header has to inset itself instead.
+     */
+    .traffic-light-inset [data-pane-header] {
+        /* Same inset the calendar header uses for the lights (`pl-20`). */
+        padding-left: 5rem;
+    }
+
     /* ⌃S "reveal in sidebar" pulses the located note row. */
     .sidebar-reveal-flash {
         animation: sidebar-reveal 1.2s ease;
