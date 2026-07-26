@@ -168,6 +168,50 @@ describe('editorLineActions', () => {
         expect(hi.doc).toBe('==note==');
     });
 
+    it('re-opens closed ancestors when a nested item is re-opened', () => {
+        const doc = [
+            '- [x] Prepare release',
+            '    - [x] Update the docs',
+            '        + [x] Proofread',
+        ].join('\n');
+        const view = makeView(doc, doc.length - 2); // on the checklist item
+        run(view, 'complete');
+
+        expect(view.doc).toBe(
+            [
+                '- [ ] Prepare release',
+                '    - [ ] Update the docs',
+                '        + [ ] Proofread',
+            ].join('\n'),
+        );
+    });
+
+    it('leaves ancestors alone when none of them are closed', () => {
+        const doc = ['- [ ] Prepare release', '    - [x] Update the docs'].join(
+            '\n',
+        );
+        const view = makeView(doc, doc.length - 2);
+        run(view, 'complete');
+
+        expect(view.doc).toBe(
+            ['- [ ] Prepare release', '    - [ ] Update the docs'].join('\n'),
+        );
+    });
+
+    it('closes only the line itself until the cascade is confirmed', () => {
+        const doc = ['- [ ] Prepare release', '    - [ ] Write changelog'].join(
+            '\n',
+        );
+        const view = makeView(doc, 8);
+        run(view, 'complete');
+
+        // The dialog resolves asynchronously, so the immediate edit is the
+        // single line — the click always feels instant.
+        expect(view.doc).toBe(
+            ['- [x] Prepare release', '    - [ ] Write changelog'].join('\n'),
+        );
+    });
+
     it('bolds each line of a multi-line selection separately', () => {
         const doc = ['First para', 'Second para'].join('\n');
         const view = makeView(doc, 0, doc.length);

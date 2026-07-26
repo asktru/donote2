@@ -54,11 +54,16 @@ import type { SyntaxNode } from '@lezer/common';
 import { tags } from '@lezer/highlight';
 
 import { todayDailyKey } from '@/core/dates';
-import { COMMENT_RE, parseLine } from '@/core/parser';
+import { COMMENT_RE, parseLine, parseNote } from '@/core/parser';
 import type { ParsedLine, Priority, TaskState } from '@/core/parser';
 
 import { PRIORITY_COLORS } from '@/core/priority';
 import { buildNextOccurrenceLine } from '@/core/repeat';
+import {
+    closedAncestors,
+    openDescendants,
+    withTaskState,
+} from '@/core/subtreeState';
 import { generateSyncId } from '@/core/syncedLines';
 import { inlineSegments } from '@/lib/inlineTitle';
 import { isTableRow, splitTableRow, tableAligns } from '@/lib/markdownTable';
@@ -66,6 +71,7 @@ import type { ColumnAlign } from '@/lib/markdownTable';
 import { downloadMermaidPng, renderMermaid } from '@/lib/mermaid';
 import { pasteAsMarkdownLink } from '@/lib/pasteLinks';
 import { openDatePicker } from '@/stores/datePicker';
+import { confirmAction } from '@/stores/prompt';
 import {
     filePreview,
     lightboxImage,
@@ -2224,6 +2230,76 @@ export function selectionBlock(state: EditorState): {
 }
 
 /** Replace the state char of a task marker and handle @repeat insertion. */
+/**
+ * Re-opening an item re-opens everything it sits under: a subtree holding an
+ * open item isn't finished. Silent and part of the same transaction — it
+ * corrects an inconsistent state rather than making a bulk change.
+ */
+function reopenAncestorChanges(
+    view: EditorView,
+    lineNumber: number,
+): { from: number; to: number; insert: string }[] {
+    const lines = parseNote(view.state.doc.toString());
+
+    return closedAncestors(lines, lineNumber - 1).map((ancestor) => {
+        const line = view.state.doc.line(ancestor.index + 1);
+
+        return {
+            from: line.from,
+            to: line.to,
+            insert: withTaskState(line.text, 'open'),
+        };
+    });
+}
+
+/**
+ * Closing an item that still holds open ones asks whether they should close
+ * too. The line itself is already written by the time this runs, so the click
+ * feels instant and "Just this one" simply does nothing further.
+ */
+async function confirmCascadeClose(
+    view: EditorView,
+    lineNumber: number,
+    state: 'done' | 'cancelled',
+): Promise<void> {
+    const target = parseNote(view.state.doc.toString());
+    const line = target[lineNumber - 1];
+    const open = openDescendants(target, lineNumber - 1);
+
+    if (!line || open.length === 0) {
+        return;
+    }
+
+    const verb = state === 'done' ? 'complete' : 'cancel';
+    const count = `${open.length} item${open.length === 1 ? '' : 's'}`;
+
+    const confirmed = await confirmAction({
+        title: `Also ${verb} the ${count} inside?`,
+        message: `“${line.title}” has ${count} still open nested under it.`,
+        confirmLabel: state === 'done' ? 'Complete all' : 'Cancel all',
+        cancelLabel: 'Just this one',
+    });
+
+    if (!confirmed) {
+        return;
+    }
+
+    // Re-read: the note may have moved on while the dialog was open.
+    const lines = parseNote(view.state.doc.toString());
+
+    view.dispatch({
+        changes: openDescendants(lines, lineNumber - 1).map((item) => {
+            const doc = view.state.doc.line(item.index + 1);
+
+            return {
+                from: doc.from,
+                to: doc.to,
+                insert: withTaskState(doc.text, state),
+            };
+        }),
+    });
+}
+
 export function setTaskState(
     view: EditorView,
     pos: number,
@@ -2293,7 +2369,15 @@ export function setTaskState(
         }
     }
 
+    if (nextState === 'open') {
+        changes.push(...reopenAncestorChanges(view, line.number));
+    }
+
     view.dispatch({ changes });
+
+    if (nextState === 'done' || nextState === 'cancelled') {
+        void confirmCascadeClose(view, line.number, nextState);
+    }
 
     return true;
 }

@@ -15,6 +15,11 @@ import {
 import type { NoteKind, NoteMeta, NoteProgress } from '@/core/frontmatter';
 import { parseNote } from '@/core/parser';
 import type { ParsedLine } from '@/core/parser';
+import {
+    closedAncestors,
+    openDescendants,
+    withTaskState,
+} from '@/core/subtreeState';
 import { applySyncedLine, changedSyncedLines } from '@/core/syncedLines';
 import { applyTitleRenames } from '@/core/wikiLinks';
 import type { TitleRename } from '@/core/wikiLinks';
@@ -24,6 +29,7 @@ import { canEditNote } from '@/lib/noteAccess';
 import type { NoteAccess } from '@/lib/noteAccess';
 import { openWorkspaceDb } from '@/stores/db';
 import type { LocalNote, WorkspaceDb } from '@/stores/db';
+import { confirmAction } from '@/stores/prompt';
 
 export interface WorkspaceConfig {
     teamSlug: string;
@@ -985,19 +991,22 @@ export async function toggleTaskLine(
     }
 
     const completing = line.state !== 'done';
-    const nextChar = completing ? 'x' : ' ';
-    rawLines[lineIndex] = rawLines[lineIndex].replace(
-        /^(\s*[-*+]\s\[)[ xX>-](\])/,
-        `$1${nextChar}$2`,
+    // withTaskState also strips !/!!/!!! when closing — priority is
+    // meaningless once done, and the editor does the same.
+    rawLines[lineIndex] = withTaskState(
+        rawLines[lineIndex],
+        completing ? 'done' : 'open',
     );
 
-    // Priority is meaningless once done — strip !/!!/!!! (and its trailing
-    // space), mirroring the editor so completion is consistent everywhere.
-    if (completing) {
-        rawLines[lineIndex] = rawLines[lineIndex].replace(
-            /^(\s*[-*+]\s\[[ xX>-]\]\s)(!{1,3})\s/,
-            '$1',
-        );
+    // Re-opening an item re-opens everything it sits under: a subtree holding
+    // an open item isn't finished.
+    if (!completing) {
+        for (const ancestor of closedAncestors(parsed, lineIndex)) {
+            rawLines[ancestor.index] = withTaskState(
+                rawLines[ancestor.index],
+                'open',
+            );
+        }
     }
 
     if (completing && line.repeat !== null) {
@@ -1023,7 +1032,41 @@ export async function toggleTaskLine(
         }
     }
 
+    const open = completing ? openDescendants(parsed, lineIndex) : [];
+
     await updateNoteContent(noteId, rawLines.join('\n'));
+
+    if (open.length === 0) {
+        return;
+    }
+
+    const count = `${open.length} item${open.length === 1 ? '' : 's'}`;
+    const confirmed = await confirmAction({
+        title: `Also complete the ${count} inside?`,
+        message: `“${line.title}” has ${count} still open nested under it.`,
+        confirmLabel: 'Complete all',
+        cancelLabel: 'Just this one',
+    });
+
+    if (!confirmed) {
+        return;
+    }
+
+    const latest = notes.get(noteId);
+
+    if (!latest) {
+        return;
+    }
+
+    // Re-read: the note may have moved on while the dialog was open (the
+    // repeat occurrence above, or a sync pull).
+    const after = latest.content.split('\n');
+
+    for (const item of openDescendants(parsedNote(noteId), lineIndex)) {
+        after[item.index] = withTaskState(after[item.index], 'done');
+    }
+
+    await updateNoteContent(noteId, after.join('\n'));
 }
 
 /** Today's calendar keys for navigation defaults. */

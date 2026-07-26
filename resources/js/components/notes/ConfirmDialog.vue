@@ -34,7 +34,7 @@ function onOpenChange(open: boolean): void {
                     variant="ghost"
                     @click="resolveConfirm(false)"
                 >
-                    Cancel
+                    {{ confirmState.cancelLabel ?? 'Cancel' }}
                 </Button>
                 <Button
                     type="button"

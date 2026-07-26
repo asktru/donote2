@@ -49,6 +49,8 @@ export interface ConfirmOptions {
     title: string;
     message?: string;
     confirmLabel?: string;
+    /** Label for the dismiss button, when "Cancel" would read wrong. */
+    cancelLabel?: string;
     /** Destructive actions render the confirm button in red. */
     destructive?: boolean;
 }
