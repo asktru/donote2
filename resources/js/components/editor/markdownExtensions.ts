@@ -54,6 +54,7 @@ import type { SyntaxNode } from '@lezer/common';
 import { tags } from '@lezer/highlight';
 
 import { todayDailyKey } from '@/core/dates';
+import { DONE_HEADING_RE } from '@/core/doneSection';
 import {
     COMMENT_RE,
     FOLD_MARKER_RE,
@@ -525,6 +526,18 @@ function indentWidthToOffset(text: string, width: number): number | null {
     return null;
 }
 const frontMatterLine = Decoration.line({ class: 'cm-frontmatter' });
+const doneSectionLine = Decoration.line({ class: 'cm-done-section' });
+
+/** Line number (1-based) where the note's Done section starts, or -1. */
+function doneSectionStart(state: EditorState): number {
+    for (let n = state.doc.lines; n >= 1; n--) {
+        if (DONE_HEADING_RE.test(state.doc.line(n).text)) {
+            return n;
+        }
+    }
+
+    return -1;
+}
 
 /** End line (1-based) of a leading --- front matter block, or -1. */
 function frontMatterEnd(state: EditorState): number {
@@ -754,9 +767,17 @@ function buildDecorations(state: EditorState): DecorationSet {
     const horizontalRules = collectHorizontalRules(state);
     const fmEnd = frontMatterEnd(state);
     const guideLevels = computeGuideLevels(state, fmEnd);
+    const doneStart = doneSectionStart(state);
 
     for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber++) {
         const line = doc.line(lineNumber);
+
+        // The archive at the end of the note reads as a distinct surface.
+        // Added first: line decorations share a position with the line's
+        // tokens, and the builder needs them in ascending order.
+        if (doneStart !== -1 && lineNumber >= doneStart) {
+            builder.add(line.from, line.from, doneSectionLine);
+        }
 
         // Front matter block: dim the line, then surface just links and
         // dates as clickable tokens (skip the full markdown pipeline — front
@@ -3476,6 +3497,12 @@ const editorTheme = EditorView.theme({
         fontSize: '0.85em',
         marginLeft: '0.4em',
         cursor: 'default',
+    },
+
+    // The archive at the end of a note: present, but clearly not the work.
+    '.cm-done-section': {
+        backgroundColor: 'color-mix(in oklab, var(--muted) 60%, transparent)',
+        color: 'var(--muted-foreground)',
     },
 
     '.cm-frontmatter': {

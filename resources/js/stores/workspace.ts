@@ -4,6 +4,7 @@ import { toast } from 'vue-sonner';
 
 import { kindOfKey, todayDailyKey, todayKey } from '@/core/dates';
 import type { CalendarKind, NoteType } from '@/core/dates';
+import { hasFileableWork, refileCompleted } from '@/core/doneSection';
 import {
     EMPTY_META,
     isReviewDue,
@@ -1067,6 +1068,23 @@ export async function toggleTaskLine(
     }
 
     await updateNoteContent(noteId, after.join('\n'));
+}
+
+/**
+ * File the note's finished work into its Done section, and lift re-opened
+ * work back out. Returns false when there was nothing to do, so the caller
+ * can say so rather than writing an empty section.
+ */
+export async function fileCompletedToDone(noteId: string): Promise<boolean> {
+    const note = notes.get(noteId);
+
+    if (!note || !hasFileableWork(note.content)) {
+        return false;
+    }
+
+    await updateNoteContent(noteId, refileCompleted(note.content));
+
+    return true;
 }
 
 /** Today's calendar keys for navigation defaults. */

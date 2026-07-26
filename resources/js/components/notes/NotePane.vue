@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+    ArchiveRestore,
     Check,
     ChevronLeft,
     ChevronRight,
@@ -18,6 +19,7 @@ import {
     X,
 } from '@lucide/vue';
 import { computed, nextTick, ref, watch } from 'vue';
+import { toast } from 'vue-sonner';
 
 import MarkdownEditor from '@/components/editor/MarkdownEditor.vue';
 import BacklinksSection from '@/components/notes/BacklinksSection.vue';
@@ -55,6 +57,7 @@ import type { PaneView } from '@/stores/ui';
 import { openGraphView, pendingScrollLine } from '@/stores/ui';
 import {
     deleteNote,
+    fileCompletedToDone,
     findCalendarNote,
     getNote,
     markReviewed,
@@ -340,6 +343,17 @@ async function togglePin(): Promise<void> {
     }
 }
 
+/** Move finished work into the note's Done section (⌘Z undoes the whole move). */
+async function moveCompletedToDone(): Promise<void> {
+    if (!note.value) {
+        return;
+    }
+
+    if (!(await fileCompletedToDone(note.value.id))) {
+        toast('Nothing to file — no completed work outside Done.');
+    }
+}
+
 /** User read-only mode, driven by `mode: read-only` in the front matter. */
 const viewMode = computed(() => meta.value?.readOnly ?? false);
 
@@ -566,6 +580,13 @@ defineExpose({ focusEditor });
                                 @select="openGraphView(note.id)"
                             >
                                 <Waypoints class="size-4" /> Connections graph
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                v-if="!readOnly"
+                                @select="moveCompletedToDone"
+                            >
+                                <ArchiveRestore class="size-4" /> Move completed
+                                to Done
                             </DropdownMenuItem>
                             <DropdownMenuItem @select="togglePin">
                                 <PinOff v-if="note.pinned" class="size-4" />
