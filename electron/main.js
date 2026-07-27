@@ -53,6 +53,11 @@ function createWindow(targetUrl = APP_URL) {
             contextIsolation: true,
             nodeIntegration: false,
             spellcheck: true,
+            // Chromium's built-in PDF viewer counts as a plugin and is off by
+            // default in Electron, which is why a PDF attachment offered a
+            // download instead of previewing. This turns the viewer on; it
+            // does not enable NPAPI or anything of that era.
+            plugins: true,
             preload: path.join(__dirname, 'preload.js'),
         },
     });

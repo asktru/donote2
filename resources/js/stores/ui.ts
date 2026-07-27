@@ -134,12 +134,19 @@ export const syncedLinePanel = ref<{
     y: number;
 } | null>(null);
 
-/** Fullscreen file viewer for text/html/csv attachments. */
+/** Fullscreen file viewer for text/html/csv/pdf attachments. */
 export const filePreview = ref<{
-    kind: 'text' | 'html' | 'csv';
+    kind: 'text' | 'html' | 'csv' | 'pdf';
     name: string;
     url: string;
+    /** Decoded text, for the kinds we render ourselves. */
     content: string;
+    /**
+     * Object URL of the fetched bytes, for the kinds the browser renders
+     * itself (pdf). Revoked when the preview closes — the attachment route
+     * needs a session, so the viewer cannot just be pointed at the URL.
+     */
+    objectUrl?: string;
 } | null>(null);
 /** Line index the main editor should scroll to after opening a note. */
 export const pendingScrollLine = ref<number | null>(null);

@@ -353,6 +353,22 @@ async function openMarkdownUrl(url: string): Promise<void> {
 
     const blob = await response.blob();
     const objectUrl = URL.createObjectURL(blob);
+
+    // A PDF is rendered by the browser's own viewer, from the bytes we just
+    // fetched — the attachment route needs a session, so an <iframe> pointed
+    // at the URL would not carry one in every shell.
+    if (mime === 'application/pdf' || /\.pdf$/i.test(filename)) {
+        filePreview.value = {
+            kind: 'pdf',
+            name: filename,
+            url,
+            content: '',
+            objectUrl,
+        };
+
+        return;
+    }
+
     const anchor = document.createElement('a');
     anchor.href = objectUrl;
     anchor.download = filename;

@@ -7,7 +7,14 @@ import { cn } from '@/lib/utils';
 import { filePreview } from '@/stores/ui';
 
 function close(): void {
+    const objectUrl = filePreview.value?.objectUrl;
+
     filePreview.value = null;
+
+    if (objectUrl) {
+        // Held only for as long as the viewer needs it.
+        URL.revokeObjectURL(objectUrl);
+    }
 }
 
 /** Minimal CSV parser with quoted-field support. */
@@ -136,9 +143,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, true));
             </div>
 
             <div class="min-h-0 flex-1 px-5 pb-5" @click.self="close">
+                <!-- The browser's built-in PDF viewer, fed the bytes we
+                     already fetched. -->
+                <iframe
+                    v-if="filePreview.kind === 'pdf'"
+                    :src="filePreview.objectUrl"
+                    class="size-full rounded-lg border border-white/20 bg-white"
+                    :title="filePreview.name"
+                ></iframe>
+
                 <!-- Rendered HTML runs sandboxed: no scripts, no navigation. -->
                 <iframe
-                    v-if="filePreview.kind === 'html'"
+                    v-else-if="filePreview.kind === 'html'"
                     :srcdoc="filePreview.content"
                     sandbox=""
                     class="size-full rounded-lg border border-white/20 bg-white"

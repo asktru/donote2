@@ -32,6 +32,28 @@ test('users can upload an attachment and download it back', function () {
         ->assertSuccessful();
 });
 
+test('a pdf is served inline, with its real type, so it can be previewed', function () {
+    // The viewer renders the bytes itself, but anything that does follow the
+    // URL — a new window, an external app — must not be told to download.
+    Storage::fake();
+
+    $user = User::factory()->create();
+    $team = $user->currentTeam;
+
+    $response = $this->actingAs($user)
+        ->post(route('attachments.store', $team), [
+            'file' => UploadedFile::fake()->create('report.pdf', 12, 'application/pdf'),
+        ])
+        ->assertCreated()
+        ->assertJsonPath('mime', 'application/pdf');
+
+    $this->actingAs($user)
+        ->get($response->json('url'))
+        ->assertSuccessful()
+        ->assertHeader('Content-Type', 'application/pdf')
+        ->assertHeader('Content-Disposition', 'inline; filename=report.pdf');
+});
+
 test('attachments are linked to a note when the note belongs to the workspace', function () {
     Storage::fake();
 
