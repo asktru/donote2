@@ -210,6 +210,41 @@ test('append-to-note keeps existing content intact', function () {
     expect($note->refresh()->content)->toBe("# Inbox\n\n- [ ] First\n- [ ] Second >2026-08-01\n");
 });
 
+test('append-to-note lands above a Done section, not inside it', function () {
+    // The archive runs to the end of the note and is collapsed by default,
+    // so appending past it would hide the new task.
+    $user = mcpUser();
+    $note = Note::factory()->create([
+        'team_id' => $user->currentTeam->id,
+        'user_id' => $user->id,
+        'title' => 'Inbox',
+        'content' => implode("\n", [
+            '# Inbox',
+            '- [ ] First',
+            '',
+            '---',
+            '# Done …',
+            '- [x] Older thing',
+        ]),
+        'server_seq' => 1,
+    ]);
+
+    DonoteServer::tool(AppendToNoteTool::class, [
+        'title' => 'Inbox',
+        'text' => '- [ ] Second',
+    ])->assertOk();
+
+    expect($note->refresh()->content)->toBe(implode("\n", [
+        '# Inbox',
+        '- [ ] First',
+        '- [ ] Second',
+        '',
+        '---',
+        '# Done …',
+        '- [x] Older thing',
+    ]));
+});
+
 test('append-to-daily-note creates the daily note when missing', function () {
     $user = mcpUser();
 

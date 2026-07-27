@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Actions\Notes\AppendUnderHeading;
 use App\Mcp\Tools\Concerns\InteractsWithWorkspace;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
@@ -39,8 +40,11 @@ class AppendToNoteTool extends Tool
             return Response::error('Note not found. Pass an id, exact title, or calendar date key to locate it.');
         }
 
-        $content = rtrim($note->content, "\n");
-        $content = ($content === '' ? '' : $content."\n").rtrim($validated['text'], "\n")."\n";
+        // Through AppendUnderHeading with no heading: it appends plainly, but
+        // to the end of the note's *body*, so text never lands inside a
+        // collapsed `# Done` archive.
+        $content = app(AppendUnderHeading::class)
+            ->execute($note->content, null, $validated['text']);
 
         $updated = $this->writeNote($team, $user, $note, ['content' => $content]);
 

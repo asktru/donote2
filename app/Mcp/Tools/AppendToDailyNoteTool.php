@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Actions\Notes\AppendUnderHeading;
 use App\Mcp\Tools\Concerns\InteractsWithWorkspace;
 use App\Models\Note;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -44,8 +45,11 @@ class AppendToDailyNoteTool extends Tool
             ->where('date_key', $dateKey)
             ->first();
 
-        $content = rtrim($note !== null ? $note->content : '', "\n");
-        $content = ($content === '' ? '' : $content."\n").rtrim($validated['text'], "\n")."\n";
+        // Through AppendUnderHeading with no heading: it appends plainly, but
+        // to the end of the note's *body*, so text never lands inside a
+        // collapsed `# Done` archive.
+        $content = app(AppendUnderHeading::class)
+            ->execute($note !== null ? $note->content : '', null, $validated['text']);
 
         $updated = $this->writeNote($team, $user, $note, [
             'type' => 'daily',

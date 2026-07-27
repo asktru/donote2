@@ -4,23 +4,42 @@ namespace App\Actions\Notes;
 
 class AppendUnderHeading
 {
+    public function __construct(protected DoneSection $doneSection) {}
+
     /**
      * Append markdown at the end of the named heading's section, matching
      * the heading text case-insensitively at any level. A missing heading
      * is created as an H2 at the bottom of the note (unless disabled, in
      * which case the text is appended plainly). A null heading appends
      * plainly at the end of the note.
+     *
+     * "The bottom of the note" means the bottom of its *body*: a `# Done`
+     * section runs to the end of the note and is collapsed by default, so
+     * appending past it would file new work into the archive, out of sight.
+     * A heading inside the archive is not matched either — the groups
+     * rebuilt in there mirror the body's own headings, and appending to one
+     * would drop live work among finished work.
      */
     public function execute(string $content, ?string $heading, string $text, bool $createHeadingIfMissing = true): string
+    {
+        [$body, $section] = $this->doneSection->split($content);
+
+        return $this->doneSection->join(
+            $this->appendToBody($body, $heading, $text, $createHeadingIfMissing),
+            $section,
+        );
+    }
+
+    private function appendToBody(string $body, ?string $heading, string $text, bool $createHeadingIfMissing): string
     {
         $text = rtrim($text, "\n");
         $heading = $heading !== null ? trim($heading) : null;
 
         if ($heading === null || $heading === '') {
-            return $this->appendPlainly($content, $text);
+            return $this->appendPlainly($body, $text);
         }
 
-        $lines = $content === '' ? [] : explode("\n", $content);
+        $lines = $body === '' ? [] : explode("\n", $body);
         $pattern = '/^(#{1,6})\s+'.preg_quote($heading, '/').'\s*$/iu';
 
         $headingIndex = null;
@@ -36,10 +55,10 @@ class AppendUnderHeading
 
         if ($headingIndex === null) {
             if (! $createHeadingIfMissing) {
-                return $this->appendPlainly($content, $text);
+                return $this->appendPlainly($body, $text);
             }
 
-            $base = rtrim($content, "\n");
+            $base = rtrim($body, "\n");
             $prefix = $base === '' ? '' : $base."\n\n";
 
             return $prefix.'## '.$heading."\n".$text."\n";

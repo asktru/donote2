@@ -1,10 +1,11 @@
 <?php
 
 use App\Actions\Notes\AppendUnderHeading;
+use App\Actions\Notes\DoneSection;
 
 function appendUnderHeading(string $content, ?string $heading, string $text, bool $create = true): string
 {
-    return (new AppendUnderHeading)->execute($content, $heading, $text, $create);
+    return (new AppendUnderHeading(new DoneSection))->execute($content, $heading, $text, $create);
 }
 
 test('a null heading appends plainly at the end', function () {
@@ -60,4 +61,77 @@ test('a section at the end of the note grows at the bottom', function () {
 
     expect(appendUnderHeading($content, 'Links', '- [[B]]'))
         ->toBe("# Day\n\n## Links\n- [[A]]\n- [[B]]\n");
+});
+
+test('a missing heading is created above the Done section, not after it', function () {
+    // The section runs to the end of the note and is collapsed by default:
+    // appending past it files new work into the archive, out of sight.
+    $note = implode("\n", [
+        '# Launch',
+        '- [ ] Ship it',
+        '',
+        '---',
+        '# Done …',
+        '## Launch',
+        '- [x] Tag v1.0',
+    ]);
+
+    expect(appendUnderHeading($note, 'Meetings', '- [[Anton <> Max]]'))
+        ->toBe(implode("\n", [
+            '# Launch',
+            '- [ ] Ship it',
+            '',
+            '## Meetings',
+            '- [[Anton <> Max]]',
+            '',
+            '---',
+            '# Done …',
+            '## Launch',
+            '- [x] Tag v1.0',
+        ]));
+});
+
+test('a plain append lands above the Done section too', function () {
+    $note = implode("\n", ['- [ ] Ship it', '', '---', '# Done …', '- [x] Tag']);
+
+    expect(appendUnderHeading($note, null, '- new'))
+        ->toBe(implode("\n", [
+            '- [ ] Ship it',
+            '- new',
+            '',
+            '---',
+            '# Done …',
+            '- [x] Tag',
+        ]));
+});
+
+test('a heading inside the Done section is never matched', function () {
+    // The archive rebuilds the body's headings, so "Meetings" can exist in
+    // both places — appending to the archived one would bury live work.
+    $note = implode("\n", [
+        '# Launch',
+        '',
+        '---',
+        '# Done …',
+        '## Meetings',
+        '- [[Old meeting]]',
+    ]);
+
+    expect(appendUnderHeading($note, 'Meetings', '- [[New meeting]]'))
+        ->toBe(implode("\n", [
+            '# Launch',
+            '',
+            '## Meetings',
+            '- [[New meeting]]',
+            '',
+            '---',
+            '# Done …',
+            '## Meetings',
+            '- [[Old meeting]]',
+        ]));
+});
+
+test('a note without a Done section is untouched by the split', function () {
+    expect(appendUnderHeading("# Launch\n- [ ] Ship it\n", 'Meetings', '- [[Anton]]'))
+        ->toBe("# Launch\n- [ ] Ship it\n\n## Meetings\n- [[Anton]]\n");
 });
