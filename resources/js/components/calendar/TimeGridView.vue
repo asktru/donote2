@@ -41,6 +41,8 @@ const emit = defineEmits<{
 }>();
 
 const HOUR_HEIGHT = 48;
+/** Below this height a block cannot stack title over time — about 35 minutes. */
+const COMPACT_HEIGHT = 28;
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
 const scroller = ref<HTMLElement | null>(null);
@@ -460,7 +462,13 @@ onMounted(() => {
                         type="button"
                         :class="
                             cn(
-                                'absolute flex flex-col items-start gap-0.5 overflow-hidden rounded-md border border-black/10 px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm',
+                                'absolute overflow-hidden rounded-md border border-black/10 px-1.5 text-left text-[11px] leading-tight shadow-sm',
+                                // A short event has no room to stack title
+                                // over time, and a clipped title is useless —
+                                // put them on one line instead.
+                                pos.height < COMPACT_HEIGHT
+                                    ? 'flex items-center gap-1 py-0'
+                                    : 'flex flex-col items-start gap-0.5 py-1',
                                 rsvpClass(pos.event),
                                 pos.event.key === selectedKey &&
                                     'ring-2 ring-primary ring-offset-1 ring-offset-background',
@@ -475,13 +483,25 @@ onMounted(() => {
                         }"
                         @click="emit('open-event', pos.event)"
                     >
-                        <span class="w-full truncate font-semibold">
+                        <span class="min-w-0 flex-1 truncate font-semibold">
                             {{ pos.event.title }}
                         </span>
-                        <span class="opacity-80">{{ timeLabel(pos.event) }}</span>
+                        <span
+                            :class="
+                                pos.height < COMPACT_HEIGHT
+                                    ? 'shrink-0 opacity-80'
+                                    : 'opacity-80'
+                            "
+                        >
+                            {{ timeLabel(pos.event) }}
+                        </span>
                         <Repeat
                             v-if="pos.event.seriesId"
-                            class="absolute right-1 bottom-1 size-2.5 opacity-60"
+                            :class="
+                                pos.height < COMPACT_HEIGHT
+                                    ? 'size-2.5 shrink-0 opacity-60'
+                                    : 'absolute right-1 bottom-1 size-2.5 opacity-60'
+                            "
                             aria-label="Repeats"
                         />
                     </button>

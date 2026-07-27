@@ -1,9 +1,10 @@
 import { addDays, addMonths, addWeeks, endOfWeek, format, startOfDay, startOfWeek } from 'date-fns';
 import { computed, ref, watch } from 'vue';
 
+import { visibleEvents } from '@/core/eventVisibility';
+import type { VisibilityRules } from '@/core/eventVisibility';
 import { apiFetch } from '@/lib/api';
 import { appleCalendar } from '@/lib/appleCalendar';
-import { dedupeEvents } from '@/lib/dedupeEvents';
 
 export type CalendarViewKind = 'day' | 'week' | 'month';
 
@@ -262,14 +263,13 @@ export async function nextEventAfter(
             fetchApple(startIso, endIso),
         ]);
 
-        // The same visibility rules the grid applies, so the jump never lands
-        // on something the user has filtered away.
-        const visible = dedupeEvents([...google, ...apple]).filter(
-            (event) =>
-                !hiddenCalendars.value.has(event.calendarId) &&
-                !(hideDeclined.value && event.responseStatus === 'declined') &&
-                !isEventHidden(event),
-        );
+        // The very same pipeline the grid runs, so the event this returns is
+        // the copy the grid will show — matching it up afterwards depends on
+        // both sides picking the same one.
+        const visible = visibleEvents(
+            [...google, ...apple],
+            currentVisibility(),
+        ).filter((event) => !event.hidden);
 
         return (
             visible
@@ -725,19 +725,18 @@ export interface DisplayEvent extends CalendarEvent {
  * requested, de-duplicated (Google wins), and annotated with `hidden` so the
  * views can render decluttered events as a thin strip.
  */
-export const displayEvents = computed<DisplayEvent[]>(() => {
-    const base = events.value.filter(
-        (event) => !hiddenCalendars.value.has(event.calendarId),
-    );
-    const filtered = hideDeclined.value
-        ? base.filter((event) => event.responseStatus !== 'declined')
-        : base;
+/** The visibility rules as they stand right now, for the shared pipeline. */
+function currentVisibility(): VisibilityRules {
+    return {
+        isCalendarHidden: (id) => hiddenCalendars.value.has(id),
+        hideDeclined: hideDeclined.value,
+        isHidden: (event) => isEventHidden(event as CalendarEvent),
+    };
+}
 
-    return dedupeEvents(filtered).map((event) => ({
-        ...event,
-        hidden: isEventHidden(event),
-    }));
-});
+export const displayEvents = computed<DisplayEvent[]>(() =>
+    visibleEvents(events.value, currentVisibility()),
+);
 
 /** Currently open event in the detail panel, if any. */
 export const selectedEvent = ref<CalendarEvent | null>(null);

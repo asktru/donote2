@@ -24,6 +24,19 @@ function normalizeMoment(value: string | null): string {
     return Number.isNaN(epoch) ? value : String(epoch);
 }
 
+/**
+ * What makes two entries the same occurrence, independent of which calendar
+ * or source they came from. Use this to match an event across two separate
+ * fetches, where the copy that represents the group may differ.
+ */
+export function occurrenceId(event: {
+    title: string;
+    start: string | null;
+    end: string | null;
+}): string {
+    return `${event.title.trim()}|${normalizeMoment(event.start)}|${normalizeMoment(event.end)}`;
+}
+
 export function dedupeEvents<
     T extends { title: string; start: string | null; end: string | null },
 >(events: T[]): T[] {
@@ -31,7 +44,7 @@ export function dedupeEvents<
     const result: T[] = [];
 
     for (const event of events) {
-        const key = `${event.title.trim()}|${normalizeMoment(event.start)}|${normalizeMoment(event.end)}`;
+        const key = occurrenceId(event);
 
         if (seen.has(key)) {
             continue;

@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useSwipe } from '@/composables/useSwipe';
 import { orderEvents, stepEvent, upcomingEvent } from '@/core/eventCursor';
+import { occurrenceId } from '@/lib/dedupeEvents';
 import {
     initNativeTabs,
     nativeTabsActive,
@@ -121,24 +122,35 @@ watch(
 // panel describing something that is no longer on screen. A refetch is also
 // where a jumped-to event finally arrives.
 watch(displayEvents, (events) => {
-    if (pendingSelectKey.value !== null) {
+    if (pendingOccurrence.value !== null) {
         const arrived = events.find(
-            (event) => event.key === pendingSelectKey.value,
+            (event) => occurrenceId(event) === pendingOccurrence.value,
         );
 
         if (arrived) {
-            pendingSelectKey.value = null;
+            pendingOccurrence.value = null;
             openEventDetail(arrived);
 
             return;
         }
     }
 
-    if (
-        selectedEvent.value &&
-        !events.some((event) => event.key === selectedEvent.value?.key)
-    ) {
+    const selected = selectedEvent.value;
+
+    if (!selected) {
+        return;
+    }
+
+    const still = events.find(
+        (event) => occurrenceId(event) === occurrenceId(selected),
+    );
+
+    if (!still) {
         closeEventDetail();
+    } else if (still.key !== selected.key) {
+        // Same meeting, different copy after a refetch — re-bind so the grid
+        // can match the selection by key.
+        openEventDetail(still);
     }
 });
 
@@ -312,10 +324,11 @@ function selectEvent(event: CalendarEvent | null): void {
 }
 
 /**
- * An event we have jumped the view to, waiting for its day to load. The
- * watcher below selects it once it arrives.
+ * An event we have jumped the view to, waiting for its day to load. Held by
+ * occurrence rather than key: the copy that represents a meeting on several
+ * calendars need not be the same object in two separate fetches.
  */
-const pendingSelectKey = ref<string | null>(null);
+const pendingOccurrence = ref<string | null>(null);
 
 /**
  * `N` — the next event from now. When the current view holds no future, look
@@ -340,8 +353,11 @@ async function selectNextEvent(): Promise<void> {
         return;
     }
 
-    // Jump the view to its day, then select it once the refetch lands.
-    pendingSelectKey.value = ahead.key;
+    // Show it straight away — the panel renders from the event itself — then
+    // jump the view to its day. The watcher re-binds it to the copy the grid
+    // ends up drawing, so the ring lands on the right block.
+    openEventDetail(ahead);
+    pendingOccurrence.value = occurrenceId(ahead);
     anchor.value = startOfDay(new Date(ahead.start));
 }
 
