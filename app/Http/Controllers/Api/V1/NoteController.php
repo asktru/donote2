@@ -104,9 +104,7 @@ class NoteController extends Controller
      */
     private function sanitizedTitle(string $title): string
     {
-        $title = preg_replace('/[\[\]|#^\r\n]+/', ' ', $title) ?? $title;
-
-        return trim(preg_replace('/\s+/', ' ', $title) ?? $title);
+        return Note::wikiSafeTitle($title);
     }
 
     /**

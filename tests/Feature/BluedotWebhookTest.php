@@ -184,6 +184,55 @@ test('the job stores a meeting note and links it from the daily note', function 
         ->and($daily->content)->toContain('- [[Ivan <> Anton -- 2025-03-04]]');
 });
 
+test('a title with wiki-link punctuation still links from the daily note', function () {
+    // "Anton | Max" would split the [[link]] into a target and a label,
+    // leaving the daily note pointing at a note called "Anton".
+    $user = User::factory()->create();
+    $team = $user->currentTeam;
+
+    (new ProcessBluedotSummary(
+        $user->id,
+        $team->id,
+        bluedotPayload(['title' => 'Anton | Max [sync] #weekly']),
+    ))->handle(
+        app(WriteNote::class),
+        app(AppendUnderHeading::class),
+        app(FormatBluedotSummary::class),
+    );
+
+    $note = Note::query()->forWorkspace($team, $user)
+        ->where('type', 'note')->firstOrFail();
+
+    expect($note->title)->toBe('Anton Max sync weekly -- 2025-03-04');
+
+    $daily = Note::query()->forWorkspace($team, $user)
+        ->where('type', 'daily')->where('date_key', '2025-03-04')->firstOrFail();
+
+    expect($daily->content)->toContain(
+        '- [[Anton Max sync weekly -- 2025-03-04]]',
+    );
+});
+
+test('a title that is nothing but punctuation falls back to Meeting', function () {
+    $user = User::factory()->create();
+    $team = $user->currentTeam;
+
+    (new ProcessBluedotSummary(
+        $user->id,
+        $team->id,
+        bluedotPayload(['title' => '|| ##']),
+    ))->handle(
+        app(WriteNote::class),
+        app(AppendUnderHeading::class),
+        app(FormatBluedotSummary::class),
+    );
+
+    $note = Note::query()->forWorkspace($team, $user)
+        ->where('type', 'note')->firstOrFail();
+
+    expect($note->title)->toBe('Meeting -- 2025-03-04');
+});
+
 test('a re-sent summary updates the same note without duplicating', function () {
     $user = User::factory()->create();
     $team = $user->currentTeam;

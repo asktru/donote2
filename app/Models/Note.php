@@ -183,6 +183,21 @@ class Note extends Model
     }
 
     /**
+     * Strip the characters that would break a `[[wiki link]]` to this note.
+     *
+     * A title is what links resolve by, so anything the link syntax itself
+     * uses cannot appear in one: `|` splits off a label, `[` and `]` end the
+     * token, `#` and `^` start a tag or a synced-line id, and a newline ends
+     * the line. Runs of whitespace collapse so the replacement reads cleanly.
+     */
+    public static function wikiSafeTitle(string $title): string
+    {
+        $stripped = preg_replace('/[\[\]|#^\r\n]+/', ' ', $title) ?? $title;
+
+        return trim(preg_replace('/\s+/', ' ', $stripped) ?? $stripped);
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

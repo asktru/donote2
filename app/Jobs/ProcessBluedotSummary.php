@@ -111,7 +111,10 @@ class ProcessBluedotSummary implements ShouldQueue
      */
     private function resolveTitle(): string
     {
-        $title = trim((string) ($this->payload['title'] ?? ''));
+        // Meeting names arrive as people typed them, and a "Anton | Max"
+        // would split the [[link]] the daily note gets into a target and a
+        // label — leaving a link to a note that does not exist.
+        $title = Note::wikiSafeTitle((string) ($this->payload['title'] ?? ''));
 
         if ($title === '' || preg_match('/^[0-9a-f]{24}$/i', $title) === 1) {
             return 'Meeting';
