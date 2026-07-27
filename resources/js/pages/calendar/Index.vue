@@ -30,6 +30,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useSwipe } from '@/composables/useSwipe';
+import { nextFromNow, orderEvents, stepEvent } from '@/core/eventCursor';
 import {
     initNativeTabs,
     nativeTabsActive,
@@ -55,6 +56,7 @@ import {
     goToday,
     hiddenCalendars,
     hideDeclined,
+    hideEvent,
     initCalendarPrefs,
     meetWith,
     openEventDetail,
@@ -112,6 +114,17 @@ watch(
     },
     { immediate: true },
 );
+
+// A refetch or a filter change can drop the selected event; don't leave the
+// panel describing something that is no longer on screen.
+watch(displayEvents, (events) => {
+    if (
+        selectedEvent.value &&
+        !events.some((event) => event.key === selectedEvent.value?.key)
+    ) {
+        closeEventDetail();
+    }
+});
 
 const supported = (
     Intl as unknown as { supportedValuesOf?: (k: string) => string[] }
@@ -273,6 +286,36 @@ useSwipe((swipe) => {
     }
 });
 
+/** What the cursor walks: the events actually on screen, yours only. */
+const cursorEvents = computed(() => orderEvents(displayEvents.value));
+
+function selectEvent(event: CalendarEvent | null): void {
+    if (event) {
+        openEventDetail(event);
+    }
+}
+
+/**
+ * Hide the selected event, then move the cursor on — so H H H clears a run of
+ * noise without reaching for the mouse.
+ */
+function hideSelected(scope: 'one' | 'series'): void {
+    const current = selectedEvent.value;
+
+    if (!current) {
+        return;
+    }
+
+    const next = stepEvent(cursorEvents.value, current.key, 1, new Date());
+    hideEvent(current, scope);
+
+    if (next && next.key !== current.key) {
+        selectEvent(next);
+    } else {
+        closeEventDetail();
+    }
+}
+
 function onKeydown(event: KeyboardEvent): void {
     // Every bare key below is off-limits while the user is typing.
     const target = event.target as HTMLElement | null;
@@ -392,9 +435,45 @@ function onKeydown(event: KeyboardEvent): void {
         return;
     }
 
+    if (!event.shiftKey && key === 'n') {
+        event.preventDefault();
+        selectEvent(nextFromNow(cursorEvents.value, new Date()));
+
+        return;
+    }
+
+    if (key === 'h') {
+        event.preventDefault();
+        hideSelected(event.shiftKey ? 'series' : 'one');
+
+        return;
+    }
+
+    if (event.key === 'Enter' && selectedEvent.value?.htmlLink) {
+        event.preventDefault();
+        window.open(selectedEvent.value.htmlLink, '_blank', 'noopener');
+
+        return;
+    }
+
     if (!event.shiftKey && key === 'z') {
         event.preventDefault();
         toggleSecondZone();
+
+        return;
+    }
+
+    // ↑ / ↓ — walk the events in view.
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        selectEvent(
+            stepEvent(
+                cursorEvents.value,
+                selectedEvent.value?.key ?? null,
+                event.key === 'ArrowDown' ? 1 : -1,
+                new Date(),
+            ),
+        );
 
         return;
     }
