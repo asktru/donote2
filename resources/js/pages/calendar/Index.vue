@@ -17,7 +17,9 @@ import EventDetailPanel from '@/components/calendar/EventDetailPanel.vue';
 import EventEditor from '@/components/calendar/EventEditor.vue';
 import MonthView from '@/components/calendar/MonthView.vue';
 import TimeGridView from '@/components/calendar/TimeGridView.vue';
+import TimezonePicker from '@/components/calendar/TimezonePicker.vue';
 import RecordingIndicator from '@/components/notes/RecordingIndicator.vue';
+import ShortcutsDialog from '@/components/notes/ShortcutsDialog.vue';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -39,6 +41,7 @@ import {
     publishShareTargets,
     startShareInboxWatcher,
 } from '@/lib/shareInbox';
+import { zoneCity } from '@/lib/timezones';
 import { cn } from '@/lib/utils';
 import {
     anchor,
@@ -71,6 +74,7 @@ import type { CalendarEvent } from '@/stores/calendar';
 import { startReminderScheduler } from '@/stores/reminderScheduler';
 import { setTeamMembers, teamMembers } from '@/stores/team';
 import type { TeamMember } from '@/stores/team';
+import { shortcutsOpen } from '@/stores/ui';
 import { initWorkspace } from '@/stores/workspace';
 
 const props = defineProps<{
@@ -114,11 +118,6 @@ const supported = (
 const allZones: string[] = supported
     ? supported('timeZone')
     : ['Europe/Kyiv', 'Europe/London', 'America/New_York', 'America/Los_Angeles', 'Asia/Tokyo'];
-
-const zones: { value: string; label: string }[] = [
-    { value: '', label: 'No 2nd zone' },
-    ...allZones.map((zone) => ({ value: zone, label: zone.replace(/_/g, ' ') })),
-];
 
 const notesHref = computed(() => `/${props.workspace.teamSlug}/notes`);
 
@@ -174,6 +173,40 @@ const HOUR_MS = 60 * 60 * 1000;
 
 const fabOpen = ref(false);
 const meetPickerOpen = ref(false);
+const timezonePickerOpen = ref(false);
+
+/** The zone `Z` restores after switching the rail off. */
+const lastSecondZone = ref<string | null>(secondZone.value);
+
+/**
+ * `Z` — show or hide the secondary time axis. With no zone ever chosen there
+ * is nothing to toggle to, so open the picker instead.
+ */
+function toggleSecondZone(): void {
+    if (secondZone.value !== null) {
+        lastSecondZone.value = secondZone.value;
+        setSecondZone(null);
+
+        return;
+    }
+
+    if (lastSecondZone.value !== null) {
+        setSecondZone(lastSecondZone.value);
+
+        return;
+    }
+
+    timezonePickerOpen.value = true;
+}
+
+/** Picking from the dialog also updates what `Z` toggles back to. */
+function onPickZone(zone: string | null): void {
+    setSecondZone(zone);
+
+    if (zone !== null) {
+        lastSecondZone.value = zone;
+    }
+}
 
 /** Tapping a slot: schedule a meeting with overlaid people, else a timeblock. */
 function createAt(at: Date): void {
@@ -239,7 +272,25 @@ useSwipe((swipe) => {
 });
 
 function onKeydown(event: KeyboardEvent): void {
-    // ⌘J — toggle the Meet-with panel (Vimcal parity).
+    // Every bare key below is off-limits while the user is typing.
+    const target = event.target as HTMLElement | null;
+    const typing =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLSelectElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.isContentEditable === true;
+
+    // ⌘/ — the cheatsheet.
+    if ((event.metaKey || event.ctrlKey) && event.key === '/') {
+        event.preventDefault();
+        shortcutsOpen.value = !shortcutsOpen.value;
+
+        return;
+    }
+
+    // ⌘J — toggle the Meet-with panel (Vimcal parity). The panel handles the
+    // empty case itself (directory search, a raw email field), so there is
+    // nothing to gate on — the toolbar button never did either.
     if (
         (event.metaKey || event.ctrlKey) &&
         !event.shiftKey &&
@@ -247,11 +298,8 @@ function onKeydown(event: KeyboardEvent): void {
         event.key.toLowerCase() === 'j'
     ) {
         event.preventDefault();
-
-        if (colleagues.value.length > 0 || meetWith.value.length > 0) {
-            fabOpen.value = false;
-            meetPickerOpen.value = !meetPickerOpen.value;
-        }
+        fabOpen.value = false;
+        meetPickerOpen.value = !meetPickerOpen.value;
 
         return;
     }
@@ -283,21 +331,71 @@ function onKeydown(event: KeyboardEvent): void {
         return;
     }
 
-    // ← / → — step to the previous / next period (ignore while typing).
-    const target = event.target as HTMLElement | null;
-    const typing =
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLSelectElement ||
-        target instanceof HTMLTextAreaElement;
+    if (typing || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+    }
 
-    if (!typing && !event.metaKey && !event.ctrlKey && !event.altKey) {
-        if (event.key === 'ArrowLeft') {
-            event.preventDefault();
-            stepCalendar(-1);
-        } else if (event.key === 'ArrowRight') {
-            event.preventDefault();
-            stepCalendar(1);
-        }
+    // Bare letters (Vimcal parity).
+    const key = event.key.toLowerCase();
+
+    if (!event.shiftKey && key === 't') {
+        event.preventDefault();
+        goToday();
+
+        return;
+    }
+
+    const byLetter = { d: 'day', w: 'week', m: 'month' } as const;
+
+    if (!event.shiftKey && key in byLetter) {
+        event.preventDefault();
+        setCalendarView(byLetter[key as keyof typeof byLetter]);
+
+        return;
+    }
+
+    if (!event.shiftKey && (key === 'j' || key === 'k')) {
+        event.preventDefault();
+        stepCalendar(key === 'j' ? -1 : 1);
+
+        return;
+    }
+
+    if (!event.shiftKey && key === 'c') {
+        event.preventDefault();
+        newTimeblock();
+
+        return;
+    }
+
+    if (event.shiftKey && key === 'd') {
+        event.preventDefault();
+        setHideDeclined(!hideDeclined.value);
+
+        return;
+    }
+
+    if (event.shiftKey && key === 'v') {
+        event.preventDefault();
+        showHidden.value = !showHidden.value;
+
+        return;
+    }
+
+    if (!event.shiftKey && key === 'z') {
+        event.preventDefault();
+        toggleSecondZone();
+
+        return;
+    }
+
+    // ← / → — step to the previous / next period.
+    if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        stepCalendar(-1);
+    } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        stepCalendar(1);
     }
 }
 
@@ -478,29 +576,16 @@ onBeforeUnmount(() => {
                     </DropdownMenuContent>
                 </DropdownMenu>
 
-                <label
+                <button
                     v-if="calendarView !== 'month'"
-                    class="hidden items-center gap-1 text-xs text-muted-foreground sm:flex"
+                    type="button"
+                    class="hidden items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted-foreground hover:bg-muted/60 sm:flex"
+                    title="Secondary timezone (Z)"
+                    @click="timezonePickerOpen = true"
                 >
                     <Globe class="size-3.5" />
-                    <select
-                        :value="secondZone ?? ''"
-                        class="rounded-md border border-border/60 bg-background px-1.5 py-1 text-xs"
-                        @change="
-                            setSecondZone(
-                                ($event.target as HTMLSelectElement).value || null,
-                            )
-                        "
-                    >
-                        <option
-                            v-for="zone in zones"
-                            :key="zone.value"
-                            :value="zone.value"
-                        >
-                            {{ zone.label }}
-                        </option>
-                    </select>
-                </label>
+                    {{ secondZone ? zoneCity(secondZone) : 'Add timezone' }}
+                </button>
 
                 <div
                     class="flex items-center rounded-lg border border-border/60 p-0.5"
@@ -681,6 +766,13 @@ onBeforeUnmount(() => {
 
         <EventDetailPanel />
         <EventEditor />
+        <ShortcutsDialog page="calendar" />
+        <TimezonePicker
+            v-model:open="timezonePickerOpen"
+            :zones="allZones"
+            :current="secondZone"
+            @select="onPickZone"
+        />
         <RecordingIndicator />
     </div>
 </template>

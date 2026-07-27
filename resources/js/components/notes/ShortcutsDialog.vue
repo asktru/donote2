@@ -10,6 +10,11 @@ interface ShortcutGroup {
     shortcuts: [keys: string, description: string][];
 }
 
+/** Each page has its own keys; the dialog is shared. */
+const props = withDefaults(defineProps<{ page?: 'notes' | 'calendar' }>(), {
+    page: 'notes',
+});
+
 const groups: ShortcutGroup[] = [
     {
         title: 'Navigation',
@@ -32,14 +37,6 @@ const groups: ShortcutGroup[] = [
             ['⌥-click token', 'Open in split pane'],
             ['⌘⏎ / ⌘⌥⏎', 'Open token under cursor (main / split)'],
             ['⌘/', 'Show this cheatsheet'],
-        ],
-    },
-    {
-        title: 'Calendar',
-        shortcuts: [
-            ['⌘1 / ⌘2 / ⌘3', 'Day / Week / Month view'],
-            ['← / →', 'Previous / next period'],
-            ['Click an event', 'Open its details panel'],
         ],
     },
     {
@@ -114,6 +111,53 @@ const groups: ShortcutGroup[] = [
     },
 ];
 
+/** The calendar page's own keys — see the calendar spec for the rationale. */
+const calendarGroups: ShortcutGroup[] = [
+    {
+        title: 'Navigation',
+        shortcuts: [
+            ['T', 'Today'],
+            ['D / W / M', 'Day / Week / Month view'],
+            ['⌘1 / ⌘2 / ⌘3', 'Day / Week / Month view'],
+            ['j / k', 'Previous / next period'],
+            ['← / →', 'Previous / next period'],
+            ['⌘⌃1', 'Switch to Notes'],
+        ],
+    },
+    {
+        title: 'Creating',
+        shortcuts: [
+            ['C', 'New timeblock'],
+            ['⌘J', 'Meet with — overlay a colleague’s schedule'],
+        ],
+    },
+    {
+        title: 'Events',
+        shortcuts: [
+            ['N', 'Select the next event from now'],
+            ['↑ / ↓', 'Previous / next event in view'],
+            ['⏎', 'Open the selected event in Google Calendar'],
+            ['Esc', 'Close the event details'],
+            ['H', 'Hide the selected event'],
+            ['⇧H', 'Hide all occurrences of it'],
+            ['Click an event', 'Open its details panel'],
+        ],
+    },
+    {
+        title: 'View',
+        shortcuts: [
+            ['⇧D', 'Toggle hide declined events'],
+            ['⇧V', 'Toggle show hidden events'],
+            ['Z', 'Toggle the secondary timezone'],
+            ['⌘/', 'Show this cheatsheet'],
+        ],
+    },
+];
+
+const shown = computed<ShortcutGroup[]>(() =>
+    props.page === 'calendar' ? calendarGroups : groups,
+);
+
 const query = ref('');
 
 watch(shortcutsOpen, (open) => {
@@ -126,10 +170,10 @@ const filteredGroups = computed<ShortcutGroup[]>(() => {
     const needle = query.value.trim().toLowerCase();
 
     if (needle === '') {
-        return groups;
+        return shown.value;
     }
 
-    return groups
+    return shown.value
         .map((group) => ({
             title: group.title,
             shortcuts: group.shortcuts.filter(
