@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    appendToBody,
     DONE_HEADING_RE,
     ensureDoneSection,
     findDoneHeading,
@@ -219,6 +220,58 @@ describe('liftableBlocks', () => {
         const lines = parseNote(['---', '# Done', '- [x] Tag v1.0'].join('\n'));
 
         expect(liftableBlocks(lines, 1)).toEqual([]);
+    });
+});
+
+describe('appendToBody', () => {
+    it('appends above the Done section, not into it', () => {
+        const note = [
+            '# Launch',
+            '- [ ] Ship it',
+            '',
+            '---',
+            '# Done …',
+            '## Launch',
+            '- [x] Tag v1.0',
+        ].join('\n');
+
+        expect(appendToBody(note, '- [ ] From the agenda').split('\n')).toEqual([
+            '# Launch',
+            '- [ ] Ship it',
+            '',
+            '- [ ] From the agenda',
+            '',
+            '---',
+            '# Done …',
+            '## Launch',
+            '- [x] Tag v1.0',
+        ]);
+    });
+
+    it('appends at the end when there is no section', () => {
+        expect(appendToBody('# Launch\n- [ ] Ship it', '- [ ] New')).toBe(
+            '# Launch\n- [ ] Ship it\n\n- [ ] New\n',
+        );
+    });
+
+    it('handles a note that is nothing but a Done section', () => {
+        const note = ['---', '# Done …', '- [x] Tag v1.0'].join('\n');
+
+        expect(appendToBody(note, '- [ ] New').split('\n')).toEqual([
+            '- [ ] New',
+            '',
+            '---',
+            '# Done …',
+            '- [x] Tag v1.0',
+        ]);
+    });
+
+    it('starts an empty note without a leading blank line', () => {
+        expect(appendToBody('', '- [ ] New')).toBe('- [ ] New\n');
+    });
+
+    it('leaves the note alone when the block is empty', () => {
+        expect(appendToBody('# Launch', '   ')).toBe('# Launch');
     });
 });
 

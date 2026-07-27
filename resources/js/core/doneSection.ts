@@ -255,6 +255,46 @@ export function liftableBlocks(
     return blocks;
 }
 
+/**
+ * Add a block at the end of the note's *body* — above the Done section when
+ * there is one. The section runs to the end of the note, so appending to the
+ * end of the text would file new work straight into the archive, where it is
+ * collapsed out of sight.
+ */
+export function appendToBody(content: string, block: string): string {
+    const trimmed = block.replace(/\s+$/, '');
+
+    if (trimmed === '') {
+        return content;
+    }
+
+    const raw = content.split('\n');
+    const doneStart = findDoneHeading(raw);
+
+    if (doneStart === -1) {
+        const base = content.replace(/\s+$/, '');
+
+        return `${base === '' ? '' : `${base}\n\n`}${trimmed}\n`;
+    }
+
+    // Step back over the marker that introduces the section — the `---` and
+    // the blank line above it belong to it, not to the body.
+    let end = doneStart;
+
+    if (raw[end - 1]?.trim() === '---') {
+        end--;
+    }
+
+    while (end > 0 && raw[end - 1].trim() === '') {
+        end--;
+    }
+
+    const body = raw.slice(0, end).join('\n').replace(/\s+$/, '');
+    const section = raw.slice(end).join('\n').replace(/^\n+/, '');
+
+    return `${body === '' ? '' : `${body}\n\n`}${trimmed}\n\n${section}`;
+}
+
 /** Give the note a Done section if it hasn't got one, collapsed by default. */
 export function ensureDoneSection(content: string): string {
     if (findDoneHeading(content.split('\n')) !== -1) {

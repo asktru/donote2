@@ -2,6 +2,7 @@ import type { EditorView } from '@codemirror/view';
 import { ref } from 'vue';
 
 import { selectionBlock } from '@/components/editor/markdownExtensions';
+import { appendToBody } from '@/core/doneSection';
 import { activeEditor, activeEditorNoteId } from '@/stores/editorRegistry';
 import { searchOpen } from '@/stores/ui';
 import { getNote, updateNoteContent } from '@/stores/workspace';
@@ -70,11 +71,11 @@ export async function completeMoveToNote(destId: string): Promise<void> {
     const dest = getNote(destId);
 
     if (dest !== undefined) {
-        const base = dest.content.replace(/\s+$/, '');
-        const block = move.text.replace(/\s+$/, '');
+        // Above the Done section: moved work is live work, and the section is
+        // collapsed by default — landing in it would look like a vanishing.
         await updateNoteContent(
             destId,
-            `${base === '' ? '' : `${base}\n\n`}${block}\n`,
+            appendToBody(dest.content, move.text),
         );
     }
 

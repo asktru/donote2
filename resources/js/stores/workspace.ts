@@ -4,7 +4,11 @@ import { toast } from 'vue-sonner';
 
 import { kindOfKey, todayDailyKey, todayKey } from '@/core/dates';
 import type { CalendarKind, NoteType } from '@/core/dates';
-import { hasFileableWork, refileCompleted } from '@/core/doneSection';
+import {
+    appendToBody,
+    hasFileableWork,
+    refileCompleted,
+} from '@/core/doneSection';
 import {
     EMPTY_META,
     isReviewDue,
@@ -638,8 +642,9 @@ export async function fetchAgenda(noteId: string): Promise<number> {
         return 0;
     }
 
-    const base = note.content.replace(/\s+$/, '');
-    await updateNoteContent(noteId, `${base}\n\n${appendix}\n`);
+    // Above the Done section, never into it — the section runs to the end of
+    // the note, and it is collapsed by default.
+    await updateNoteContent(noteId, appendToBody(note.content, appendix));
 
     return count;
 }
