@@ -75,7 +75,7 @@ applies to `←`/`→` (input, select and textarea targets).
 | `T` | Today |
 | `D` / `W` / `M` | Day / Week / Month view |
 | `⌘1` / `⌘2` / `⌘3` | Day / Week / Month view (kept) |
-| `j` / `k` | Previous / next period |
+| `j` / `k` | Next / previous period (vim's directions) |
 | `←` / `→` | Previous / next period (kept) |
 | `⌘⌃1` | Back to Notes (kept) |
 

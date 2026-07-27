@@ -119,7 +119,7 @@ const calendarGroups: ShortcutGroup[] = [
             ['T', 'Today'],
             ['D / W / M', 'Day / Week / Month view'],
             ['⌘1 / ⌘2 / ⌘3', 'Day / Week / Month view'],
-            ['j / k', 'Previous / next period'],
+            ['j / k', 'Next / previous period'],
             ['← / →', 'Previous / next period'],
             ['⌘⌃1', 'Switch to Notes'],
         ],

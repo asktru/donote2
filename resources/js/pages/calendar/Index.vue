@@ -457,9 +457,10 @@ function onKeydown(event: KeyboardEvent): void {
         return;
     }
 
+    // j is down/forward, k is up/back — vim's directions, and Vimcal's.
     if (!event.shiftKey && (key === 'j' || key === 'k')) {
         event.preventDefault();
-        stepCalendar(key === 'j' ? -1 : 1);
+        stepCalendar(key === 'j' ? 1 : -1);
 
         return;
     }
