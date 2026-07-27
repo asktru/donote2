@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { nextFromNow, orderEvents, stepEvent } from './eventCursor';
+import {
+    nextFromNow,
+    orderEvents,
+    stepEvent,
+    upcomingEvent,
+} from './eventCursor';
 
 const EVENTS = [
     { key: 'c', start: '2026-07-27T09:00:00Z', title: 'Tuesday standup' },
@@ -26,6 +31,18 @@ describe('orderEvents', () => {
         orderEvents(input);
 
         expect(input.map((event) => event.key)).toEqual(['c', 'a', 'b', 'd']);
+    });
+});
+
+describe('upcomingEvent', () => {
+    it('picks the first event starting at or after now', () => {
+        expect(upcomingEvent(EVENTS, NOW)?.key).toBe('d');
+    });
+
+    it('is null when the range holds no future — the caller looks further', () => {
+        const afterEverything = new Date('2026-07-28T00:00:00Z');
+
+        expect(upcomingEvent(EVENTS, afterEverything)).toBeNull();
     });
 });
 

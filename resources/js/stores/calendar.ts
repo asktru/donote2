@@ -233,6 +233,61 @@ async function fetchApple(startIso: string, endIso: string): Promise<CalendarEve
     }
 }
 
+/**
+ * The soonest event after `from` that the user would actually see, looked up
+ * beyond the visible range without disturbing it — what "jump to my next
+ * event" needs when the next one isn't on screen. Returns null when the
+ * lookahead window holds nothing.
+ */
+export async function nextEventAfter(
+    from: Date,
+    days = 60,
+): Promise<CalendarEvent | null> {
+    const startIso = from.toISOString();
+    const endIso = new Date(
+        from.getTime() + days * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    try {
+        const [google, apple] = await Promise.all([
+            apiFetch<{ events: GoogleEventDto[] }>(
+                `/api/google/events?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`,
+            )
+                .then((res) =>
+                    res.events
+                        .map(mapGoogle)
+                        .filter((e): e is CalendarEvent => e !== null),
+                )
+                .catch(() => [] as CalendarEvent[]),
+            fetchApple(startIso, endIso),
+        ]);
+
+        // The same visibility rules the grid applies, so the jump never lands
+        // on something the user has filtered away.
+        const visible = dedupeEvents([...google, ...apple]).filter(
+            (event) =>
+                !hiddenCalendars.value.has(event.calendarId) &&
+                !(hideDeclined.value && event.responseStatus === 'declined') &&
+                !isEventHidden(event),
+        );
+
+        return (
+            visible
+                .filter(
+                    (event) => new Date(event.start).getTime() > from.getTime(),
+                )
+                .sort(
+                    (a, b) =>
+                        new Date(a.start).getTime() -
+                            new Date(b.start).getTime() ||
+                        a.title.localeCompare(b.title),
+                )[0] ?? null
+        );
+    } catch {
+        return null;
+    }
+}
+
 /** Load events for the currently visible range from Google + Apple. */
 export async function fetchEvents(): Promise<void> {
     const { start, end } = visibleRange.value;

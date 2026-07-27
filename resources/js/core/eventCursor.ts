@@ -23,23 +23,31 @@ export function orderEvents<T extends CursorEvent>(events: T[]): T[] {
 }
 
 /**
+ * The first event starting at or after `now`, or null when the range holds no
+ * future. Answers only from what it is given — the caller decides whether to
+ * look further afield.
+ */
+export function upcomingEvent<T extends CursorEvent>(
+    events: T[],
+    now: Date,
+): T | null {
+    return (
+        orderEvents(events).find(
+            (event) => new Date(event.start).getTime() >= now.getTime(),
+        ) ?? null
+    );
+}
+
+/**
  * The first event starting at or after `now`, falling back to the first in
- * range when the view holds no future — the view is never changed to find
- * one, so this always answers within what the user is looking at.
+ * range when the view holds no future — somewhere to land when the arrow keys
+ * start with nothing selected.
  */
 export function nextFromNow<T extends CursorEvent>(
     events: T[],
     now: Date,
 ): T | null {
-    const ordered = orderEvents(events);
-
-    return (
-        ordered.find(
-            (event) => new Date(event.start).getTime() >= now.getTime(),
-        ) ??
-        ordered[0] ??
-        null
-    );
+    return upcomingEvent(events, now) ?? orderEvents(events)[0] ?? null;
 }
 
 /**

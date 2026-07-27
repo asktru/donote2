@@ -11,6 +11,7 @@ import {
 } from '@lucide/vue';
 import { addDays, startOfDay } from 'date-fns';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { toast } from 'vue-sonner';
 
 import DirectoryAutocomplete from '@/components/calendar/DirectoryAutocomplete.vue';
 import EventDetailPanel from '@/components/calendar/EventDetailPanel.vue';
@@ -30,7 +31,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useSwipe } from '@/composables/useSwipe';
-import { nextFromNow, orderEvents, stepEvent } from '@/core/eventCursor';
+import { orderEvents, stepEvent, upcomingEvent } from '@/core/eventCursor';
 import {
     initNativeTabs,
     nativeTabsActive,
@@ -59,6 +60,7 @@ import {
     hideEvent,
     initCalendarPrefs,
     meetWith,
+    nextEventAfter,
     openEventDetail,
     openEventEditor,
     overlayEvents,
@@ -116,8 +118,22 @@ watch(
 );
 
 // A refetch or a filter change can drop the selected event; don't leave the
-// panel describing something that is no longer on screen.
+// panel describing something that is no longer on screen. A refetch is also
+// where a jumped-to event finally arrives.
 watch(displayEvents, (events) => {
+    if (pendingSelectKey.value !== null) {
+        const arrived = events.find(
+            (event) => event.key === pendingSelectKey.value,
+        );
+
+        if (arrived) {
+            pendingSelectKey.value = null;
+            openEventDetail(arrived);
+
+            return;
+        }
+    }
+
     if (
         selectedEvent.value &&
         !events.some((event) => event.key === selectedEvent.value?.key)
@@ -296,6 +312,40 @@ function selectEvent(event: CalendarEvent | null): void {
 }
 
 /**
+ * An event we have jumped the view to, waiting for its day to load. The
+ * watcher below selects it once it arrives.
+ */
+const pendingSelectKey = ref<string | null>(null);
+
+/**
+ * `N` — the next event from now. When the current view holds no future, look
+ * past it: the next event is usually tomorrow morning, and refusing to leave
+ * today makes the key useless exactly when it is most wanted.
+ */
+async function selectNextEvent(): Promise<void> {
+    const now = new Date();
+    const inView = upcomingEvent(cursorEvents.value, now);
+
+    if (inView) {
+        selectEvent(inView);
+
+        return;
+    }
+
+    const ahead = await nextEventAfter(now);
+
+    if (!ahead) {
+        toast('Nothing else on the calendar in the next 60 days.');
+
+        return;
+    }
+
+    // Jump the view to its day, then select it once the refetch lands.
+    pendingSelectKey.value = ahead.key;
+    anchor.value = startOfDay(new Date(ahead.start));
+}
+
+/**
  * Hide the selected event, then move the cursor on — so H H H clears a run of
  * noise without reaching for the mouse.
  */
@@ -437,7 +487,7 @@ function onKeydown(event: KeyboardEvent): void {
 
     if (!event.shiftKey && key === 'n') {
         event.preventDefault();
-        selectEvent(nextFromNow(cursorEvents.value, new Date()));
+        void selectNextEvent();
 
         return;
     }
@@ -724,6 +774,7 @@ onBeforeUnmount(() => {
                 :anchor-month="anchor.getMonth()"
                 :events="displayEvents"
                 :show-hidden="showHidden"
+                :selected-key="selectedEvent?.key ?? null"
                 @open-event="openEvent"
                 @open-day="openDay"
             />
@@ -735,6 +786,7 @@ onBeforeUnmount(() => {
                 :show-hidden="showHidden"
                 :overlays="overlayEvents"
                 :hide-header="isNarrow && calendarView === 'day'"
+                :selected-key="selectedEvent?.key ?? null"
                 @open-event="openEvent"
                 @create-at="createAt"
             />

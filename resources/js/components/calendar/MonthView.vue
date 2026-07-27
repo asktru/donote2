@@ -14,6 +14,8 @@ const props = defineProps<{
     days: Date[];
     anchorMonth: number;
     events: GridEvent[];
+    /** The event the detail panel is showing, outlined in the grid. */
+    selectedKey?: string | null;
     showHidden?: boolean;
 }>();
 
@@ -151,23 +153,37 @@ const cells = computed(() =>
                                 'flex w-full items-center gap-1 truncate rounded px-1 text-left text-[10px] hover:bg-muted/60',
                                 rsvpClass(event),
                                 isPast(event) && 'opacity-50',
+                                event.key === selectedKey &&
+                                    'ring-2 ring-primary ring-offset-1 ring-offset-background',
                             )
                         "
                         @click="emit('open-event', event)"
                     >
+                        <!-- A declined event's dot is hollow, the small-scale
+                             version of drawing it as an outline. -->
                         <span
                             class="size-1.5 shrink-0 rounded-full"
-                            :style="{
-                                backgroundColor:
-                                    event.eventColor ?? event.color ?? 'var(--primary)',
-                            }"
+                            :style="
+                                event.responseStatus === 'declined'
+                                    ? {
+                                          border: `1.5px solid ${event.eventColor ?? event.color ?? 'var(--primary)'}`,
+                                      }
+                                    : {
+                                          backgroundColor:
+                                              event.eventColor ??
+                                              event.color ??
+                                              'var(--primary)',
+                                      }
+                            "
                         />
+                        <span class="min-w-0 flex-1 truncate">
+                            {{ event.title }}
+                        </span>
                         <Repeat
                             v-if="event.seriesId"
                             class="size-2.5 shrink-0 opacity-60"
                             aria-label="Repeats"
                         />
-                        <span class="truncate">{{ event.title }}</span>
                     </button>
                     <p
                         v-if="cell.overflow > 0"

@@ -31,6 +31,8 @@ const props = defineProps<{
     overlays?: OverlayEvent[];
     /** Hide the per-day date header row (redundant on mobile Day view). */
     hideHeader?: boolean;
+    /** The event the detail panel is showing, outlined in the grid. */
+    selectedKey?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -82,12 +84,28 @@ function fillOf(event: CalendarEvent): string | null {
  */
 function eventStyles(event: CalendarEvent): Record<string, string> {
     const fill = fillOf(event) ?? 'var(--primary)';
-    const styles: Record<string, string> = {
-        backgroundColor: fill,
-        color: readableTextColor(fillOf(event)),
-    };
 
-    if (event.eventColor && event.color && event.eventColor !== event.color) {
+    // A declined event is drawn as an outline with no fill: it reads as
+    // "not yours" at a glance, where a strikethrough on a solid block does
+    // not. Its text takes the calendar's own color.
+    const styles: Record<string, string> =
+        event.responseStatus === 'declined'
+            ? {
+                  backgroundColor: 'transparent',
+                  color: fill,
+                  border: `1.5px solid ${fill}`,
+              }
+            : {
+                  backgroundColor: fill,
+                  color: readableTextColor(fillOf(event)),
+              };
+
+    if (
+        event.responseStatus !== 'declined' &&
+        event.eventColor &&
+        event.color &&
+        event.eventColor !== event.color
+    ) {
         styles.borderLeft = `3px solid ${event.color}`;
     }
 
@@ -101,7 +119,7 @@ function eventStyles(event: CalendarEvent): Record<string, string> {
 function rsvpClass(event: GridEvent): string {
     switch (event.responseStatus) {
         case 'declined':
-            return 'opacity-40 line-through';
+            return 'opacity-80 line-through';
         case 'tentative':
             return 'opacity-70 italic';
         case 'needsAction':
@@ -329,18 +347,21 @@ onMounted(() => {
                     type="button"
                     :class="
                         cn(
-                            'block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px]',
+                            'relative block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px]',
                             rsvpClass(event),
+                            event.key === selectedKey &&
+                                'ring-2 ring-primary ring-offset-1 ring-offset-background',
                         )
                     "
                     :style="eventStyles(event)"
                     @click="emit('open-event', event)"
                 >
+                    {{ event.title }}
                     <Repeat
                         v-if="event.seriesId"
-                        class="mr-0.5 inline size-2.5 shrink-0 opacity-60"
+                        class="absolute right-1 bottom-1 size-2.5 opacity-60"
                         aria-label="Repeats"
-                    />{{ event.title }}
+                    />
                 </button>
             </div>
         </div>
@@ -441,6 +462,8 @@ onMounted(() => {
                             cn(
                                 'absolute flex flex-col items-start gap-0.5 overflow-hidden rounded-md border border-black/10 px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm',
                                 rsvpClass(pos.event),
+                                pos.event.key === selectedKey &&
+                                    'ring-2 ring-primary ring-offset-1 ring-offset-background',
                             )
                         "
                         :style="{
@@ -452,15 +475,15 @@ onMounted(() => {
                         }"
                         @click="emit('open-event', pos.event)"
                     >
-                        <span class="flex min-w-0 items-center gap-0.5 font-semibold">
-                            <Repeat
-                                v-if="pos.event.seriesId"
-                                class="size-2.5 shrink-0 opacity-70"
-                                aria-label="Repeats"
-                            />
-                            <span class="truncate">{{ pos.event.title }}</span>
+                        <span class="w-full truncate font-semibold">
+                            {{ pos.event.title }}
                         </span>
                         <span class="opacity-80">{{ timeLabel(pos.event) }}</span>
+                        <Repeat
+                            v-if="pos.event.seriesId"
+                            class="absolute right-1 bottom-1 size-2.5 opacity-60"
+                            aria-label="Repeats"
+                        />
                     </button>
                 </div>
             </div>
