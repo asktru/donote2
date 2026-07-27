@@ -6,6 +6,7 @@ import {
     Eye,
     EyeOff,
     MapPin,
+    Repeat,
     Video,
     X,
 } from '@lucide/vue';
@@ -95,15 +96,18 @@ const RSVP_CLASS: Record<RsvpStatus, string> = {
 </script>
 
 <template>
-    <div
-        v-if="selectedEvent"
-        class="fixed inset-0 z-50"
-        @click.self="closeEventDetail"
-    >
-        <div class="absolute inset-0 bg-black/20" @click="closeEventDetail" />
+    <template v-if="selectedEvent">
+        <!-- Below lg the panel is a sheet over the grid. From lg it takes
+             width from the grid instead, so an event and its details are
+             visible together — which is what makes arrowing between events
+             bearable. -->
+        <div
+            class="fixed inset-0 z-40 bg-black/20 lg:hidden"
+            @click="closeEventDetail"
+        />
 
         <aside
-            class="absolute inset-x-0 bottom-0 flex max-h-[85%] flex-col rounded-t-2xl border border-border/60 bg-background shadow-2xl sm:inset-y-0 sm:right-0 sm:left-auto sm:max-h-none sm:w-[380px] sm:rounded-none sm:border-y-0 sm:border-r-0 pb-[env(safe-area-inset-bottom)]"
+            class="fixed inset-x-0 bottom-0 z-50 flex max-h-[85%] flex-col rounded-t-2xl border border-border/60 bg-background pb-[env(safe-area-inset-bottom)] shadow-2xl sm:inset-y-0 sm:right-0 sm:left-auto sm:max-h-none sm:w-[380px] sm:rounded-none sm:border-y-0 sm:border-r-0 lg:static lg:z-auto lg:w-[380px] lg:shrink-0 lg:border-y-0 lg:border-r-0 lg:border-l lg:pb-0 lg:shadow-none"
         >
             <header class="flex items-start gap-2 border-b border-border/60 p-4">
                 <span
@@ -132,7 +136,15 @@ const RSVP_CLASS: Record<RsvpStatus, string> = {
             <div class="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 text-sm">
                 <div class="flex items-start gap-2">
                     <CalendarClock class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                    <span>{{ when }}</span>
+                    <span>
+                        {{ when }}
+                        <span
+                            v-if="selectedEvent.seriesId"
+                            class="inline-flex items-center gap-1 text-muted-foreground"
+                        >
+                            · <Repeat class="size-3.5" /> Repeats
+                        </span>
+                    </span>
                 </div>
 
                 <div
@@ -248,5 +260,5 @@ const RSVP_CLASS: Record<RsvpStatus, string> = {
                 </a>
             </footer>
         </aside>
-    </div>
+    </template>
 </template>

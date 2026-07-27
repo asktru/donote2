@@ -49,6 +49,7 @@ import {
     calendarList,
     calendarView,
     clearMeetWith,
+    closeEventDetail,
     displayEvents,
     eventsFailed,
     goToday,
@@ -60,6 +61,7 @@ import {
     openEventEditor,
     overlayEvents,
     secondZone,
+    selectedEvent,
     setCalendarView,
     setHideDeclined,
     setSecondZone,
@@ -279,6 +281,14 @@ function onKeydown(event: KeyboardEvent): void {
         target instanceof HTMLSelectElement ||
         target instanceof HTMLTextAreaElement ||
         target?.isContentEditable === true;
+
+    // Esc — close the event details.
+    if (event.key === 'Escape' && selectedEvent.value) {
+        event.preventDefault();
+        closeEventDetail();
+
+        return;
+    }
 
     // ⌘/ — the cheatsheet.
     if ((event.metaKey || event.ctrlKey) && event.key === '/') {
@@ -610,6 +620,7 @@ onBeforeUnmount(() => {
             </div>
         </header>
 
+        <div class="flex min-h-0 flex-1 overflow-hidden">
         <div class="min-h-0 flex-1 overflow-hidden px-2 py-1" data-cal-body>
             <p
                 v-if="!googleConnected"
@@ -648,6 +659,9 @@ onBeforeUnmount(() => {
                 @open-event="openEvent"
                 @create-at="createAt"
             />
+        </div>
+
+            <EventDetailPanel />
         </div>
 
         <div
@@ -764,7 +778,6 @@ onBeforeUnmount(() => {
             </div>
         </div>
 
-        <EventDetailPanel />
         <EventEditor />
         <ShortcutsDialog page="calendar" />
         <TimezonePicker

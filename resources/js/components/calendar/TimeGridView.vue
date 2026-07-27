@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { Repeat } from '@lucide/vue';
 import {
     addDays,
     addMinutes,
     differenceInMinutes,
     format,
     isSameDay,
+    isWeekend,
     parseISO,
     startOfDay,
 } from 'date-fns';
@@ -211,6 +213,7 @@ const columns = computed(() =>
     props.days.map((day) => ({
         day,
         isToday: isSameDay(day, now.value),
+        isWeekend: isWeekend(day),
         timed: timedFor(day),
         allDay: allDayFor(day),
         overlays: overlaysFor(day),
@@ -282,7 +285,9 @@ onMounted(() => {
             <div
                 v-for="col in columns"
                 :key="col.day.toISOString()"
-                class="flex-1 py-1.5 text-center"
+                :class="
+                    cn('flex-1 py-1.5 text-center', col.isWeekend && 'bg-muted/25')
+                "
             >
                 <div class="text-[11px] text-muted-foreground uppercase">
                     {{ format(col.day, 'EEE') }}
@@ -331,7 +336,11 @@ onMounted(() => {
                     :style="eventStyles(event)"
                     @click="emit('open-event', event)"
                 >
-                    {{ event.title }}
+                    <Repeat
+                        v-if="event.seriesId"
+                        class="mr-0.5 inline size-2.5 shrink-0 opacity-60"
+                        aria-label="Repeats"
+                    />{{ event.title }}
                 </button>
             </div>
         </div>
@@ -362,7 +371,12 @@ onMounted(() => {
                 <div
                     v-for="col in columns"
                     :key="col.day.toISOString()"
-                    class="relative min-w-0 flex-1 border-l border-border/40"
+                    :class="
+                        cn(
+                            'relative min-w-0 flex-1 border-l border-border/40',
+                            col.isWeekend && 'bg-muted/25',
+                        )
+                    "
                     :style="{ height: `${24 * HOUR_HEIGHT}px` }"
                     @click="onColumnClick($event, col.day)"
                 >
@@ -438,7 +452,14 @@ onMounted(() => {
                         }"
                         @click="emit('open-event', pos.event)"
                     >
-                        <span class="font-semibold">{{ pos.event.title }}</span>
+                        <span class="flex min-w-0 items-center gap-0.5 font-semibold">
+                            <Repeat
+                                v-if="pos.event.seriesId"
+                                class="size-2.5 shrink-0 opacity-70"
+                                aria-label="Repeats"
+                            />
+                            <span class="truncate">{{ pos.event.title }}</span>
+                        </span>
                         <span class="opacity-80">{{ timeLabel(pos.event) }}</span>
                     </button>
                 </div>

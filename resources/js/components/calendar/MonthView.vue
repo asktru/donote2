@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { format, isSameDay, parseISO, startOfDay } from 'date-fns';
+import { Repeat } from '@lucide/vue';
+import { format, isSameDay, isWeekend, parseISO, startOfDay } from 'date-fns';
 import { computed } from 'vue';
+
 
 import { useNow } from '@/composables/useNow';
 import { cn } from '@/lib/utils';
@@ -84,6 +86,7 @@ const cells = computed(() =>
         return {
             day,
             inMonth: day.getMonth() === props.anchorMonth,
+            isWeekend: isWeekend(day),
             isToday: isSameDay(day, new Date()),
             chips: dayEvents.slice(0, MAX_CHIPS),
             overflow: Math.max(0, dayEvents.length - MAX_CHIPS),
@@ -111,8 +114,13 @@ const cells = computed(() =>
                 :class="
                     cn(
                         'min-h-0 min-w-0 border-r border-b border-border/30 p-1',
-                        // Recede days from the previous/next month.
-                        cell.inMonth ? 'bg-background' : 'bg-muted/25',
+                        // Recede days from the previous/next month, and rest
+                        // the weekend a shade back from the working week.
+                        cell.inMonth
+                            ? cell.isWeekend
+                                ? 'bg-muted/25'
+                                : 'bg-background'
+                            : 'bg-muted/40',
                     )
                 "
             >
@@ -153,6 +161,11 @@ const cells = computed(() =>
                                 backgroundColor:
                                     event.eventColor ?? event.color ?? 'var(--primary)',
                             }"
+                        />
+                        <Repeat
+                            v-if="event.seriesId"
+                            class="size-2.5 shrink-0 opacity-60"
+                            aria-label="Repeats"
                         />
                         <span class="truncate">{{ event.title }}</span>
                     </button>
