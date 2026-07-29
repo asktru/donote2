@@ -271,6 +271,8 @@ const syncLabel = computed(() => {
             <Link
                 v-if="calendarHref"
                 :href="calendarHref"
+                :prefetch="['mount', 'hover']"
+                :cache-for="['30s', '5m']"
                 class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-foreground/80 hover:bg-muted/70"
             >
                 <CalendarDays class="size-4 shrink-0 text-muted-foreground" />

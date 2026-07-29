@@ -6,6 +6,7 @@ import type { VisibilityRules } from '@/core/eventVisibility';
 import { apiFetch } from '@/lib/api';
 import { fetchEventRange } from '@/lib/calendarFetch';
 import type { CalendarEvent } from '@/lib/calendarFetch';
+import { seedFromHorizon } from '@/stores/eventHorizon';
 
 export type {
     CalendarEvent,
@@ -174,8 +175,9 @@ export async function fetchEvents(): Promise<void> {
         events.value = found;
     } catch {
         if (seq === requestSeq) {
+            // Keep whatever is on screen — cached events with a warning beat
+            // an empty grid, and the banner already says the refresh failed.
             eventsFailed.value = true;
-            events.value = [];
         }
     } finally {
         if (seq === requestSeq) {
@@ -613,6 +615,14 @@ export function watchCalendarRange(): void {
     watch(
         () => [visibleRange.value.start.getTime(), visibleRange.value.end.getTime()],
         () => {
+            // Paint from the cached window first when it covers this range,
+            // so a view switch is instant and the fetch only corrects it.
+            const cached = seedFromHorizon(visibleRange.value);
+
+            if (cached !== null) {
+                events.value = cached;
+            }
+
             void fetchEvents();
             void fetchOverlays();
         },

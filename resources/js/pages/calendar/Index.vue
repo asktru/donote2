@@ -30,6 +30,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useEventHorizon } from '@/composables/useEventHorizon';
 import { useSwipe } from '@/composables/useSwipe';
 import { orderEvents, stepEvent, upcomingEvent } from '@/core/eventCursor';
 import { occurrenceId } from '@/lib/dedupeEvents';
@@ -89,6 +90,11 @@ const props = defineProps<{
     members: TeamMember[];
     googleConnected: boolean;
 }>();
+
+const { hydrated } = useEventHorizon(
+    props.workspace.teamSlug,
+    props.workspace.userId,
+);
 
 const views: { value: 'day' | 'week' | 'month'; label: string }[] = [
     { value: 'day', label: 'Day' },
@@ -558,6 +564,10 @@ function onKeydown(event: KeyboardEvent): void {
 onMounted(async () => {
     setTeamMembers(props.members);
     initCalendarPrefs(props.workspace.teamSlug);
+
+    // The cached window has to be in memory before the range watcher fires,
+    // or its first run has nothing to seed from and the grid starts blank.
+    await hydrated;
     watchCalendarRange();
     window.addEventListener('keydown', onKeydown);
     window.addEventListener('resize', onResize);
@@ -606,6 +616,8 @@ onBeforeUnmount(() => {
             <nav class="flex items-center gap-1 text-sm">
                 <Link
                     :href="notesHref"
+                    :prefetch="['mount', 'hover']"
+                    :cache-for="['30s', '5m']"
                     class="rounded-md px-2 py-1 text-muted-foreground hover:bg-muted/60 sm:px-2.5"
                 >
                     Notes
