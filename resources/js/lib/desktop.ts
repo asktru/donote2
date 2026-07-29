@@ -40,6 +40,8 @@ interface DonoteDesktop {
     };
     /** Open an app-relative path in a new shell window (Cmd-click). */
     openWindow?: (path: string) => Promise<void>;
+    /** Register the handler for the shell's global ⌘⇧J. Last call wins. */
+    onOpenMeet?: (callback: () => void) => void;
 }
 
 export const donoteDesktop: DonoteDesktop | null =

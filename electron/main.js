@@ -4,8 +4,10 @@ const {
     app,
     BrowserWindow,
     desktopCapturer,
+    globalShortcut,
     ipcMain,
     Menu,
+    Notification,
     shell,
 } = require('electron');
 
@@ -279,6 +281,38 @@ ipcMain.handle('apple-calendar:events', (_event, from, to) => {
     return runEventKit(['events', from, to]);
 });
 
+/**
+ * ⌘⇧J joins the meeting you are in or about to be in, from anywhere in
+ * macOS. The main process only forwards the press: the renderer holds the
+ * cached calendar window and picks the target, which keeps that decision in
+ * tested app code rather than here.
+ */
+const MEET_SHORTCUT = 'CommandOrControl+Shift+J';
+
+function notify(body) {
+    if (Notification.isSupported()) {
+        new Notification({ title: 'Donote', body }).show();
+    }
+}
+
+function registerMeetShortcut() {
+    const registered = globalShortcut.register(MEET_SHORTCUT, () => {
+        const win = primaryWindow();
+
+        if (!win) {
+            notify('Donote has no open window.');
+
+            return;
+        }
+
+        win.webContents.send('donote:open-meet');
+    });
+
+    if (!registered) {
+        notify('Another app owns ⌘⇧J, so Donote could not register it.');
+    }
+}
+
 // donote://note/<id> deep links (KnowTabs "open in Donote", shared links).
 // They resolve through the server's /n/<id> redirect, which picks the
 // right team and view. A link arriving before the window exists is held
@@ -339,6 +373,7 @@ if (!hasLock) {
 
     app.whenReady().then(() => {
         buildMenu();
+        registerMeetShortcut();
 
         // A deep link that arrived before launch decides the first window's
         // destination; otherwise open the app root.
@@ -350,6 +385,10 @@ if (!hasLock) {
                 createWindow();
             }
         });
+    });
+
+    app.on('will-quit', () => {
+        globalShortcut.unregisterAll();
     });
 
     app.on('window-all-closed', () => {

@@ -33,6 +33,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useEventHorizon } from '@/composables/useEventHorizon';
+import { useMeetShortcut } from '@/composables/useMeetShortcut';
 import { useSwipe } from '@/composables/useSwipe';
 import { orderEvents, stepEvent, upcomingEvent } from '@/core/eventCursor';
 import { eventMoment } from '@/core/eventWindow';
@@ -98,6 +99,8 @@ const { hydrated } = useEventHorizon(
     props.workspace.teamSlug,
     props.workspace.userId,
 );
+
+useMeetShortcut();
 
 const views: { value: 'day' | 'week' | 'month'; label: string }[] = [
     { value: 'day', label: 'Day' },
