@@ -2,7 +2,15 @@ import Dexie from 'dexie';
 import type { EntityTable } from 'dexie';
 
 import type { NoteType } from '@/core/dates';
+import type { CalendarEvent } from '@/lib/calendarFetch';
 import type { NoteAccess } from '@/lib/noteAccess';
+
+/**
+ * A calendar event kept for offline paint. Stored exactly as fetched — the
+ * cache is a snapshot of a window, replaced wholesale on refresh, never
+ * merged, so an event deleted upstream disappears here too.
+ */
+export type CachedCalendarEvent = CalendarEvent;
 
 export interface LocalNote {
     id: string;
@@ -80,6 +88,7 @@ export type WorkspaceDb = Dexie & {
     meta: EntityTable<MetaEntry, 'key'>;
     reminders: EntityTable<ReminderState, 'key'>;
     memos: EntityTable<MemoRecord, 'id'>;
+    calendarEvents: EntityTable<CachedCalendarEvent, 'key'>;
 };
 
 /** One IndexedDB database per (team, user) workspace. */
@@ -123,6 +132,10 @@ export function openWorkspaceDb(teamSlug: string, userId: number): WorkspaceDb {
                 note.access = note.access ?? 'owner';
             }),
     );
+
+    db.version(5).stores({
+        calendarEvents: 'key, start',
+    });
 
     return db;
 }
