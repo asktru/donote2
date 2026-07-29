@@ -30,7 +30,9 @@ import TrashView from '@/components/notes/TrashView.vue';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useEventHorizon } from '@/composables/useEventHorizon';
 import { hideNativeAccessoryBar } from '@/composables/useKeyboardInset';
+import { useMeetShortcut } from '@/composables/useMeetShortcut';
 import { useSwipe } from '@/composables/useSwipe';
 import { kindOfKey, todayDailyKey, todayKey } from '@/core/dates';
 import type { CalendarKind } from '@/core/dates';
@@ -95,6 +97,11 @@ const props = defineProps<{
     members: TeamMember[];
     googleConnected: boolean;
 }>();
+
+// Notes keeps the shared event window warm too — the global Meet shortcut
+// reads it from whichever section happens to be open.
+useEventHorizon(props.workspace.teamSlug, props.workspace.userId);
+useMeetShortcut();
 
 const ready = workspaceReady();
 const booted = ref(false);
