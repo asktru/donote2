@@ -587,7 +587,7 @@ export interface DisplayEvent extends CalendarEvent {
  * views can render decluttered events as a thin strip.
  */
 /** The visibility rules as they stand right now, for the shared pipeline. */
-function currentVisibility(): VisibilityRules {
+export function currentVisibility(): VisibilityRules {
     return {
         isCalendarHidden: (id) => hiddenCalendars.value.has(id),
         hideDeclined: hideDeclined.value,

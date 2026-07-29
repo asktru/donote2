@@ -5,6 +5,7 @@ import {
     ChevronRight,
     Globe,
     Plus,
+    Search,
     SlidersHorizontal,
     Users,
     X,
@@ -16,6 +17,7 @@ import { toast } from 'vue-sonner';
 import DirectoryAutocomplete from '@/components/calendar/DirectoryAutocomplete.vue';
 import EventDetailPanel from '@/components/calendar/EventDetailPanel.vue';
 import EventEditor from '@/components/calendar/EventEditor.vue';
+import EventSearchDialog from '@/components/calendar/EventSearchDialog.vue';
 import MonthView from '@/components/calendar/MonthView.vue';
 import TimeGridView from '@/components/calendar/TimeGridView.vue';
 import TimezonePicker from '@/components/calendar/TimezonePicker.vue';
@@ -33,6 +35,7 @@ import {
 import { useEventHorizon } from '@/composables/useEventHorizon';
 import { useSwipe } from '@/composables/useSwipe';
 import { orderEvents, stepEvent, upcomingEvent } from '@/core/eventCursor';
+import { eventMoment } from '@/core/eventWindow';
 import { occurrenceId } from '@/lib/dedupeEvents';
 import {
     initNativeTabs,
@@ -221,6 +224,16 @@ function openDay(day: Date): void {
 const HOUR_MS = 60 * 60 * 1000;
 
 const fabOpen = ref(false);
+const eventSearchOpen = ref(false);
+
+/**
+ * Land on a searched event: move the anchor to its day, keep whichever view
+ * is current, and open the detail panel on it.
+ */
+function openSearchResult(event: CalendarEvent): void {
+    anchor.value = startOfDay(new Date(eventMoment(event.start)));
+    openEventDetail(event);
+}
 const meetPickerOpen = ref(false);
 const timezonePickerOpen = ref(false);
 
@@ -457,6 +470,14 @@ function onKeydown(event: KeyboardEvent): void {
     }
 
     if (typing || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+    }
+
+    // / — find an event anywhere in the cached window.
+    if (event.key === '/') {
+        event.preventDefault();
+        eventSearchOpen.value = true;
+
         return;
     }
 
@@ -825,10 +846,10 @@ onBeforeUnmount(() => {
         </div>
 
         <div
-            v-if="googleConnected && !meetPickerOpen && !nativeTabsActive"
+            v-if="!meetPickerOpen && !nativeTabsActive"
             class="fixed right-5 bottom-[calc(1.25rem+var(--bottom-chrome))] z-40 flex flex-col items-end gap-2"
         >
-            <template v-if="fabOpen">
+            <template v-if="googleConnected && fabOpen">
                 <button
                     type="button"
                     class="flex items-center gap-2 rounded-full border border-border/60 bg-background px-3.5 py-2 text-sm font-medium shadow-lg hover:bg-muted/60"
@@ -844,7 +865,19 @@ onBeforeUnmount(() => {
                     <Plus class="size-4" /> New timeblock
                 </button>
             </template>
+            <!-- Search: quick reach on phones, where there's no keyboard. -->
             <button
+                v-if="!fabOpen"
+                type="button"
+                class="flex size-11 items-center justify-center rounded-full border border-border/60 bg-background text-foreground shadow-lg transition-transform hover:scale-105 md:hidden"
+                aria-label="Search events"
+                @click="eventSearchOpen = true"
+            >
+                <Search class="size-5" />
+            </button>
+
+            <button
+                v-if="googleConnected"
                 type="button"
                 :class="
                     cn(
@@ -939,6 +972,10 @@ onBeforeUnmount(() => {
         </div>
 
         <EventEditor />
+        <EventSearchDialog
+            v-model:open="eventSearchOpen"
+            @pick="openSearchResult"
+        />
         <ShortcutsDialog page="calendar" />
         <TimezonePicker
             v-model:open="timezonePickerOpen"

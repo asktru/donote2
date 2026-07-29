@@ -117,6 +117,7 @@ const calendarGroups: ShortcutGroup[] = [
         title: 'Navigation',
         shortcuts: [
             ['T', 'Today'],
+            ['/', 'Search events'],
             ['D / W / M', 'Day / Week / Month view'],
             ['⌘1 / ⌘2 / ⌘3', 'Day / Week / Month view'],
             ['j / k', 'Next / previous period'],
