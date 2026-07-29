@@ -130,6 +130,8 @@ const calendarGroups: ShortcutGroup[] = [
         shortcuts: [
             ['C', 'New timeblock'],
             ['⌘J', 'Meet with — overlay a colleague’s schedule'],
+            ['↑ / ↓ then ⏎', 'Pick from the Meet-with suggestions'],
+            ['Esc', 'Clear everyone, then close Meet with'],
         ],
     },
     {

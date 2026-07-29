@@ -12,8 +12,8 @@ import {
 } from 'date-fns';
 import { computed, onMounted, ref } from 'vue';
 
-import { layoutDayColumns } from '@/core/calendarLayout';
 import { readableTextColor } from '@/core/color';
+import { layoutSharedDay } from '@/core/dayGrid';
 import { cn } from '@/lib/utils';
 import type { CalendarEvent, OverlayEvent } from '@/stores/calendar';
 
@@ -27,7 +27,7 @@ const props = defineProps<{
     secondZone?: string | null;
     /** Render hidden events normally (dimmed) instead of as a thin strip. */
     showHidden?: boolean;
-    /** Colleague schedules ("Meet with") drawn as a translucent backdrop. */
+    /** Colleague schedules ("Meet with"), laid out alongside the user's own. */
     overlays?: OverlayEvent[];
     /** Hide the per-day date header row (redundant on mobile Day view). */
     hideHeader?: boolean;
@@ -139,6 +139,14 @@ interface PositionedEvent {
     widthPct: number;
 }
 
+interface OverlayBlock {
+    event: OverlayEvent;
+    top: number;
+    height: number;
+    leftPct: number;
+    widthPct: number;
+}
+
 interface StripEvent {
     event: GridEvent;
     top: number;
@@ -146,12 +154,25 @@ interface StripEvent {
     offset: number;
 }
 
-/** Timed events for a day, split into laid-out blocks and declutter strips. */
-function timedFor(day: Date): { blocks: PositionedEvent[]; strips: StripEvent[] } {
+interface DaySpan<T> {
+    event: T;
+    startMin: number;
+    endMin: number;
+}
+
+/**
+ * Minute offsets within `day` for the events that touch it, clamped to the
+ * day's edges and given a floor so a 5-minute event is still clickable.
+ */
+function spansFor<T extends { allDay: boolean; start: string; end: string }>(
+    events: T[],
+    day: Date,
+    minMinutes: number,
+): DaySpan<T>[] {
     const dayStart = startOfDay(day);
     const dayEnd = addDays(dayStart, 1);
 
-    const items = props.events
+    return events
         .filter((event) => !event.allDay)
         .map((event) => ({ event, start: parseISO(event.start), end: parseISO(event.end) }))
         .filter(({ start, end }) => start < dayEnd && end > dayStart)
@@ -159,8 +180,31 @@ function timedFor(day: Date): { blocks: PositionedEvent[]; strips: StripEvent[] 
             const startMin = Math.max(0, differenceInMinutes(start, dayStart));
             const endMin = Math.min(1440, differenceInMinutes(end, dayStart));
 
-            return { event, startMin, endMin: Math.max(endMin, startMin + 20) };
+            return { event, startMin, endMin: Math.max(endMin, startMin + minMinutes) };
         });
+}
+
+function box<T>(span: DaySpan<T> & { lane: number; lanes: number }) {
+    return {
+        event: span.event,
+        top: (span.startMin / 60) * HOUR_HEIGHT,
+        height: ((span.endMin - span.startMin) / 60) * HOUR_HEIGHT,
+        leftPct: (span.lane / span.lanes) * 100,
+        widthPct: (1 / span.lanes) * 100,
+    };
+}
+
+/**
+ * A day's timed content: the user's blocks, the overlaid colleague blocks, and
+ * the declutter strips. Own and overlaid events share one lane set, so a
+ * colleague's meeting that collides with the user's sits beside it.
+ */
+function timedFor(day: Date): {
+    blocks: PositionedEvent[];
+    overlays: OverlayBlock[];
+    strips: StripEvent[];
+} {
+    const items = spansFor(props.events, day, 20);
 
     const strips = items
         .filter((item) => isStripped(item.event))
@@ -171,48 +215,16 @@ function timedFor(day: Date): { blocks: PositionedEvent[]; strips: StripEvent[] 
             offset,
         }));
 
-    const blocks = layoutDayColumns(items.filter((item) => !isStripped(item.event))).map(
-        ({ item, lane, lanes }) => ({
-            event: item.event,
-            top: (item.startMin / 60) * HOUR_HEIGHT,
-            height: ((item.endMin - item.startMin) / 60) * HOUR_HEIGHT,
-            leftPct: (lane / lanes) * 100,
-            widthPct: (1 / lanes) * 100,
-        }),
+    const laid = layoutSharedDay(
+        items.filter((item) => !isStripped(item.event)),
+        spansFor(props.overlays ?? [], day, 15),
     );
 
-    return { blocks, strips };
-}
-
-interface OverlayBlock {
-    event: OverlayEvent;
-    top: number;
-    height: number;
-}
-
-/** Colleague busy/events for a day, as a translucent backdrop. */
-function overlaysFor(day: Date): OverlayBlock[] {
-    if (!props.overlays || props.overlays.length === 0) {
-        return [];
-    }
-
-    const dayStart = startOfDay(day);
-    const dayEnd = addDays(dayStart, 1);
-
-    return props.overlays
-        .filter((event) => !event.allDay)
-        .map((event) => ({ event, start: parseISO(event.start), end: parseISO(event.end) }))
-        .filter(({ start, end }) => start < dayEnd && end > dayStart)
-        .map(({ event, start, end }) => {
-            const startMin = Math.max(0, differenceInMinutes(start, dayStart));
-            const endMin = Math.min(1440, differenceInMinutes(end, dayStart));
-
-            return {
-                event,
-                top: (startMin / 60) * HOUR_HEIGHT,
-                height: ((Math.max(endMin, startMin + 15) - startMin) / 60) * HOUR_HEIGHT,
-            };
-        });
+    return {
+        blocks: laid.mine.map(box),
+        overlays: laid.overlays.map(box),
+        strips,
+    };
 }
 
 /** All-day events covering a given day (decluttered ones dropped). */
@@ -236,7 +248,6 @@ const columns = computed(() =>
         isWeekend: isWeekend(day),
         timed: timedFor(day),
         allDay: allDayFor(day),
-        overlays: overlaysFor(day),
     })),
 );
 
@@ -420,17 +431,24 @@ onMounted(() => {
                         />
                     </div>
 
-                    <!-- Meet-with: colleague schedules as a translucent backdrop. -->
+                    <!--
+                        Meet-with: a colleague's schedule reads as another of
+                        the user's own calendars — solid, and given its own lane
+                        beside anything of theirs it collides with. Clicks still
+                        pass through to the column, so tapping one of these
+                        blocks proposes a meeting at that time.
+                    -->
                     <div
-                        v-for="ov in col.overlays"
+                        v-for="ov in col.timed.overlays"
                         :key="ov.event.key"
-                        class="pointer-events-none absolute inset-x-0.5 overflow-hidden rounded-md border-l-2 px-1 py-0.5 text-[10px] leading-tight"
+                        class="pointer-events-none absolute overflow-hidden rounded-md border border-black/10 px-1 py-0.5 text-[10px] leading-tight shadow-sm"
                         :style="{
                             top: `${ov.top}px`,
                             height: `${ov.height}px`,
-                            backgroundColor: `${ov.event.color}26`,
-                            borderColor: ov.event.color,
-                            color: ov.event.color,
+                            left: `calc(${ov.leftPct}% + 1px)`,
+                            width: `calc(${ov.widthPct}% - 2px)`,
+                            backgroundColor: ov.event.color,
+                            color: readableTextColor(ov.event.color),
                         }"
                         :title="`${ov.event.personName}: ${ov.event.title}`"
                     >

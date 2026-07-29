@@ -160,6 +160,16 @@ function busyStyle(interval: BusyInterval, day: Date): Record<string, string> {
     };
 }
 
+/**
+ * Hover text for a busy block: when and what. A colleague whose calendar isn't
+ * shared with the user has no title to show, so it stays "Busy".
+ */
+function busyLabel(interval: BusyInterval): string {
+    const when = `${format(parseISO(interval.start), 'HH:mm')}–${format(parseISO(interval.end), 'HH:mm')}`;
+
+    return `${when} · ${interval.title ?? 'Busy'}`;
+}
+
 const availabilityDay = computed<Date>(() => {
     const ref_ = allDay.value ? startDate.value : startLocal.value;
 
@@ -339,9 +349,14 @@ async function save(): Promise<void> {
                         </span>
                     </div>
                     <div class="mt-1">
+                        <!--
+                            The field swallows Esc to drop its own query, so
+                            close the dialog here once it has nothing left.
+                        -->
                         <DirectoryAutocomplete
                             placeholder="Invite by name or email…"
                             @add="(email) => addInvitee(email)"
+                            @escape="(cleared) => !cleared && closeEventEditor()"
                         />
                     </div>
                     <div
@@ -381,10 +396,11 @@ async function save(): Promise<void> {
                                 :key="index"
                                 class="absolute inset-y-0 rounded-sm bg-muted-foreground/50"
                                 :style="busyStyle(interval, availabilityDay)"
+                                :title="busyLabel(interval)"
                             />
                             <span
                                 v-if="slotStyle"
-                                class="absolute inset-y-0 rounded-sm border border-primary bg-primary/30"
+                                class="pointer-events-none absolute inset-y-0 rounded-sm border border-primary bg-primary/30"
                                 :style="slotStyle"
                             />
                         </div>

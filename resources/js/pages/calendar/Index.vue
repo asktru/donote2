@@ -37,6 +37,7 @@ import { useMeetShortcut } from '@/composables/useMeetShortcut';
 import { useSwipe } from '@/composables/useSwipe';
 import { orderEvents, stepEvent, upcomingEvent } from '@/core/eventCursor';
 import { eventMoment } from '@/core/eventWindow';
+import { meetWithEscape } from '@/core/meetWith';
 import { occurrenceId } from '@/lib/dedupeEvents';
 import {
     initNativeTabs,
@@ -239,6 +240,24 @@ function openSearchResult(event: CalendarEvent): void {
 }
 const meetPickerOpen = ref(false);
 const timezonePickerOpen = ref(false);
+
+/**
+ * Esc in the Meet-with field: undo the search — the component has already
+ * dropped its query, so this drops the overlaid people to match "Clear
+ * everyone" — and only close the panel once there is nothing left to undo.
+ */
+function onMeetEscape(cleared: boolean): void {
+    if (
+        meetWithEscape({ typed: cleared, selected: meetWith.value.length }) ===
+        'clear'
+    ) {
+        clearMeetWith();
+
+        return;
+    }
+
+    meetPickerOpen.value = false;
+}
 
 /** The zone `Z` restores after switching the rail off. */
 const lastSecondZone = ref<string | null>(secondZone.value);
@@ -944,7 +963,16 @@ onBeforeUnmount(() => {
                     </span>
                 </div>
 
-                <DirectoryAutocomplete @add="addMeetPerson" />
+                <!--
+                    Opening the panel is always a prelude to typing a name, so
+                    take the focus — except on phones, where that throws up a
+                    keyboard over the schedule the panel exists to show.
+                -->
+                <DirectoryAutocomplete
+                    :autofocus="!isNarrow"
+                    @add="addMeetPerson"
+                    @escape="onMeetEscape"
+                />
 
                 <div v-if="colleagueSuggestions.length > 0">
                     <p class="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
