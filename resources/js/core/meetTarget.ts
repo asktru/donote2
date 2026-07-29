@@ -17,6 +17,8 @@ export interface MeetCandidate {
     end: string;
     allDay: boolean;
     hangoutLink: string | null;
+    /** The user's own RSVP; a declined meeting is not one they are joining. */
+    responseStatus?: string | null;
 }
 
 /** Timed events that actually have somewhere to join. */
@@ -24,6 +26,7 @@ function joinable<T extends MeetCandidate>(events: T[]): T[] {
     return events.filter(
         (event) =>
             !event.allDay &&
+            event.responseStatus !== 'declined' &&
             event.hangoutLink !== null &&
             event.hangoutLink !== '',
     );

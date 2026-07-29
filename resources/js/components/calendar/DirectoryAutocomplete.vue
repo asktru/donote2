@@ -1,21 +1,36 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 
+import { wrapIndex } from '@/core/listCursor';
 import { searchDirectory } from '@/stores/calendar';
 import type { DirectoryPerson } from '@/stores/calendar';
 
-withDefaults(defineProps<{ placeholder?: string }>(), {
-    placeholder: 'Search colleagues by name or email…',
-});
+const props = withDefaults(
+    defineProps<{ placeholder?: string; autofocus?: boolean }>(),
+    {
+        placeholder: 'Search colleagues by name or email…',
+        autofocus: false,
+    },
+);
 
-const emit = defineEmits<{ add: [email: string, name: string] }>();
+const emit = defineEmits<{
+    add: [email: string, name: string];
+    /**
+     * Esc was pressed. `cleared` says whether this press threw away a query of
+     * our own, so the parent can decide between clearing more and closing.
+     */
+    escape: [cleared: boolean];
+}>();
 
 const root = ref<HTMLElement>();
+const field = ref<HTMLInputElement>();
 const query = ref('');
 const suggestions = ref<DirectoryPerson[]>([]);
 const open = ref(false);
 const loading = ref(false);
 const error = ref<string | null>(null);
+/** Which suggestion the arrow keys have highlighted. */
+const highlighted = ref(0);
 // Flip the panel above the input when there isn't room below (the Meet-with
 // picker docks at the bottom of the window, so "down" would overflow it).
 const dropUp = ref(false);
@@ -39,6 +54,12 @@ function reveal(): void {
     open.value = true;
 }
 
+onMounted(() => {
+    if (props.autofocus) {
+        field.value?.focus();
+    }
+});
+
 watch(query, (value) => {
     const q = value.trim();
 
@@ -50,6 +71,7 @@ watch(query, (value) => {
         suggestions.value = [];
         open.value = false;
         error.value = null;
+        highlighted.value = 0;
 
         return;
     }
@@ -63,6 +85,7 @@ watch(query, (value) => {
             suggestions.value = result.people;
             error.value = result.error;
             loading.value = false;
+            highlighted.value = 0;
             reveal();
         }
     }, 250);
@@ -73,10 +96,12 @@ function pick(person: DirectoryPerson): void {
     reset();
 }
 
-/** Enter: accept the top suggestion, or a raw email if one was typed. */
+/** Enter: accept the highlighted suggestion, or a raw email if one was typed. */
 function onEnter(): void {
-    if (suggestions.value.length > 0) {
-        pick(suggestions.value[0]);
+    const chosen = suggestions.value[highlighted.value];
+
+    if (chosen) {
+        pick(chosen);
 
         return;
     }
@@ -89,13 +114,56 @@ function onEnter(): void {
     }
 }
 
+/** ↑ / ↓ walk the suggestions, opening the popover if it was dismissed. */
+function onArrow(delta: number): void {
+    if (suggestions.value.length === 0) {
+        return;
+    }
+
+    if (!open.value) {
+        reveal();
+
+        return;
+    }
+
+    highlighted.value = wrapIndex(
+        highlighted.value,
+        delta,
+        suggestions.value.length,
+    );
+}
+
+/**
+ * Esc undoes our own state first — the query and the popover — and reports
+ * whether it had anything to undo so the parent can take the next step.
+ */
+function onEsc(event: KeyboardEvent): void {
+    const cleared = query.value !== '' || open.value;
+
+    // Consumed either way: nothing above should also act on this press.
+    event.preventDefault();
+    event.stopPropagation();
+    reset();
+    emit('escape', cleared);
+}
+
 function reset(): void {
     query.value = '';
     suggestions.value = [];
     open.value = false;
     loading.value = false;
     error.value = null;
+    highlighted.value = 0;
 }
+
+// Keep the highlight visible when the list has scrolled past it.
+watch(highlighted, (index) => {
+    const list = root.value?.querySelector('ul');
+
+    (list?.children[index] as HTMLElement | undefined)?.scrollIntoView({
+        block: 'nearest',
+    });
+});
 
 /** Delay close so a suggestion click (mousedown) registers first. */
 function onBlur(): void {
@@ -108,6 +176,7 @@ function onBlur(): void {
 <template>
     <div ref="root" class="relative">
         <input
+            ref="field"
             v-model="query"
             type="text"
             autocapitalize="off"
@@ -116,7 +185,9 @@ function onBlur(): void {
             :placeholder="placeholder"
             class="h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
             @keydown.enter.prevent="onEnter"
-            @keydown.esc="open = false"
+            @keydown.down.prevent="onArrow(1)"
+            @keydown.up.prevent="onArrow(-1)"
+            @keydown.esc="onEsc"
             @focus="suggestions.length > 0 && reveal()"
             @blur="onBlur"
         />
@@ -128,10 +199,14 @@ function onBlur(): void {
                 dropUp ? 'bottom-full mb-1' : 'top-full mt-1',
             ]"
         >
-            <li v-for="person in suggestions" :key="person.email">
+            <li v-for="(person, index) in suggestions" :key="person.email">
                 <button
                     type="button"
-                    class="flex w-full flex-col items-start px-2.5 py-1.5 text-left hover:bg-muted/60"
+                    :class="[
+                        'flex w-full flex-col items-start px-2.5 py-1.5 text-left',
+                        index === highlighted ? 'bg-muted' : 'hover:bg-muted/60',
+                    ]"
+                    @mouseenter="highlighted = index"
                     @mousedown.prevent="pick(person)"
                 >
                     <span class="text-sm">{{ person.name }}</span>

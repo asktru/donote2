@@ -342,9 +342,22 @@ export async function fetchOverlays(): Promise<void> {
 export interface BusyInterval {
     start: string;
     end: string;
+    /**
+     * What the invitee is doing then, when their calendar is shared with the
+     * user. Null when only free/busy came back, so the UI shows "Busy" rather
+     * than implying it knows more than it does.
+     */
+    title: string | null;
 }
 
-/** Free/busy for a set of invitees (meeting availability preview). */
+/**
+ * An invitee's schedule for the availability preview: named blocks where their
+ * calendar is shared with the user, anonymous busy blocks where it isn't.
+ *
+ * The overlay endpoint is what knows the difference — one request per person,
+ * degrading to free/busy on its own — so this asks it per invitee rather than
+ * batching a titleless free/busy query for all of them.
+ */
 export async function fetchInviteeBusy(
     emails: string[],
     start: string,
@@ -354,12 +367,47 @@ export async function fetchInviteeBusy(
         return {};
     }
 
-    const res = await apiFetch<{ busy: Record<string, BusyInterval[]> }>(
-        '/api/google/freebusy',
-        { method: 'POST', body: JSON.stringify({ emails, start, end }) },
+    const results = await Promise.all(
+        emails.map((email) =>
+            apiFetch<OverlayDto>(
+                `/api/google/overlay?email=${encodeURIComponent(email)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
+            )
+                .then((dto) => ({ email, dto }))
+                .catch(() => null),
+        ),
     );
 
-    return res.busy ?? {};
+    const byEmail: Record<string, BusyInterval[]> = {};
+
+    for (const result of results) {
+        if (result === null) {
+            continue;
+        }
+
+        const { email, dto } = result;
+
+        byEmail[email] =
+            dto.shared && dto.events
+                ? dto.events
+                      .filter(
+                          (event) =>
+                              !event.all_day &&
+                              event.start !== null &&
+                              event.end !== null,
+                      )
+                      .map((event) => ({
+                          start: event.start as string,
+                          end: event.end as string,
+                          title: event.summary || null,
+                      }))
+                : (dto.busy ?? []).map((slot) => ({
+                      start: slot.start,
+                      end: slot.end,
+                      title: null,
+                  }));
+    }
+
+    return byEmail;
 }
 
 export interface DirectoryPerson {

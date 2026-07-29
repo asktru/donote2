@@ -9,8 +9,9 @@ function candidate(
     end: string,
     link: string | null = 'https://meet.google.com/abc',
     allDay = false,
+    responseStatus = 'accepted',
 ) {
-    return { start, end, allDay, hangoutLink: link };
+    return { start, end, allDay, hangoutLink: link, responseStatus };
 }
 
 describe('pickMeetEvent', () => {
@@ -85,6 +86,54 @@ describe('pickMeetEvent', () => {
         ];
 
         expect(pickMeetEvent(events, NOW)).toBeNull();
+    });
+
+    it('skips a declined meeting in progress in favour of one you accepted', () => {
+        const events = [
+            candidate(
+                '2026-07-15T11:45:00Z',
+                '2026-07-15T12:15:00Z',
+                'https://meet.google.com/declined',
+                false,
+                'declined',
+            ),
+            candidate(
+                '2026-07-15T12:20:00Z',
+                '2026-07-15T12:50:00Z',
+                'https://meet.google.com/ok',
+            ),
+        ];
+
+        expect(pickMeetEvent(events, NOW)?.hangoutLink).toBe(
+            'https://meet.google.com/ok',
+        );
+    });
+
+    it('returns null when the only meeting in the window is declined', () => {
+        const events = [
+            candidate(
+                '2026-07-15T12:10:00Z',
+                '2026-07-15T12:40:00Z',
+                'https://meet.google.com/nope',
+                false,
+                'declined',
+            ),
+        ];
+
+        expect(pickMeetEvent(events, NOW)).toBeNull();
+    });
+
+    it('still joins a meeting with no RSVP of its own', () => {
+        const events = [
+            {
+                start: '2026-07-15T12:10:00Z',
+                end: '2026-07-15T12:40:00Z',
+                allDay: false,
+                hangoutLink: 'https://meet.google.com/solo',
+            },
+        ];
+
+        expect(pickMeetEvent(events, NOW)).not.toBeNull();
     });
 
     it('ignores all-day events', () => {
