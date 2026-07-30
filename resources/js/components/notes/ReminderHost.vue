@@ -23,6 +23,7 @@ import {
     workspaceConfig,
     isArchivedNote,
     liveNotes,
+    noteDayKey,
     parsedNote,
     rewriteReminderToken,
     toggleTaskLine,
@@ -51,6 +52,7 @@ function liveCandidates(): Map<string, ReminderCandidate> {
         for (const candidate of reminderCandidates(
             note.id,
             parsedNote(note.id),
+            noteDayKey(note),
         )) {
             live.set(reminderSlot(candidate), candidate);
         }

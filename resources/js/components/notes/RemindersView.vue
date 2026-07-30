@@ -19,6 +19,7 @@ import type { ReminderState, WorkspaceDb } from '@/stores/db';
 import {
     isArchivedNote,
     liveNotes,
+    noteDayKey,
     parsedNote,
     toggleTaskLine,
     workspaceConfig,
@@ -53,7 +54,13 @@ const rows = computed<ReminderCandidate[]>(() => {
             continue;
         }
 
-        candidates.push(...reminderCandidates(note.id, parsedNote(note.id)));
+        candidates.push(
+            ...reminderCandidates(
+                note.id,
+                parsedNote(note.id),
+                noteDayKey(note),
+            ),
+        );
     }
 
     return candidates.sort((a, b) => a.at.getTime() - b.at.getTime());

@@ -5,14 +5,9 @@ import MobileSidebarButton from '@/components/notes/MobileSidebarButton.vue';
 import TaskTitle from '@/components/notes/TaskTitle.vue';
 
 import { Button } from '@/components/ui/button';
-import {
-    humanizeKey,
-    keyRange,
-    keyStartDate,
-    todayDailyKey,
-    todayKey,
-} from '@/core/dates';
+import { humanizeKey, keyStartDate, todayDailyKey } from '@/core/dates';
 import { priorityColor } from '@/core/priority';
+import { groupTasksByDate, OVERDUE_LABEL } from '@/core/taskGroups';
 import { cn } from '@/lib/utils';
 import {
     isArchivedNote,
@@ -143,45 +138,12 @@ function sortTasks(tasks: WorkspaceTask[]): WorkspaceTask[] {
     });
 }
 
-const groups = computed<TaskGroup[]>(() => {
-    const now = keyStartDate(todayDailyKey()).getTime();
-    const thisWeekEnd = keyRange(todayKey('weekly')).end.getTime();
-
-    const overdue: WorkspaceTask[] = [];
-    const today: WorkspaceTask[] = [];
-    const week: WorkspaceTask[] = [];
-    const later: WorkspaceTask[] = [];
-    const someday: WorkspaceTask[] = [];
-
-    for (const task of filtered.value) {
-        const day = taskDayKey(task);
-
-        if (day === null) {
-            someday.push(task);
-            continue;
-        }
-
-        const range = keyRange(day);
-
-        if (range.end.getTime() <= now) {
-            overdue.push(task);
-        } else if (range.start.getTime() <= now && now < range.end.getTime()) {
-            today.push(task);
-        } else if (range.start.getTime() < thisWeekEnd) {
-            week.push(task);
-        } else {
-            later.push(task);
-        }
-    }
-
-    return [
-        { label: 'Overdue', tasks: sortTasks(overdue) },
-        { label: 'Today', tasks: sortTasks(today) },
-        { label: 'This week', tasks: sortTasks(week) },
-        { label: 'Later', tasks: sortTasks(later) },
-        { label: 'No date', tasks: sortTasks(someday) },
-    ].filter((group) => group.tasks.length > 0);
-});
+const groups = computed<TaskGroup[]>(() =>
+    groupTasksByDate(filtered.value, taskDayKey).map((section) => ({
+        label: section.label,
+        tasks: sortTasks(section.items),
+    })),
+);
 
 function noteLabel(task: WorkspaceTask): string {
     if (task.note.type !== 'note' && task.note.dateKey !== null) {
@@ -300,7 +262,7 @@ function dueLabel(task: WorkspaceTask): string | null {
                     :class="
                         cn(
                             'mb-1.5 text-[11px] font-semibold tracking-wide uppercase',
-                            group.label === 'Overdue'
+                            group.label === OVERDUE_LABEL
                                 ? 'text-destructive'
                                 : 'text-muted-foreground',
                         )
