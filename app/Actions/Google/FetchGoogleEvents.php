@@ -41,7 +41,13 @@ class FetchGoogleEvents
      */
     public function execute(User $user, Carbon $start, Carbon $end): array
     {
-        $cacheKey = sprintf('google-events:%d:%s:%s', $user->id, $start->toDateString(), $end->toDateString());
+        $cacheKey = sprintf(
+            'google-events:%d:%d:%s:%s',
+            $user->id,
+            self::generation($user),
+            $start->toDateString(),
+            $end->toDateString(),
+        );
 
         return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($user, $start, $end): array {
             return $user->googleAccounts()
@@ -51,6 +57,37 @@ class FetchGoogleEvents
                 ->values()
                 ->all();
         });
+    }
+
+    /**
+     * Writing to a calendar has to beat the five-minute read cache, or the
+     * refresh that follows a create, an edit, or an RSVP hands back the
+     * window as it was before the write. Bumping a per-user generation
+     * orphans every cached range at once; the stale entries age out on their
+     * own TTL, so nothing has to enumerate keys.
+     */
+    public static function invalidate(User $user): void
+    {
+        $key = self::generationKey($user);
+
+        // Cache::increment on a missing key is driver-dependent; seed it.
+        if (Cache::get($key) === null) {
+            Cache::forever($key, 1);
+
+            return;
+        }
+
+        Cache::increment($key);
+    }
+
+    protected static function generation(User $user): int
+    {
+        return (int) Cache::get(self::generationKey($user), 0);
+    }
+
+    protected static function generationKey(User $user): string
+    {
+        return 'google-events-gen:'.$user->id;
     }
 
     /**

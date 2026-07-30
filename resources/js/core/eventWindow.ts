@@ -37,6 +37,31 @@ export function eventMoment(value: string): number {
     return Date.parse(value);
 }
 
+/**
+ * Whether an event is over. A timed event is past once it has ended; an
+ * all-day event once its (exclusive) end date has arrived — so an all-day
+ * event is still current throughout its last day.
+ *
+ * The grid, the month chips, and search all fade past events, and the pending
+ * invitations list ignores them; one rule keeps those four in agreement.
+ */
+export function eventHasPassed(
+    event: { allDay: boolean; end: string },
+    now: Date,
+): boolean {
+    if (event.allDay) {
+        const midnight = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+        ).getTime();
+
+        return eventMoment(event.end) <= midnight;
+    }
+
+    return eventMoment(event.end) < now.getTime();
+}
+
 /** Events overlapping `[range.start, range.end)` — the end is exclusive. */
 export function eventsInRange<T extends WindowEvent>(
     events: T[],

@@ -6,7 +6,7 @@ import { computed, ref, watch } from 'vue';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { searchEvents } from '@/core/eventSearch';
 import { visibleEvents } from '@/core/eventVisibility';
-import { eventMoment } from '@/core/eventWindow';
+import { eventHasPassed, eventMoment } from '@/core/eventWindow';
 import type { CalendarEvent } from '@/lib/calendarFetch';
 import { cn } from '@/lib/utils';
 import { currentVisibility } from '@/stores/calendar';
@@ -46,6 +46,11 @@ watch(open, (isOpen) => {
 watch(results, () => {
     highlighted.value = 0;
 });
+
+/** A hit that has already happened is muted, exactly as it is on the grid. */
+function isPast(event: CalendarEvent): boolean {
+    return eventHasPassed(event, new Date());
+}
 
 /** "in 2 hours" / "3 days ago", plus the clock time for a same-day hit. */
 function when(event: CalendarEvent): string {
@@ -112,6 +117,7 @@ function onKeydown(event: KeyboardEvent): void {
                             index === highlighted
                                 ? 'bg-muted'
                                 : 'hover:bg-muted/60',
+                            isPast(event) && 'opacity-50',
                         )
                     "
                     @mouseenter="highlighted = index"

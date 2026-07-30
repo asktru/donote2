@@ -14,6 +14,7 @@ import { computed, onMounted, ref } from 'vue';
 
 import { readableTextColor } from '@/core/color';
 import { layoutSharedDay } from '@/core/dayGrid';
+import { eventHasPassed } from '@/core/eventWindow';
 import { cn } from '@/lib/utils';
 import type { CalendarEvent, OverlayEvent } from '@/stores/calendar';
 
@@ -61,16 +62,11 @@ function isStripped(event: GridEvent): boolean {
 }
 
 /**
- * Past events read as muted so the eye lands on what's still ahead. A timed
- * event is past once it has ended; an all-day event once its (exclusive) end
- * date has arrived. Reactive on `now`, so blocks dim as the day advances.
+ * Past events read as muted so the eye lands on what's still ahead.
+ * Reactive on `now`, so blocks dim as the day advances.
  */
 function isPast(event: CalendarEvent): boolean {
-    if (event.allDay) {
-        return parseAllDay(event.end) <= startOfDay(now.value);
-    }
-
-    return parseISO(event.end) < now.value;
+    return eventHasPassed(event, now.value);
 }
 
 /** RSVP-derived styling: dim declined, soften tentative, outline pending. */
@@ -174,13 +170,21 @@ function spansFor<T extends { allDay: boolean; start: string; end: string }>(
 
     return events
         .filter((event) => !event.allDay)
-        .map((event) => ({ event, start: parseISO(event.start), end: parseISO(event.end) }))
+        .map((event) => ({
+            event,
+            start: parseISO(event.start),
+            end: parseISO(event.end),
+        }))
         .filter(({ start, end }) => start < dayEnd && end > dayStart)
         .map(({ event, start, end }) => {
             const startMin = Math.max(0, differenceInMinutes(start, dayStart));
             const endMin = Math.min(1440, differenceInMinutes(end, dayStart));
 
-            return { event, startMin, endMin: Math.max(endMin, startMin + minMinutes) };
+            return {
+                event,
+                startMin,
+                endMin: Math.max(endMin, startMin + minMinutes),
+            };
         });
 }
 
@@ -251,7 +255,9 @@ const columns = computed(() =>
     })),
 );
 
-const hasAllDay = computed(() => columns.value.some((c) => c.allDay.length > 0));
+const hasAllDay = computed(() =>
+    columns.value.some((c) => c.allDay.length > 0),
+);
 
 /** Secondary-zone hour labels aligned to each local hour row. */
 const secondZoneLabels = computed<string[]>(() => {
@@ -269,7 +275,9 @@ const secondZoneLabels = computed<string[]>(() => {
 });
 
 const nowTop = computed(
-    () => (differenceInMinutes(now.value, startOfDay(now.value)) / 60) * HOUR_HEIGHT,
+    () =>
+        (differenceInMinutes(now.value, startOfDay(now.value)) / 60) *
+        HOUR_HEIGHT,
 );
 
 function timeLabel(event: CalendarEvent): string {
@@ -285,7 +293,10 @@ function onColumnClick(event: MouseEvent, day: Date): void {
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     const minutes = Math.min(
         1410,
-        Math.max(0, Math.round(((event.clientY - rect.top) / HOUR_HEIGHT) * 2) * 30),
+        Math.max(
+            0,
+            Math.round(((event.clientY - rect.top) / HOUR_HEIGHT) * 2) * 30,
+        ),
     );
     const at = new Date(startOfDay(day));
     at.setMinutes(minutes);
@@ -317,7 +328,10 @@ onMounted(() => {
                 v-for="col in columns"
                 :key="col.day.toISOString()"
                 :class="
-                    cn('flex-1 py-1.5 text-center', col.isWeekend && 'bg-muted/25')
+                    cn(
+                        'flex-1 py-1.5 text-center',
+                        col.isWeekend && 'bg-muted/25',
+                    )
                 "
             >
                 <div class="text-[11px] text-muted-foreground uppercase">
@@ -397,7 +411,9 @@ onMounted(() => {
                         <span v-if="secondZone" class="opacity-60">{{
                             secondZoneLabels[h]
                         }}</span>
-                        <span>{{ h === 0 ? '' : format(new Date(2000, 0, 1, h), 'ha') }}</span>
+                        <span>{{
+                            h === 0 ? '' : format(new Date(2000, 0, 1, h), 'ha')
+                        }}</span>
                     </div>
                 </div>
 

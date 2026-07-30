@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Google\FetchGoogleEvents;
 use App\Models\GoogleAccount;
 use App\Models\User;
 use App\Services\GoogleCalendarClient;
@@ -29,6 +30,8 @@ class CalendarEventController extends Controller
             $request->boolean('add_meet'),
         );
 
+        FetchGoogleEvents::invalidate($request->user());
+
         return response()->json(['event' => $this->mapEvent($event)]);
     }
 
@@ -47,6 +50,40 @@ class CalendarEventController extends Controller
             $data['event_id'],
             $this->buildBody($data),
         );
+
+        FetchGoogleEvents::invalidate($request->user());
+
+        return response()->json(['event' => $this->mapEvent($event)]);
+    }
+
+    /**
+     * Answer an invitation — for this occurrence or the whole series.
+     */
+    public function rsvp(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'calendar_id' => ['required', 'string'],
+            'event_id' => ['required', 'string'],
+            'response' => ['required', 'in:accepted,declined,tentative'],
+            'scope' => ['required', 'in:one,series'],
+        ]);
+
+        $account = $this->accountForCalendar($request->user(), $validated['calendar_id']);
+
+        abort_if($account === null, 422, 'That calendar is not connected.');
+
+        try {
+            $event = (new GoogleCalendarClient($account))->respondToEvent(
+                $validated['calendar_id'],
+                $validated['event_id'],
+                $validated['response'],
+                $validated['scope'] === 'series',
+            );
+        } catch (\RuntimeException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        FetchGoogleEvents::invalidate($request->user());
 
         return response()->json(['event' => $this->mapEvent($event)]);
     }
@@ -69,6 +106,8 @@ class CalendarEventController extends Controller
             $validated['calendar_id'],
             $validated['event_id'],
         );
+
+        FetchGoogleEvents::invalidate($request->user());
 
         return response()->json(['deleted' => true]);
     }

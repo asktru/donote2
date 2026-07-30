@@ -1,12 +1,21 @@
-import { addDays, addMonths, addWeeks, endOfWeek, format, startOfDay, startOfWeek } from 'date-fns';
+import {
+    addDays,
+    addMonths,
+    addWeeks,
+    endOfWeek,
+    format,
+    startOfDay,
+    startOfWeek,
+} from 'date-fns';
 import { computed, ref, watch } from 'vue';
 
 import { visibleEvents } from '@/core/eventVisibility';
 import type { VisibilityRules } from '@/core/eventVisibility';
+import { pendingInvites } from '@/core/pendingInvites';
 import { apiFetch } from '@/lib/api';
 import { fetchEventRange } from '@/lib/calendarFetch';
-import type { CalendarEvent } from '@/lib/calendarFetch';
-import { seedFromHorizon } from '@/stores/eventHorizon';
+import type { CalendarEvent, RsvpStatus } from '@/lib/calendarFetch';
+import { horizonEvents, seedFromHorizon } from '@/stores/eventHorizon';
 
 export type {
     CalendarEvent,
@@ -83,7 +92,10 @@ export const visibleRange = computed<{ start: Date; end: Date }>(() => {
     const monthStart = new Date(day.getFullYear(), day.getMonth(), 1);
     const gridStart = startOfWeek(monthStart, { weekStartsOn: WEEK_STARTS_ON });
     const monthEnd = new Date(day.getFullYear(), day.getMonth() + 1, 0);
-    const gridEnd = addDays(endOfWeek(monthEnd, { weekStartsOn: WEEK_STARTS_ON }), 1);
+    const gridEnd = addDays(
+        endOfWeek(monthEnd, { weekStartsOn: WEEK_STARTS_ON }),
+        1,
+    );
 
     return { start: gridStart, end: gridEnd };
 });
@@ -503,7 +515,9 @@ export function initCalendarPrefs(teamSlug: string): void {
 
     try {
         const raw = localStorage.getItem(HIDDEN_CALS_PREFIX + teamSlug);
-        hiddenCalendars.value = new Set(Array.isArray(JSON.parse(raw ?? 'null')) ? JSON.parse(raw!) : []);
+        hiddenCalendars.value = new Set(
+            Array.isArray(JSON.parse(raw ?? 'null')) ? JSON.parse(raw!) : [],
+        );
     } catch {
         hiddenCalendars.value = new Set();
     }
@@ -523,7 +537,10 @@ export function toggleCalendar(id: string): void {
     hiddenCalendars.value = next;
 
     if (prefsTeam) {
-        localStorage.setItem(HIDDEN_CALS_PREFIX + prefsTeam, JSON.stringify([...next]));
+        localStorage.setItem(
+            HIDDEN_CALS_PREFIX + prefsTeam,
+            JSON.stringify([...next]),
+        );
     }
 }
 
@@ -566,9 +583,12 @@ export const showHidden = ref(false);
 
 function loadHidePrefs(teamSlug: string): void {
     try {
-        hideDeclined.value = localStorage.getItem(HIDE_DECLINED_PREFIX + teamSlug) === '1';
+        hideDeclined.value =
+            localStorage.getItem(HIDE_DECLINED_PREFIX + teamSlug) === '1';
         const raw = localStorage.getItem(HIDDEN_EVENTS_PREFIX + teamSlug);
-        hiddenEventKeys.value = new Set(Array.isArray(JSON.parse(raw ?? 'null')) ? JSON.parse(raw!) : []);
+        hiddenEventKeys.value = new Set(
+            Array.isArray(JSON.parse(raw ?? 'null')) ? JSON.parse(raw!) : [],
+        );
     } catch {
         hideDeclined.value = false;
         hiddenEventKeys.value = new Set();
@@ -579,7 +599,10 @@ export function setHideDeclined(value: boolean): void {
     hideDeclined.value = value;
 
     if (prefsTeam) {
-        localStorage.setItem(HIDE_DECLINED_PREFIX + prefsTeam, value ? '1' : '0');
+        localStorage.setItem(
+            HIDE_DECLINED_PREFIX + prefsTeam,
+            value ? '1' : '0',
+        );
     }
 }
 
@@ -593,7 +616,8 @@ function hideKeyFor(event: CalendarEvent, scope: 'one' | 'series'): string {
 export function isEventHidden(event: CalendarEvent): boolean {
     return (
         hiddenEventKeys.value.has(`one:${event.key}`) ||
-        (event.seriesId !== null && hiddenEventKeys.value.has(`series:${event.seriesId}`))
+        (event.seriesId !== null &&
+            hiddenEventKeys.value.has(`series:${event.seriesId}`))
     );
 }
 
@@ -658,10 +682,105 @@ export function closeEventDetail(): void {
     selectedEvent.value = null;
 }
 
+/* ---- Answering invitations ------------------------------------------ */
+
+export type RsvpScope = 'one' | 'series';
+
+export type RsvpAnswer = Exclude<RsvpStatus, 'needsAction'>;
+
+/** Every cached copy of an event — the grid's, the horizon's, the panel's. */
+function eachCopy(
+    matches: (event: CalendarEvent) => boolean,
+    apply: (event: CalendarEvent) => CalendarEvent,
+): () => void {
+    const before = {
+        events: events.value,
+        horizon: horizonEvents.value,
+        selected: selectedEvent.value,
+    };
+
+    events.value = events.value.map((e) => (matches(e) ? apply(e) : e));
+    horizonEvents.value = horizonEvents.value.map((e) =>
+        matches(e) ? apply(e) : e,
+    );
+
+    if (selectedEvent.value !== null && matches(selectedEvent.value)) {
+        selectedEvent.value = apply(selectedEvent.value);
+    }
+
+    return () => {
+        events.value = before.events;
+        horizonEvents.value = before.horizon;
+        selectedEvent.value = before.selected;
+    };
+}
+
+/**
+ * Answer an invitation. The answer is applied locally first: the whole point
+ * of the pending-invitations dot is that it clears the moment you reply, and
+ * Google's own round-trip is far too slow to carry that.
+ */
+export async function respondToEvent(
+    event: CalendarEvent,
+    response: RsvpAnswer,
+    scope: RsvpScope,
+): Promise<void> {
+    const matches =
+        scope === 'series' && event.seriesId !== null
+            ? (other: CalendarEvent) => other.seriesId === event.seriesId
+            : (other: CalendarEvent) => other.key === event.key;
+
+    const rollback = eachCopy(matches, (target) => ({
+        ...target,
+        responseStatus: response,
+        attendees: target.attendees.map((attendee) =>
+            attendee.self ? { ...attendee, response } : attendee,
+        ),
+    }));
+
+    try {
+        await apiFetch('/api/google/events/rsvp', {
+            method: 'POST',
+            body: JSON.stringify({
+                calendar_id: event.calendarId,
+                event_id: eventIdOf(event),
+                response,
+                scope,
+            }),
+        });
+    } catch (e) {
+        rollback();
+
+        throw e;
+    }
+}
+
+/** The Google event id inside our composite `google:{calendar}:{id}` key. */
+function eventIdOf(event: CalendarEvent): string {
+    return event.key.slice(`google:${event.calendarId}:`.length);
+}
+
+/**
+ * Invitations still waiting on an answer, drawn from the cached horizon and
+ * put through the same visibility pipeline as the grid — a switched-off
+ * calendar or a hidden series should not nag.
+ */
+export const pendingInvitations = computed<CalendarEvent[]>(() =>
+    pendingInvites(
+        visibleEvents(horizonEvents.value, currentVisibility()).filter(
+            (event) => !event.hidden,
+        ),
+        new Date(),
+    ),
+);
+
 /** Refetch whenever the visible range changes (view switch or navigation). */
 export function watchCalendarRange(): void {
     watch(
-        () => [visibleRange.value.start.getTime(), visibleRange.value.end.getTime()],
+        () => [
+            visibleRange.value.start.getTime(),
+            visibleRange.value.end.getTime(),
+        ],
         () => {
             // Paint from the cached window first when it covers this range,
             // so a view switch is instant and the fetch only corrects it.
