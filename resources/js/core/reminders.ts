@@ -1,4 +1,4 @@
-import { keyStartDate, todayDailyKey } from './dates';
+import { keyStartDate } from './dates';
 import type { ParsedLine } from './parser';
 
 export interface ReminderCandidate {
@@ -13,17 +13,25 @@ export interface ReminderCandidate {
  *
  * Reminders attach to the schedule date when the task has one (using the
  * first day of the period for week/month/quarter/year schedules), otherwise
- * they fire today.
+ * to the day of the note holding the line — `noteDayKey`, which is a daily
+ * note's own date and null for every other note. A reminder with neither has
+ * no day to fire on, so it does not fire: moving a line between daily notes
+ * is therefore what reschedules it.
  */
 export function resolveReminderAt(
     line: ParsedLine,
-    ref: Date = new Date(),
+    noteDayKey: string | null,
 ): Date | null {
     if (line.reminderMinutes === null || line.state !== 'open') {
         return null;
     }
 
-    const dayKey = line.schedule ?? todayDailyKey(ref);
+    const dayKey = line.schedule ?? noteDayKey;
+
+    if (dayKey === null) {
+        return null;
+    }
+
     const day = keyStartDate(dayKey);
 
     return new Date(
@@ -106,16 +114,19 @@ export function refreshDueReminders(
     });
 }
 
-/** Collect reminder candidates from a parsed note. */
+/**
+ * Collect reminder candidates from a parsed note. `noteDayKey` is the day the
+ * note itself stands for — see `resolveReminderAt`.
+ */
 export function reminderCandidates(
     noteId: string,
     lines: ParsedLine[],
-    ref: Date = new Date(),
+    noteDayKey: string | null,
 ): ReminderCandidate[] {
     const candidates: ReminderCandidate[] = [];
 
     for (const line of lines) {
-        const at = resolveReminderAt(line, ref);
+        const at = resolveReminderAt(line, noteDayKey);
 
         if (at === null) {
             continue;

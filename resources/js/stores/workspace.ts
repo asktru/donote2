@@ -867,17 +867,18 @@ export const allMentions = computed<string[]>(() =>
     allTokens((line) => line.mentions),
 );
 
+/**
+ * The day a note itself stands for: a daily note's own date, and null for
+ * every other note. The single answer to "what day does an undated line in
+ * this note belong to", shared by task grouping and reminder scheduling.
+ */
+export function noteDayKey(note: LocalNote): string | null {
+    return note.type === 'daily' ? note.dateKey : null;
+}
+
 /** The effective daily key a task belongs to (schedule, else its daily note's day). */
 export function taskDayKey(task: WorkspaceTask): string | null {
-    if (task.line.schedule !== null) {
-        return task.line.schedule;
-    }
-
-    if (task.note.type === 'daily') {
-        return task.note.dateKey;
-    }
-
-    return null;
+    return task.line.schedule ?? noteDayKey(task.note);
 }
 
 /** Search local notes by title and content substring (offline fallback). */

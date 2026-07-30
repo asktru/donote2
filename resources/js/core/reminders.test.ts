@@ -11,38 +11,64 @@ import {
     resolveReminderAt,
 } from './reminders';
 
-const ref = new Date(2026, 6, 11, 6, 0); // Sat July 11 2026, 06:00
+// Sat July 11th 2026 — the day key of the note a task sits in.
+const today = '2026-07-11';
 
 describe('resolveReminderAt', () => {
-    it('fires today when the task has no schedule', () => {
-        const at = resolveReminderAt(parseLine('- [ ] Standup @8am'), ref);
+    it('fires on its note’s day when the task has no schedule', () => {
+        const at = resolveReminderAt(parseLine('- [ ] Standup @8am'), today);
         expect(at?.getFullYear()).toBe(2026);
         expect(at?.getMonth()).toBe(6);
         expect(at?.getDate()).toBe(11);
         expect(at?.getHours()).toBe(8);
     });
 
+    it('follows the task to another daily note', () => {
+        // Moving the line is what reschedules it: nothing about the line
+        // itself changes, only the note holding it.
+        const at = resolveReminderAt(parseLine('- [ ] Standup @8am'), '2026-07-15');
+
+        expect(at?.getDate()).toBe(15);
+        expect(at?.getHours()).toBe(8);
+    });
+
+    it('does not fire at all without a schedule or a daily note', () => {
+        expect(resolveReminderAt(parseLine('- [ ] Standup @8am'), null)).toBeNull();
+    });
+
     it('fires on the scheduled day', () => {
         const at = resolveReminderAt(
             parseLine('- [ ] Call @2:30pm >2026-07-15'),
-            ref,
+            today,
         );
         expect(at?.getDate()).toBe(15);
         expect(at?.getHours()).toBe(14);
         expect(at?.getMinutes()).toBe(30);
     });
 
+    it('lets an explicit schedule win over the note’s own day', () => {
+        const at = resolveReminderAt(
+            parseLine('- [ ] Call @2:30pm >2026-07-15'),
+            '2026-07-20',
+        );
+
+        expect(at?.getDate()).toBe(15);
+    });
+
     it('uses the first day of week schedules', () => {
         const at = resolveReminderAt(
             parseLine('- [ ] Weekly review @9am >2026-W29'),
-            ref,
+            today,
         );
         expect(at?.getDate()).toBe(13); // Monday July 13th
     });
 
     it('returns null for done tasks and tasks without reminders', () => {
-        expect(resolveReminderAt(parseLine('- [x] Done @8am'), ref)).toBeNull();
-        expect(resolveReminderAt(parseLine('- [ ] No time'), ref)).toBeNull();
+        expect(
+            resolveReminderAt(parseLine('- [x] Done @8am'), today),
+        ).toBeNull();
+        expect(resolveReminderAt(parseLine('- [ ] No time'), today)).toBeNull();
+        expect(resolveReminderAt(parseLine('- [ ] No time'), null)).toBeNull();
     });
 });
 
@@ -75,21 +101,33 @@ describe('reminderCandidates', () => {
                 '- [ ] Plain task',
             ].join('\n'),
         );
-        const candidates = reminderCandidates('note-1', lines, ref);
+        const candidates = reminderCandidates('note-1', lines, today);
 
         expect(candidates).toHaveLength(1);
         expect(candidates[0].key).toContain('note-1');
         expect(candidates[0].at.getHours()).toBe(9);
     });
+
+    it('collects nothing from a note that is not a daily note', () => {
+        // A project note's `@9am` has no day to fire on.
+        const lines = parseNote('- [ ] Standup @9am');
+
+        expect(reminderCandidates('note-1', lines, null)).toEqual([]);
+    });
+
+    it('still collects a scheduled reminder from a non-daily note', () => {
+        const lines = parseNote('- [ ] Standup @9am >2026-07-15');
+
+        expect(reminderCandidates('note-1', lines, null)).toHaveLength(1);
+    });
 });
 
 /** The reminders a note currently holds, keyed by slot — what a popup tracks. */
-function liveFrom(noteId: string, markdown: string, at = ref) {
+function liveFrom(noteId: string, markdown: string, dayKey = today) {
     return new Map(
-        reminderCandidates(noteId, parseNote(markdown), at).map((candidate) => [
-            reminderSlot(candidate),
-            candidate,
-        ]),
+        reminderCandidates(noteId, parseNote(markdown), dayKey).map(
+            (candidate) => [reminderSlot(candidate), candidate],
+        ),
     );
 }
 
@@ -97,7 +135,7 @@ describe('isReminderDue', () => {
     const [candidate] = reminderCandidates(
         'note-1',
         parseNote('- [ ] Standup @9am'),
-        ref,
+        today,
     );
     const at = candidate.at.getTime();
 

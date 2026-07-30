@@ -12,6 +12,7 @@ import type { WorkspaceDb } from '@/stores/db';
 import {
     isArchivedNote,
     liveNotes,
+    noteDayKey,
     parsedNote,
     rewriteReminderToken,
     workspaceConfig,
@@ -62,7 +63,11 @@ export async function reconcileReminderNotifications(): Promise<void> {
             continue;
         }
 
-        for (const candidate of reminderCandidates(note.id, parsedNote(note.id))) {
+        for (const candidate of reminderCandidates(
+            note.id,
+            parsedNote(note.id),
+            noteDayKey(note),
+        )) {
             const state = await db.reminders.get(candidate.key);
             const silenced =
                 state?.status === 'dismissed' ||
