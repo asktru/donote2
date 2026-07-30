@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveSwipeAction  } from './swipeActions';
-import type {SwipeContext} from './swipeActions';
+import { resolveSwipeAction } from './swipeActions';
+import type { SwipeContext } from './swipeActions';
 
 const base: SwipeContext = {
     menuOpen: false,
@@ -63,7 +63,10 @@ describe('resolveSwipeAction', () => {
 
     it('does not step the calendar outside a calendar view or over a split', () => {
         expect(
-            resolveSwipeAction(swipe('left', -80), { ...base, isCalendar: false }),
+            resolveSwipeAction(swipe('left', -80), {
+                ...base,
+                isCalendar: false,
+            }),
         ).toBeNull();
         expect(
             resolveSwipeAction(swipe('left', -80), { ...base, hasSplit: true }),

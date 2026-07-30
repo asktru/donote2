@@ -180,8 +180,7 @@ const today = new Date();
                     class="pr-1.5 text-[10px] text-muted-foreground/60 hover:text-primary"
                     :title="`Open weekly note ${week.weekKey}`"
                     @click="
-                        (event) =>
-                            emit('pick-week', week.weekKey, event.altKey)
+                        (event) => emit('pick-week', week.weekKey, event.altKey)
                     "
                 >
                     {{ week.weekNumber }}

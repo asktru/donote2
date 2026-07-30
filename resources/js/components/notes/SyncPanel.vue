@@ -148,12 +148,15 @@ function logColor(level: 'info' | 'warn' | 'error'): string {
                     </div>
                     <div class="flex items-center justify-between">
                         <dt class="text-muted-foreground">Pending edits</dt>
-                        <dd class="font-medium">{{ dirtyCount || pendingChanges }}</dd>
+                        <dd class="font-medium">
+                            {{ dirtyCount || pendingChanges }}
+                        </dd>
                     </div>
                     <div class="flex items-center justify-between">
                         <dt class="text-muted-foreground">Cursor</dt>
                         <dd class="font-medium tabular-nums">
-                            {{ syncCursor }}<span
+                            {{ syncCursor
+                            }}<span
                                 v-if="serverStats"
                                 class="text-muted-foreground"
                                 >/{{ serverStats.maxSeq }}</span
@@ -211,8 +214,8 @@ function logColor(level: 'info' | 'warn' | 'error'): string {
                     <p class="text-sm font-medium">Rebuild local copy</p>
                     <p class="mt-0.5 text-xs text-muted-foreground">
                         Clears this device's cached notes and re-downloads
-                        everything. Unpushed edits are sent first, so nothing
-                        is lost. Use only if a resync doesn't fix it.
+                        everything. Unpushed edits are sent first, so nothing is
+                        lost. Use only if a resync doesn't fix it.
                     </p>
 
                     <div class="mt-2 flex flex-wrap items-center gap-2">

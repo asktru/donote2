@@ -59,11 +59,36 @@ const groups: ToolbarButton[][] = [
         { action: 'bullet', icon: List, label: 'Bullet' },
     ],
     [
-        { action: 'complete', icon: Check, label: 'Complete / reopen', taskOnly: true },
-        { action: 'schedule', icon: Calendar, label: 'Schedule', taskOnly: true },
-        { action: 'due', icon: CalendarClock, label: 'Due date', taskOnly: true },
-        { action: 'cancel', icon: Ban, label: 'Cancel / restore', taskOnly: true },
-        { action: 'priority', icon: Flag, label: 'Cycle priority', taskOnly: true },
+        {
+            action: 'complete',
+            icon: Check,
+            label: 'Complete / reopen',
+            taskOnly: true,
+        },
+        {
+            action: 'schedule',
+            icon: Calendar,
+            label: 'Schedule',
+            taskOnly: true,
+        },
+        {
+            action: 'due',
+            icon: CalendarClock,
+            label: 'Due date',
+            taskOnly: true,
+        },
+        {
+            action: 'cancel',
+            icon: Ban,
+            label: 'Cancel / restore',
+            taskOnly: true,
+        },
+        {
+            action: 'priority',
+            icon: Flag,
+            label: 'Cycle priority',
+            taskOnly: true,
+        },
     ],
     [
         { action: 'bold', icon: Bold, label: 'Bold' },

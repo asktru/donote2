@@ -1,9 +1,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 /** A shared reactive flag tracking the browser's online/offline state. */
-const online = ref(
-    typeof navigator === 'undefined' ? true : navigator.onLine,
-);
+const online = ref(typeof navigator === 'undefined' ? true : navigator.onLine);
 
 function setOnline(): void {
     online.value = true;

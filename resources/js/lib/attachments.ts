@@ -92,10 +92,9 @@ export async function insertAttachments(
             { id: uploading },
         );
     } catch (error) {
-        toast.error(
-            error instanceof Error ? error.message : 'Upload failed',
-            { id: uploading },
-        );
+        toast.error(error instanceof Error ? error.message : 'Upload failed', {
+            id: uploading,
+        });
     }
 }
 
@@ -126,12 +125,7 @@ export function attachmentHandlers(getNoteId: () => string | undefined) {
                 x: event.clientX,
                 y: event.clientY,
             });
-            void insertAttachments(
-                view,
-                files,
-                pos ?? undefined,
-                getNoteId(),
-            );
+            void insertAttachments(view, files, pos ?? undefined, getNoteId());
 
             return true;
         },

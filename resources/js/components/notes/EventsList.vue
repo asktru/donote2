@@ -197,7 +197,9 @@ const events = computed<UnifiedEvent[]>(() => {
 const visibleEvents = computed(() =>
     showHiddenEvents.value
         ? events.value
-        : events.value.filter((event) => !hiddenEvents.value.has(event.hideKey)),
+        : events.value.filter(
+              (event) => !hiddenEvents.value.has(event.hideKey),
+          ),
 );
 
 async function load(): Promise<void> {
@@ -357,127 +359,136 @@ watch(() => range.value.start.getTime(), load);
         </div>
 
         <template v-if="!isSectionCollapsed('events')">
-        <div
-            v-if="!anySourceConnected"
-            class="rounded-lg border border-dashed border-border/70 p-3 text-center"
-        >
-            <p class="text-xs text-muted-foreground">
-                See your calendar events here.
-            </p>
-            <div class="mt-2 flex flex-col items-center gap-1.5">
-                <button
-                    v-if="appleAvailable && appleStatus === 'notDetermined'"
-                    type="button"
-                    class="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-                    @click="connectApple"
-                >
-                    <CalendarPlus class="size-3.5" /> Connect Apple Calendar
-                </button>
-                <p
-                    v-else-if="appleAvailable && appleStatus === 'denied'"
-                    class="text-[11px] text-muted-foreground"
-                >
-                    {{ deniedHint }}
-                </p>
-                <Link
-                    v-if="!googleConnected"
-                    href="/settings/integrations"
-                    :class="
-                        cn(
-                            'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium',
-                            appleAvailable && appleStatus === 'notDetermined'
-                                ? 'text-muted-foreground hover:text-foreground'
-                                : 'bg-primary text-primary-foreground hover:bg-primary/90',
-                        )
-                    "
-                >
-                    <CalendarPlus class="size-3.5" /> Connect Google Calendar
-                </Link>
-            </div>
-        </div>
-
-        <template v-else>
             <div
-                v-if="loading && visibleEvents.length === 0"
-                class="space-y-1.5"
+                v-if="!anySourceConnected"
+                class="rounded-lg border border-dashed border-border/70 p-3 text-center"
             >
-                <div class="h-8 animate-pulse rounded-md bg-muted/60"></div>
-                <div class="h-8 animate-pulse rounded-md bg-muted/40"></div>
-            </div>
-
-            <p v-else-if="failed" class="px-1 text-xs text-muted-foreground">
-                Couldn't load events.
-            </p>
-            <p
-                v-else-if="visibleEvents.length === 0"
-                class="px-1 text-xs text-muted-foreground"
-            >
-                No events.
-            </p>
-
-            <div v-else class="space-y-1">
-                <component
-                    :is="event.htmlLink !== null ? 'a' : 'div'"
-                    v-for="event in visibleEvents"
-                    :key="event.key"
-                    v-bind="
-                        event.htmlLink !== null
-                            ? {
-                                  href: event.htmlLink,
-                                  target: '_blank',
-                                  rel: 'noopener',
-                              }
-                            : {}
-                    "
-                    :class="
-                        cn(
-                            'group flex items-start gap-2 rounded-md px-1.5 py-1 hover:bg-muted/60',
-                            (isHidden(event) || isPast(event)) && 'opacity-50',
-                        )
-                    "
-                >
-                    <span
-                        class="mt-1 h-8 w-1 shrink-0 rounded-full"
-                        :style="{
-                            backgroundColor: event.color ?? 'var(--primary)',
-                        }"
-                    />
-                    <span class="min-w-0 flex-1">
-                        <span class="block truncate text-xs font-medium">{{
-                            event.title
-                        }}</span>
-                        <span class="block text-[11px] text-muted-foreground">
-                            {{ timeLabel(event)
-                            }}<template v-if="event.location">
-                                · {{ event.location }}</template
-                            >
-                        </span>
-                    </span>
+                <p class="text-xs text-muted-foreground">
+                    See your calendar events here.
+                </p>
+                <div class="mt-2 flex flex-col items-center gap-1.5">
                     <button
-                        v-if="isHidden(event)"
+                        v-if="appleAvailable && appleStatus === 'notDetermined'"
                         type="button"
-                        class="mt-1 shrink-0 rounded p-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground"
-                        title="Unhide event"
-                        aria-label="Unhide event"
-                        @click.prevent.stop="unhideEvent(event.hideKey)"
+                        class="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+                        @click="connectApple"
                     >
-                        <Eye class="size-3.5" />
+                        <CalendarPlus class="size-3.5" /> Connect Apple Calendar
                     </button>
-                    <button
-                        v-else
-                        type="button"
-                        class="mt-1 shrink-0 rounded p-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground"
-                        title="Hide event (a repeating event hides the whole series)"
-                        aria-label="Hide event"
-                        @click.prevent.stop="
-                            hideEvent(event.hideKey, event.title)
+                    <p
+                        v-else-if="appleAvailable && appleStatus === 'denied'"
+                        class="text-[11px] text-muted-foreground"
+                    >
+                        {{ deniedHint }}
+                    </p>
+                    <Link
+                        v-if="!googleConnected"
+                        href="/settings/integrations"
+                        :class="
+                            cn(
+                                'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium',
+                                appleAvailable &&
+                                    appleStatus === 'notDetermined'
+                                    ? 'text-muted-foreground hover:text-foreground'
+                                    : 'bg-primary text-primary-foreground hover:bg-primary/90',
+                            )
                         "
                     >
-                        <EyeOff class="size-3.5" />
-                    </button>
-                </component>
+                        <CalendarPlus class="size-3.5" /> Connect Google
+                        Calendar
+                    </Link>
+                </div>
             </div>
-        </template>
+
+            <template v-else>
+                <div
+                    v-if="loading && visibleEvents.length === 0"
+                    class="space-y-1.5"
+                >
+                    <div class="h-8 animate-pulse rounded-md bg-muted/60"></div>
+                    <div class="h-8 animate-pulse rounded-md bg-muted/40"></div>
+                </div>
+
+                <p
+                    v-else-if="failed"
+                    class="px-1 text-xs text-muted-foreground"
+                >
+                    Couldn't load events.
+                </p>
+                <p
+                    v-else-if="visibleEvents.length === 0"
+                    class="px-1 text-xs text-muted-foreground"
+                >
+                    No events.
+                </p>
+
+                <div v-else class="space-y-1">
+                    <component
+                        :is="event.htmlLink !== null ? 'a' : 'div'"
+                        v-for="event in visibleEvents"
+                        :key="event.key"
+                        v-bind="
+                            event.htmlLink !== null
+                                ? {
+                                      href: event.htmlLink,
+                                      target: '_blank',
+                                      rel: 'noopener',
+                                  }
+                                : {}
+                        "
+                        :class="
+                            cn(
+                                'group flex items-start gap-2 rounded-md px-1.5 py-1 hover:bg-muted/60',
+                                (isHidden(event) || isPast(event)) &&
+                                    'opacity-50',
+                            )
+                        "
+                    >
+                        <span
+                            class="mt-1 h-8 w-1 shrink-0 rounded-full"
+                            :style="{
+                                backgroundColor:
+                                    event.color ?? 'var(--primary)',
+                            }"
+                        />
+                        <span class="min-w-0 flex-1">
+                            <span class="block truncate text-xs font-medium">{{
+                                event.title
+                            }}</span>
+                            <span
+                                class="block text-[11px] text-muted-foreground"
+                            >
+                                {{ timeLabel(event)
+                                }}<template v-if="event.location">
+                                    · {{ event.location }}</template
+                                >
+                            </span>
+                        </span>
+                        <button
+                            v-if="isHidden(event)"
+                            type="button"
+                            class="mt-1 shrink-0 rounded p-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground"
+                            title="Unhide event"
+                            aria-label="Unhide event"
+                            @click.prevent.stop="unhideEvent(event.hideKey)"
+                        >
+                            <Eye class="size-3.5" />
+                        </button>
+                        <button
+                            v-else
+                            type="button"
+                            class="mt-1 shrink-0 rounded p-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground"
+                            title="Hide event (a repeating event hides the whole series)"
+                            aria-label="Hide event"
+                            @click.prevent.stop="
+                                hideEvent(event.hideKey, event.title)
+                            "
+                        >
+                            <EyeOff class="size-3.5" />
+                        </button>
+                    </component>
+                </div>
+            </template>
         </template>
     </div>
 </template>

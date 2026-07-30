@@ -252,85 +252,89 @@ onBeforeUnmount(() => {
                     :key="candidate.key"
                     class="group flex items-start gap-2.5 rounded-lg px-2 py-1.5 hover:bg-muted/50"
                 >
-                <span
-                    :class="
-                        cn(
-                            'mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full',
-                            statusOf(candidate).kind === 'overdue'
-                                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-500'
-                                : 'bg-primary/10 text-primary',
-                        )
-                    "
-                >
-                    <AlarmClock class="size-4" />
-                </span>
-
-                <button
-                    type="button"
-                    class="min-w-0 flex-1 text-left"
-                    @click="
-                        (event) =>
-                            emit(
-                                'open-note',
-                                candidate.noteId,
-                                candidate.line.index,
-                                event.altKey,
+                    <span
+                        :class="
+                            cn(
+                                'mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full',
+                                statusOf(candidate).kind === 'overdue'
+                                    ? 'bg-amber-500/15 text-amber-600 dark:text-amber-500'
+                                    : 'bg-primary/10 text-primary',
                             )
-                    "
-                >
-                    <p class="truncate text-sm">{{ candidate.line.title }}</p>
-                    <p
-                        class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground"
-                    >
-                        <span
-                            :class="
-                                statusOf(candidate).kind === 'overdue' &&
-                                'text-amber-600 dark:text-amber-500'
-                            "
-                        >
-                            {{ timeLabel(candidate.at) }}
-                        </span>
-                        <span class="truncate">{{ noteLabel(candidate) }}</span>
-                        <span
-                            v-if="statusOf(candidate).kind === 'dismissed'"
-                            class="rounded-full bg-muted px-1.5 text-[11px]"
-                        >
-                            dismissed
-                        </span>
-                        <span
-                            v-else-if="snoozeLabel(candidate)"
-                            class="rounded-full bg-muted px-1.5 text-[11px]"
-                        >
-                            snoozed until {{ snoozeLabel(candidate) }}
-                        </span>
-                    </p>
-                </button>
-
-                <div
-                    class="flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100"
-                >
-                    <Button
-                        v-if="
-                            statusOf(candidate).kind !== 'pending' &&
-                            statusOf(candidate).kind !== 'overdue'
                         "
-                        variant="ghost"
-                        size="sm"
-                        class="h-7 gap-1 px-2 text-xs text-muted-foreground"
-                        title="Let it fire again"
-                        @click="reset(candidate)"
                     >
-                        <RotateCcw class="size-3.5" /> Restore
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        class="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-primary"
-                        @click="complete(candidate)"
+                        <AlarmClock class="size-4" />
+                    </span>
+
+                    <button
+                        type="button"
+                        class="min-w-0 flex-1 text-left"
+                        @click="
+                            (event) =>
+                                emit(
+                                    'open-note',
+                                    candidate.noteId,
+                                    candidate.line.index,
+                                    event.altKey,
+                                )
+                        "
                     >
-                        <Check class="size-3.5" /> Done
-                    </Button>
-                </div>
+                        <p class="truncate text-sm">
+                            {{ candidate.line.title }}
+                        </p>
+                        <p
+                            class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground"
+                        >
+                            <span
+                                :class="
+                                    statusOf(candidate).kind === 'overdue' &&
+                                    'text-amber-600 dark:text-amber-500'
+                                "
+                            >
+                                {{ timeLabel(candidate.at) }}
+                            </span>
+                            <span class="truncate">{{
+                                noteLabel(candidate)
+                            }}</span>
+                            <span
+                                v-if="statusOf(candidate).kind === 'dismissed'"
+                                class="rounded-full bg-muted px-1.5 text-[11px]"
+                            >
+                                dismissed
+                            </span>
+                            <span
+                                v-else-if="snoozeLabel(candidate)"
+                                class="rounded-full bg-muted px-1.5 text-[11px]"
+                            >
+                                snoozed until {{ snoozeLabel(candidate) }}
+                            </span>
+                        </p>
+                    </button>
+
+                    <div
+                        class="flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100"
+                    >
+                        <Button
+                            v-if="
+                                statusOf(candidate).kind !== 'pending' &&
+                                statusOf(candidate).kind !== 'overdue'
+                            "
+                            variant="ghost"
+                            size="sm"
+                            class="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                            title="Let it fire again"
+                            @click="reset(candidate)"
+                        >
+                            <RotateCcw class="size-3.5" /> Restore
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            class="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-primary"
+                            @click="complete(candidate)"
+                        >
+                            <Check class="size-3.5" /> Done
+                        </Button>
+                    </div>
                 </div>
             </section>
         </div>

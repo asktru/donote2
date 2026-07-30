@@ -23,7 +23,11 @@ function event(
 describe('searchEvents', () => {
     it('returns nothing for an empty query', () => {
         expect(
-            searchEvents([event('Standup', '2026-07-15T13:00:00Z')], '   ', NOW),
+            searchEvents(
+                [event('Standup', '2026-07-15T13:00:00Z')],
+                '   ',
+                NOW,
+            ),
         ).toEqual([]);
     });
 
@@ -33,9 +37,9 @@ describe('searchEvents', () => {
             event('Standup', '2026-07-15T14:00:00Z'),
         ];
 
-        expect(searchEvents(events, 'design', NOW).map((e) => e.title)).toEqual([
-            'Design Review',
-        ]);
+        expect(searchEvents(events, 'design', NOW).map((e) => e.title)).toEqual(
+            ['Design Review'],
+        );
     });
 
     it('matches an attendee name', () => {

@@ -480,12 +480,16 @@ async function onDrop(event: DragEvent): Promise<void> {
                             />
                             <span
                                 v-else-if="
-                                    listRemaining(noteMetaFor(note.id), note.id) !==
-                                    null
+                                    listRemaining(
+                                        noteMetaFor(note.id),
+                                        note.id,
+                                    ) !== null
                                 "
-                                class="text-[11px] tabular-nums text-muted-foreground"
+                                class="text-[11px] text-muted-foreground tabular-nums"
                             >
-                                {{ listRemaining(noteMetaFor(note.id), note.id) }}
+                                {{
+                                    listRemaining(noteMetaFor(note.id), note.id)
+                                }}
                             </span>
                             <Pin
                                 v-if="note.pinned === 1"

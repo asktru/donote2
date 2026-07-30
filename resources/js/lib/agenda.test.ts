@@ -5,11 +5,9 @@ import {
     classifyPerson,
     extractActionItems,
     parseAgendaConfig,
-    selectMeetings
-    
-    
+    selectMeetings,
 } from './agenda';
-import type {AgendaConfig, AgendaMeeting} from './agenda';
+import type { AgendaConfig, AgendaMeeting } from './agenda';
 
 const AGENDA_FM = [
     '---',
@@ -56,8 +54,14 @@ describe('parseAgendaConfig', () => {
         const config = parseAgendaConfig(AGENDA_FM);
         expect(config).not.toBeNull();
         expect(config!.agenda).toEqual(['Ivan']);
-        expect(config!.me).toEqual(['Антон Скляр', 'Антон Скліар', 'Anton Skliar']);
-        expect(config!.others).toEqual([{ substring: 'Іван', mention: '@IvanYakubyshyn' }]);
+        expect(config!.me).toEqual([
+            'Антон Скляр',
+            'Антон Скліар',
+            'Anton Skliar',
+        ]);
+        expect(config!.others).toEqual([
+            { substring: 'Іван', mention: '@IvanYakubyshyn' },
+        ]);
         expect(config!.days).toBe(7);
     });
 
@@ -76,13 +80,18 @@ describe('parseAgendaConfig', () => {
 
 describe('extractActionItems', () => {
     it('groups items by person heading within the Action Items section only', () => {
-        const groups = extractActionItems(MEETING('Ivan <> Anton -- 2026-04-21', '2026-04-21').content);
+        const groups = extractActionItems(
+            MEETING('Ivan <> Anton -- 2026-04-21', '2026-04-21').content,
+        );
         expect(groups.map((g) => g.person)).toEqual([
             'Іван Якубишин',
             'Антон Скліар',
             'Random Guest',
         ]);
-        expect(groups[1].items).toEqual(['Review internet providers', 'Plan the VPN setup']);
+        expect(groups[1].items).toEqual([
+            'Review internet providers',
+            'Plan the VPN setup',
+        ]);
         // Topic bullets are not action items.
         expect(groups.every((g) => !g.items.includes('detail'))).toBe(true);
     });
@@ -115,7 +124,9 @@ describe('extractActionItems', () => {
             'Anton Skliar',
             'Pavlo Harashchenko',
         ]);
-        expect(groups[0].items).toEqual(['Remind PMs about cross-team notices']);
+        expect(groups[0].items).toEqual([
+            'Remind PMs about cross-team notices',
+        ]);
         expect(groups[1].items).toEqual(['Share the B2B docs']);
     });
 
@@ -148,7 +159,10 @@ describe('classifyPerson', () => {
 
     it('routes me / others / unknown', () => {
         expect(classifyPerson('Антон Скліар', config).kind).toBe('me');
-        expect(classifyPerson('Іван Якубишин', config)).toEqual({ kind: 'other', mention: '@IvanYakubyshyn' });
+        expect(classifyPerson('Іван Якубишин', config)).toEqual({
+            kind: 'other',
+            mention: '@IvanYakubyshyn',
+        });
         expect(classifyPerson('Random Guest', config).kind).toBe('unknown');
     });
 });
@@ -161,16 +175,23 @@ describe('selectMeetings', () => {
             MEETING('Ivan <> Anton -- 2026-04-21', '2026-04-21'),
             MEETING('Natalie <> Anton -- 2026-04-20', '2026-04-20'), // wrong title
             MEETING('Ivan <> Anton -- 2026-04-01', '2026-04-01'), // out of range
-            { ...MEETING('Ivan <> Anton -- 2026-04-19', '2026-04-19'), folder: 'Projects' }, // wrong folder
+            {
+                ...MEETING('Ivan <> Anton -- 2026-04-19', '2026-04-19'),
+                folder: 'Projects',
+            }, // wrong folder
         ];
         const selected = selectMeetings(meetings, config, '', '2026-04-22');
-        expect(selected.map((s) => s.meeting.title)).toEqual(['Ivan <> Anton -- 2026-04-21']);
+        expect(selected.map((s) => s.meeting.title)).toEqual([
+            'Ivan <> Anton -- 2026-04-21',
+        ]);
     });
 
     it('skips meetings already linked in the agenda note', () => {
         const meetings = [MEETING('Ivan <> Anton -- 2026-04-21', '2026-04-21')];
         const agenda = `${AGENDA_FM}\n- [[Ivan <> Anton -- 2026-04-21 | 2026-04-21]]`;
-        expect(selectMeetings(meetings, config, agenda, '2026-04-22')).toHaveLength(0);
+        expect(
+            selectMeetings(meetings, config, agenda, '2026-04-22'),
+        ).toHaveLength(0);
     });
 
     it('matches any of several comma-separated agenda substrings', () => {
@@ -211,7 +232,11 @@ describe('selectMeetings', () => {
 describe('buildAgendaAppendix', () => {
     it('formats meeting wiki-link, my tasks, others checklist+mention, unknown checklist', () => {
         const meetings = [MEETING('Ivan <> Anton -- 2026-04-21', '2026-04-21')];
-        const { appendix, count } = buildAgendaAppendix(AGENDA_FM, meetings, '2026-04-22');
+        const { appendix, count } = buildAgendaAppendix(
+            AGENDA_FM,
+            meetings,
+            '2026-04-22',
+        );
 
         expect(count).toBe(1);
         expect(appendix).toBe(
@@ -230,6 +255,9 @@ describe('buildAgendaAppendix', () => {
 
     it('is empty when nothing matches', () => {
         expect(buildAgendaAppendix(AGENDA_FM, [], '2026-04-22').count).toBe(0);
-        expect(buildAgendaAppendix('---\ntype: area\n---\n', [], '2026-04-22').appendix).toBe('');
+        expect(
+            buildAgendaAppendix('---\ntype: area\n---\n', [], '2026-04-22')
+                .appendix,
+        ).toBe('');
     });
 });

@@ -38,7 +38,12 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useOnline } from '@/composables/useOnline';
-import { addPeriods, humanizeKey, shortLabelForKey, todayKey } from '@/core/dates';
+import {
+    addPeriods,
+    humanizeKey,
+    shortLabelForKey,
+    todayKey,
+} from '@/core/dates';
 import {
     daysUntil,
     dueLabel,
@@ -663,7 +668,9 @@ defineExpose({ focusEditor });
                     :placeholder="'Type markdown, add a task (- [ ]), a checklist (+ [ ]), or link a note with [['"
                     @update:model-value="onContentUpdate"
                     @open-link="onOpenLink"
-                    @open-date="(key, split) => emit('open-calendar', key, split)"
+                    @open-date="
+                        (key, split) => emit('open-calendar', key, split)
+                    "
                     @open-tag="(tag, split) => emit('open-tag', tag, split)"
                     @open-mention="
                         (mention, split) => emit('open-mention', mention, split)
@@ -690,8 +697,7 @@ defineExpose({ focusEditor });
             <BacklinksSection
                 :note-id="note?.id ?? null"
                 @open-note="
-                    (id, line, split) =>
-                        emit('open-note-line', id, line, split)
+                    (id, line, split) => emit('open-note-line', id, line, split)
                 "
             />
         </div>

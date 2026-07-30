@@ -20,7 +20,7 @@ const TEMPLATE = [
     '# Revenue Accrual — %monthName% %yearShort%',
     '',
     '## YouTube',
-    "+ [ ] Run `php artisan youtube:process %year% %month% \"o&o\"`",
+    '+ [ ] Run `php artisan youtube:process %year% %month% "o&o"`',
     "+ [ ] Expire before '%year%-%month0%-01'",
     '+ [ ] Compare with %prevYear%-%prevMonth0%',
     '+ [ ] [report](https://example.com/x?q=a%20reports%2Cin%20desc)',
@@ -63,9 +63,11 @@ describe('renderTemplate', () => {
         });
 
         expect(rendered.title).toBe('Revenue Accrual — May 26');
-        expect(rendered.content.startsWith('---\ntype: project\nreview: +3d\n---\n')).toBe(
-            true,
-        );
+        expect(
+            rendered.content.startsWith(
+                '---\ntype: project\nreview: +3d\n---\n',
+            ),
+        ).toBe(true);
         expect(rendered.content).toContain('youtube:process 2026 5 "o&o"');
         expect(rendered.content).toContain("before '2026-05-01'");
         expect(rendered.content).toContain('Compare with 2026-04');

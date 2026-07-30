@@ -80,5 +80,7 @@ export function stepEvent<T extends CursorEvent>(
             : (ordered[ordered.length - 1] ?? null);
     }
 
-    return ordered[Math.min(ordered.length - 1, Math.max(0, index + direction))];
+    return ordered[
+        Math.min(ordered.length - 1, Math.max(0, index + direction))
+    ];
 }

@@ -1,11 +1,7 @@
 import type { SwipeEvent } from '@/composables/useSwipe';
 
 export type SwipeAction =
-    | 'open-menu'
-    | 'close-menu'
-    | 'calendar-next'
-    | 'calendar-prev'
-    | null;
+    'open-menu' | 'close-menu' | 'calendar-next' | 'calendar-prev' | null;
 
 export interface SwipeContext {
     /** Is the off-canvas navigation menu currently open? */
@@ -36,7 +32,8 @@ export function resolveSwipeAction(
 ): SwipeAction {
     const horizontal =
         (swipe.direction === 'left' || swipe.direction === 'right') &&
-        Math.abs(swipe.distanceX) >= Math.abs(swipe.distanceY) * HORIZONTAL_RATIO;
+        Math.abs(swipe.distanceX) >=
+            Math.abs(swipe.distanceY) * HORIZONTAL_RATIO;
 
     if (!horizontal) {
         return null;

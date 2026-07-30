@@ -396,7 +396,10 @@ async function disconnect(account: GoogleAccountView): Promise<void> {
                         </option>
                     </select>
                 </label>
-                <Button :disabled="selectedTeamId === null" @click="generateWebhook">
+                <Button
+                    :disabled="selectedTeamId === null"
+                    @click="generateWebhook"
+                >
                     <Webhook class="size-4" /> Generate webhook URL
                 </Button>
             </div>

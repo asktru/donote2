@@ -101,10 +101,7 @@ const accessLabels: { value: MemberAccess; label: string }[] = [
 </script>
 
 <template>
-    <Dialog
-        :open="open"
-        @update:open="(value) => emit('update:open', value)"
-    >
+    <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
         <DialogContent class="max-w-md">
             <DialogTitle>Share note</DialogTitle>
 
@@ -122,8 +119,7 @@ const accessLabels: { value: MemberAccess; label: string }[] = [
                             >Anyone in the team can view</span
                         >
                         <span class="block text-xs text-muted-foreground"
-                            >Read-only for every current and future
-                            member</span
+                            >Read-only for every current and future member</span
                         >
                     </span>
                     <input

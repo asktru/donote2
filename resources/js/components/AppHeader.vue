@@ -165,7 +165,6 @@ const mainNavItems = computed<NavItem[]>(() => [
                                 class="size-5 opacity-80 group-hover:opacity-100"
                             />
                         </Button>
-
                     </div>
 
                     <DropdownMenu>

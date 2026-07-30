@@ -19,12 +19,7 @@ import { openCalendar, openView } from '@/stores/ui';
 
 export type NativeTabId = 'journal' | 'reminders' | 'tasks' | 'calendar';
 export type NativeFabAction =
-    | 'meet-with'
-    | 'timeblock'
-    | 'new-note'
-    | 'record'
-    | 'attach'
-    | 'ai-prompt';
+    'meet-with' | 'timeblock' | 'new-note' | 'record' | 'attach' | 'ai-prompt';
 
 interface NativeTabsPlugin {
     setActive: (options: { id: NativeTabId }) => Promise<void>;

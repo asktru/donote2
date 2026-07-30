@@ -35,7 +35,9 @@ describe('pickMeetEvent', () => {
     });
 
     it('treats an event starting exactly now as in progress', () => {
-        const events = [candidate('2026-07-15T12:00:00Z', '2026-07-15T12:30:00Z')];
+        const events = [
+            candidate('2026-07-15T12:00:00Z', '2026-07-15T12:30:00Z'),
+        ];
 
         expect(pickMeetEvent(events, NOW)).not.toBeNull();
     });
@@ -60,7 +62,9 @@ describe('pickMeetEvent', () => {
     });
 
     it('ignores an event starting beyond the hour', () => {
-        const events = [candidate('2026-07-15T13:30:00Z', '2026-07-15T14:00:00Z')];
+        const events = [
+            candidate('2026-07-15T13:30:00Z', '2026-07-15T14:00:00Z'),
+        ];
 
         expect(pickMeetEvent(events, NOW)).toBeNull();
     });

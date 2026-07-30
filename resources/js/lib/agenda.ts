@@ -99,7 +99,9 @@ export function selectMeetings(
     const cutoff = addDays(today, -config.days);
 
     return meetings
-        .filter((m) => m.folder === 'Meetings' || m.folder.startsWith('Meetings/'))
+        .filter(
+            (m) => m.folder === 'Meetings' || m.folder.startsWith('Meetings/'),
+        )
         .filter((m) => {
             const title = m.title.toLowerCase();
 

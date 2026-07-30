@@ -260,9 +260,7 @@ onBeforeUnmount(() => {
                         size="sm"
                         variant="outline"
                         class="h-7 gap-1 px-2 text-xs"
-                        @click="
-                            (event) => openNote(candidate, event.altKey)
-                        "
+                        @click="(event) => openNote(candidate, event.altKey)"
                     >
                         <ExternalLink class="size-3.5" /> Open
                     </Button>

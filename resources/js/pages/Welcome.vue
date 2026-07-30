@@ -66,7 +66,9 @@ const features = [
 <template>
     <Head title="Notes, tasks, and plans in markdown" />
     <div class="min-h-screen bg-background text-foreground">
-        <header class="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-5">
+        <header
+            class="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-5"
+        >
             <div class="flex items-center gap-2.5">
                 <AppLogoIcon class="size-8" />
                 <span class="text-lg font-semibold tracking-tight">Donote</span>
@@ -105,7 +107,9 @@ const features = [
                 >
                     Your team's notes, tasks, and plans — in plain markdown
                 </h1>
-                <p class="mx-auto mt-5 max-w-2xl text-lg text-balance text-muted-foreground">
+                <p
+                    class="mx-auto mt-5 max-w-2xl text-lg text-balance text-muted-foreground"
+                >
                     Donote is an offline-first workspace where tasks live inside
                     your notes, days roll up into weeks and quarters, and
                     everything stays connected.
@@ -140,72 +144,151 @@ const features = [
             <section
                 class="mx-auto max-w-2xl overflow-hidden rounded-xl border border-border bg-card shadow-lg shadow-black/5"
             >
-                <div class="flex items-center gap-2 border-b border-border px-4 py-2.5">
+                <div
+                    class="flex items-center gap-2 border-b border-border px-4 py-2.5"
+                >
                     <span class="size-2.5 rounded-full bg-[#dc4c3e]/80" />
                     <span class="size-2.5 rounded-full bg-[#eb8909]/80" />
                     <span class="size-2.5 rounded-full bg-[#5cb85c]/80" />
-                    <span class="ml-3 text-xs text-muted-foreground">Friday, July 11 · Daily note</span>
+                    <span class="ml-3 text-xs text-muted-foreground"
+                        >Friday, July 11 · Daily note</span
+                    >
                 </div>
                 <div class="space-y-1.5 p-6 font-mono text-[13px] leading-6">
                     <p class="pb-1 text-base font-semibold">Friday, July 11</p>
                     <p class="flex items-start gap-2">
-                        <span class="mt-1.5 inline-block size-3 shrink-0 rounded-full border-2 border-[#dc4c3e]" />
+                        <span
+                            class="mt-1.5 inline-block size-3 shrink-0 rounded-full border-2 border-[#dc4c3e]"
+                        />
                         <span>
                             Finish launch checklist for
-                            <span class="rounded px-1 py-0.5" style="color: var(--token-link); background: var(--token-link-bg)">[[Website relaunch]]</span>
-                            <span class="text-muted-foreground">@due(2026-07-14)</span>
+                            <span
+                                class="rounded px-1 py-0.5"
+                                style="
+                                    color: var(--token-link);
+                                    background: var(--token-link-bg);
+                                "
+                                >[[Website relaunch]]</span
+                            >
+                            <span class="text-muted-foreground"
+                                >@due(2026-07-14)</span
+                            >
                         </span>
                     </p>
                     <p class="flex items-start gap-2 pl-6">
-                        <span class="mt-2.5 inline-block size-1.5 shrink-0 rounded-full bg-muted-foreground" />
-                        <span class="text-muted-foreground">copy is done, waiting on the hero image</span>
+                        <span
+                            class="mt-2.5 inline-block size-1.5 shrink-0 rounded-full bg-muted-foreground"
+                        />
+                        <span class="text-muted-foreground"
+                            >copy is done, waiting on the hero image</span
+                        >
                     </p>
                     <p class="flex items-start gap-2">
-                        <span class="mt-1.5 inline-block size-3 shrink-0 rounded-full border-2 border-[#246fe0]" />
+                        <span
+                            class="mt-1.5 inline-block size-3 shrink-0 rounded-full border-2 border-[#246fe0]"
+                        />
                         <span>
                             Prep 1:1 agenda with
-                            <span class="rounded px-1 py-0.5" style="color: var(--token-mention); background: var(--token-mention-bg)">@irene</span>
-                            <span class="rounded px-1 py-0.5" style="color: var(--token-tag); background: var(--token-tag-bg)">#hiring</span>
+                            <span
+                                class="rounded px-1 py-0.5"
+                                style="
+                                    color: var(--token-mention);
+                                    background: var(--token-mention-bg);
+                                "
+                                >@irene</span
+                            >
+                            <span
+                                class="rounded px-1 py-0.5"
+                                style="
+                                    color: var(--token-tag);
+                                    background: var(--token-tag-bg);
+                                "
+                                >#hiring</span
+                            >
                             <span class="text-muted-foreground">@2pm</span>
                         </span>
                     </p>
                     <p class="flex items-start gap-2">
-                        <span class="mt-1.5 inline-block size-3 shrink-0 rounded-full border-2 border-muted-foreground/50" />
+                        <span
+                            class="mt-1.5 inline-block size-3 shrink-0 rounded-full border-2 border-muted-foreground/50"
+                        />
                         <span>
                             Water the office plants
-                            <span class="text-muted-foreground">@repeat(Tue,Fri)</span>
+                            <span class="text-muted-foreground"
+                                >@repeat(Tue,Fri)</span
+                            >
                         </span>
                     </p>
                     <p class="flex items-start gap-2">
-                        <span class="mt-1.5 inline-block size-3 shrink-0 rounded-full border-2 border-muted-foreground/50" />
+                        <span
+                            class="mt-1.5 inline-block size-3 shrink-0 rounded-full border-2 border-muted-foreground/50"
+                        />
                         <span>
                             Draft Q3 goals
-                            <span class="rounded px-1 py-0.5" style="color: var(--token-link); background: var(--token-link-bg)">&gt;2026-Q3</span>
+                            <span
+                                class="rounded px-1 py-0.5"
+                                style="
+                                    color: var(--token-link);
+                                    background: var(--token-link-bg);
+                                "
+                                >&gt;2026-Q3</span
+                            >
                         </span>
                     </p>
                     <p class="flex items-start gap-2">
-                        <svg viewBox="0 0 16 16" class="mt-1.5 size-3 shrink-0 text-[#5cb85c]" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="8" cy="8" r="7" fill="currentColor" stroke="none" opacity="0.15" />
-                            <path d="M4.5 8.5 7 11l4.5-5.5" stroke-linecap="round" stroke-linejoin="round" />
+                        <svg
+                            viewBox="0 0 16 16"
+                            class="mt-1.5 size-3 shrink-0 text-[#5cb85c]"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <circle
+                                cx="8"
+                                cy="8"
+                                r="7"
+                                fill="currentColor"
+                                stroke="none"
+                                opacity="0.15"
+                            />
+                            <path
+                                d="M4.5 8.5 7 11l4.5-5.5"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
                         </svg>
-                        <span class="text-muted-foreground line-through decoration-muted-foreground/60">
+                        <span
+                            class="text-muted-foreground line-through decoration-muted-foreground/60"
+                        >
                             Ship the sync fix
                         </span>
-                        <span class="font-sans text-xs text-muted-foreground/70 no-underline">✓ done</span>
+                        <span
+                            class="font-sans text-xs text-muted-foreground/70 no-underline"
+                            >✓ done</span
+                        >
                     </p>
                 </div>
             </section>
 
             <section class="mt-16 grid gap-x-10 gap-y-8 sm:grid-cols-2">
-                <div v-for="feature in features" :key="feature.title" class="flex gap-3.5">
+                <div
+                    v-for="feature in features"
+                    :key="feature.title"
+                    class="flex gap-3.5"
+                >
                     <span
                         class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50"
                     >
-                        <component :is="feature.icon" class="size-4.5 text-muted-foreground" />
+                        <component
+                            :is="feature.icon"
+                            class="size-4.5 text-muted-foreground"
+                        />
                     </span>
                     <div>
                         <h2 class="font-medium">{{ feature.title }}</h2>
-                        <p class="mt-1 text-sm leading-relaxed text-muted-foreground">
+                        <p
+                            class="mt-1 text-sm leading-relaxed text-muted-foreground"
+                        >
                             {{ feature.text }}
                         </p>
                     </div>

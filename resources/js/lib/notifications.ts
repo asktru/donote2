@@ -103,7 +103,8 @@ async function registerIosListeners(): Promise<void> {
 
     iosListenersReady = true;
 
-    const { LocalNotifications } = await import('@capacitor/local-notifications');
+    const { LocalNotifications } =
+        await import('@capacitor/local-notifications');
 
     // The Snooze button; `foreground` brings the app up so we can rewrite the
     // note's @time token and reschedule.
@@ -125,7 +126,8 @@ async function registerIosListeners(): Promise<void> {
     await LocalNotifications.addListener(
         'localNotificationActionPerformed',
         (action) => {
-            const extra = action.notification.extra as Partial<Target> | undefined;
+            const extra = action.notification.extra as
+                Partial<Target> | undefined;
 
             if (!extra?.noteId) {
                 return;
@@ -206,7 +208,8 @@ async function reconcileIos(
     desired: DesiredNotification[],
     live: Set<number>,
 ): Promise<void> {
-    const { LocalNotifications } = await import('@capacitor/local-notifications');
+    const { LocalNotifications } =
+        await import('@capacitor/local-notifications');
 
     // Ask once, lazily — only reached when there's something to schedule.
     let permission = await LocalNotifications.checkPermissions();
@@ -272,7 +275,8 @@ async function removeDeadDeliveredIos(
     teamSlug: string,
     live: Set<number>,
 ): Promise<void> {
-    const { LocalNotifications } = await import('@capacitor/local-notifications');
+    const { LocalNotifications } =
+        await import('@capacitor/local-notifications');
     const delivered = await LocalNotifications.getDeliveredNotifications();
 
     const dead = staleNotificationIds(
@@ -304,7 +308,10 @@ const timers = new Map<
 >();
 
 /** Notifications currently on screen, so they can be withdrawn again. */
-const shown = new Map<number, { notification: Notification; teamSlug: string }>();
+const shown = new Map<
+    number,
+    { notification: Notification; teamSlug: string }
+>();
 
 function notificationsSupported(): boolean {
     return typeof window !== 'undefined' && 'Notification' in window;

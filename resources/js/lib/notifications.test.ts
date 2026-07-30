@@ -33,7 +33,11 @@ describe('staleNotificationIds', () => {
 
     it('treats legacy untagged reminders as the current team’s', () => {
         expect(
-            staleNotificationIds([{ id: 7, teamSlug: null }], new Set(), 'alpha'),
+            staleNotificationIds(
+                [{ id: 7, teamSlug: null }],
+                new Set(),
+                'alpha',
+            ),
         ).toEqual([7]);
     });
 

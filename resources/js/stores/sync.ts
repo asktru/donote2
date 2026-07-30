@@ -354,7 +354,8 @@ export async function syncNow(): Promise<void> {
         }
 
         syncStatus.value = navigator.onLine ? 'error' : 'offline';
-        lastSyncError.value = error instanceof Error ? error.message : String(error);
+        lastSyncError.value =
+            error instanceof Error ? error.message : String(error);
         logSync('error', `Sync failed: ${lastSyncError.value}`);
         console.warn('[donote] sync failed', error);
     } finally {
@@ -404,10 +405,14 @@ export async function forceFullResync(): Promise<void> {
         syncStatus.value = 'synced';
         lastSyncAt.value = Date.now();
         lastSyncError.value = null;
-        logSync('info', `Force resync done: pulled ${received}, pruned ${pruned}.`);
+        logSync(
+            'info',
+            `Force resync done: pulled ${received}, pruned ${pruned}.`,
+        );
     } catch (error) {
         syncStatus.value = navigator.onLine ? 'error' : 'offline';
-        lastSyncError.value = error instanceof Error ? error.message : String(error);
+        lastSyncError.value =
+            error instanceof Error ? error.message : String(error);
         logSync('error', `Force resync failed: ${lastSyncError.value}`);
 
         throw error;
@@ -449,7 +454,8 @@ export async function rebuildLocalCopy(): Promise<void> {
         );
     } catch (error) {
         syncStatus.value = navigator.onLine ? 'error' : 'offline';
-        lastSyncError.value = error instanceof Error ? error.message : String(error);
+        lastSyncError.value =
+            error instanceof Error ? error.message : String(error);
         logSync('error', `Rebuild failed: ${lastSyncError.value}`);
 
         throw error;

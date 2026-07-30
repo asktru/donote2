@@ -292,8 +292,7 @@ async function createFromQuery(): Promise<void> {
 
 function onKeydown(event: KeyboardEvent): void {
     const jumps = jumpRows.value.length;
-    const total =
-        jumps + displayRows.value.length + (showCreate.value ? 1 : 0);
+    const total = jumps + displayRows.value.length + (showCreate.value ? 1 : 0);
 
     if (event.key === 'ArrowDown') {
         highlighted.value = (highlighted.value + 1) % Math.max(total, 1);
@@ -444,7 +443,9 @@ function onKeydown(event: KeyboardEvent): void {
                                 : 'hover:bg-muted/60',
                         )
                     "
-                    @mouseenter="highlighted = jumpRows.length + displayRows.length"
+                    @mouseenter="
+                        highlighted = jumpRows.length + displayRows.length
+                    "
                     @click="createFromQuery"
                 >
                     <FilePlus class="size-4 shrink-0 text-primary" />

@@ -125,9 +125,7 @@ async function emptyTrash(): Promise<void> {
                 :key="note.id"
                 class="group flex items-start gap-2.5 rounded-lg px-2 py-1.5 hover:bg-muted/50"
             >
-                <Trash2
-                    class="mt-1 size-4 shrink-0 text-muted-foreground/60"
-                />
+                <Trash2 class="mt-1 size-4 shrink-0 text-muted-foreground/60" />
                 <div class="min-w-0 flex-1">
                     <p class="truncate text-sm">{{ label(note) }}</p>
                     <p

@@ -26,14 +26,19 @@ describe('resolveReminderAt', () => {
     it('follows the task to another daily note', () => {
         // Moving the line is what reschedules it: nothing about the line
         // itself changes, only the note holding it.
-        const at = resolveReminderAt(parseLine('- [ ] Standup @8am'), '2026-07-15');
+        const at = resolveReminderAt(
+            parseLine('- [ ] Standup @8am'),
+            '2026-07-15',
+        );
 
         expect(at?.getDate()).toBe(15);
         expect(at?.getHours()).toBe(8);
     });
 
     it('does not fire at all without a schedule or a daily note', () => {
-        expect(resolveReminderAt(parseLine('- [ ] Standup @8am'), null)).toBeNull();
+        expect(
+            resolveReminderAt(parseLine('- [ ] Standup @8am'), null),
+        ).toBeNull();
     });
 
     it('fires on the scheduled day', () => {

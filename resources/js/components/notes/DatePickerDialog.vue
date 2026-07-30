@@ -41,7 +41,9 @@ const open = computed({
     },
 });
 
-const allowPeriods = computed(() => datePickerRequest.value?.allowPeriods ?? true);
+const allowPeriods = computed(
+    () => datePickerRequest.value?.allowPeriods ?? true,
+);
 
 // (Re)initialize each time the picker opens.
 watch(datePickerRequest, (request) => {
@@ -103,7 +105,9 @@ const weeks = computed<WeekRow[]>(() => {
     let cursor = startOfISOWeek(startOfMonth(focusedMonth.value));
 
     for (let index = 0; index < 6; index++) {
-        const days = Array.from({ length: 7 }, (_, day) => addDays(cursor, day));
+        const days = Array.from({ length: 7 }, (_, day) =>
+            addDays(cursor, day),
+        );
 
         rows.push({
             weekKey: `${getISOWeekYear(cursor)}-W${String(getISOWeek(cursor)).padStart(2, '0')}`,
@@ -153,7 +157,9 @@ function goToCalendarNote(): void {
     <Dialog v-model:open="open">
         <DialogContent class="max-w-xs gap-0 p-0">
             <DialogHeader class="px-4 pt-4 pb-2">
-                <DialogTitle>{{ datePickerRequest?.title ?? 'Date' }}</DialogTitle>
+                <DialogTitle>{{
+                    datePickerRequest?.title ?? 'Date'
+                }}</DialogTitle>
                 <DialogDescription class="sr-only">
                     Type a date or pick one from the calendar.
                 </DialogDescription>
@@ -185,15 +191,21 @@ function goToCalendarNote(): void {
                 </div>
 
                 <!-- Period shortcuts (schedule only). -->
-                <div
-                    v-if="allowPeriods"
-                    class="flex flex-wrap gap-1 text-xs"
-                >
+                <div v-if="allowPeriods" class="flex flex-wrap gap-1 text-xs">
                     <button
                         v-for="option in [
-                            { label: format(focusedMonth, 'MMMM'), key: monthKey },
-                            { label: `Q${format(focusedMonth, 'Q')}`, key: quarterKey },
-                            { label: format(focusedMonth, 'yyyy'), key: yearKey },
+                            {
+                                label: format(focusedMonth, 'MMMM'),
+                                key: monthKey,
+                            },
+                            {
+                                label: `Q${format(focusedMonth, 'Q')}`,
+                                key: quarterKey,
+                            },
+                            {
+                                label: format(focusedMonth, 'yyyy'),
+                                key: yearKey,
+                            },
                         ]"
                         :key="option.key"
                         type="button"
@@ -222,7 +234,9 @@ function goToCalendarNote(): void {
                                 size="icon"
                                 class="size-6"
                                 aria-label="Previous month"
-                                @click="focusedMonth = addMonths(focusedMonth, -1)"
+                                @click="
+                                    focusedMonth = addMonths(focusedMonth, -1)
+                                "
                             >
                                 <ChevronLeft class="size-3.5" />
                             </Button>
@@ -231,7 +245,9 @@ function goToCalendarNote(): void {
                                 size="icon"
                                 class="size-6"
                                 aria-label="Next month"
-                                @click="focusedMonth = addMonths(focusedMonth, 1)"
+                                @click="
+                                    focusedMonth = addMonths(focusedMonth, 1)
+                                "
                             >
                                 <ChevronRight class="size-3.5" />
                             </Button>
@@ -241,11 +257,20 @@ function goToCalendarNote(): void {
                     <div
                         class="grid grid-cols-[auto_repeat(7,1fr)] gap-y-0.5 text-center text-xs"
                     >
-                        <span class="pr-1.5 text-[10px] text-muted-foreground/60"
+                        <span
+                            class="pr-1.5 text-[10px] text-muted-foreground/60"
                             >CW</span
                         >
                         <span
-                            v-for="day in ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']"
+                            v-for="day in [
+                                'Mo',
+                                'Tu',
+                                'We',
+                                'Th',
+                                'Fr',
+                                'Sa',
+                                'Su',
+                            ]"
                             :key="day"
                             class="pb-1 text-[10px] text-muted-foreground"
                         >
@@ -293,7 +318,9 @@ function goToCalendarNote(): void {
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2 border-t border-border/60 pt-3">
+                <div
+                    class="flex items-center gap-2 border-t border-border/60 pt-3"
+                >
                     <button
                         type="button"
                         class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
