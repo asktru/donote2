@@ -11,10 +11,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import {
-    defaultTemplateMonth,
-    renderTemplate,
-} from '@/lib/noteTemplates';
+import { defaultTemplateMonth, renderTemplate } from '@/lib/noteTemplates';
 import type { TemplateMonth } from '@/lib/noteTemplates';
 import {
     closeTemplateDialog,
@@ -57,9 +54,7 @@ watch(template, (note) => {
 const targetMonth = computed<TemplateMonth | null>(() => {
     const match = monthValue.value.match(/^(\d{4})-(\d{2})$/);
 
-    return match
-        ? { year: Number(match[1]), month: Number(match[2]) }
-        : null;
+    return match ? { year: Number(match[1]), month: Number(match[2]) } : null;
 });
 
 const preview = computed(() =>
@@ -111,9 +106,8 @@ function onOpenChange(open: boolean): void {
             <DialogHeader>
                 <DialogTitle>New note from template</DialogTitle>
                 <DialogDescription>
-                    Generate a note from
-                    “{{ template?.title || 'Untitled' }}” — date placeholders
-                    fill in from the chosen month.
+                    Generate a note from “{{ template?.title || 'Untitled' }}” —
+                    date placeholders fill in from the chosen month.
                 </DialogDescription>
             </DialogHeader>
 

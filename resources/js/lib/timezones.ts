@@ -15,7 +15,8 @@ export function zoneOffsetLabel(zone: string, at: Date = new Date()): string {
         timeZone: zone,
         timeZoneName: 'longOffset',
     }).formatToParts(at);
-    const name = parts.find((part) => part.type === 'timeZoneName')?.value ?? '';
+    const name =
+        parts.find((part) => part.type === 'timeZoneName')?.value ?? '';
     const match = name.match(/GMT([+-])(\d{2}):(\d{2})/);
 
     if (!match) {

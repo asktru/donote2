@@ -19,7 +19,11 @@ import { isTouchDevice } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import { aiDialogOpen } from '@/stores/aiPrompts';
 import { activeEditor, editorFocused } from '@/stores/editorRegistry';
-import { appendLinkToTodayNote, isRecording, startRecording } from '@/stores/memos';
+import {
+    appendLinkToTodayNote,
+    isRecording,
+    startRecording,
+} from '@/stores/memos';
 import { promptText } from '@/stores/prompt';
 import { currentView, openNote, searchOpen } from '@/stores/ui';
 import { createNote, fetchAgenda, getNote } from '@/stores/workspace';

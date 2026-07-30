@@ -459,7 +459,11 @@ export function insertUnderPath(
     // Land after the group's last real line, never after its trailing blanks.
     let at = end + 1;
 
-    while (at > from && raw[at - 1] !== undefined && raw[at - 1].trim() === '') {
+    while (
+        at > from &&
+        raw[at - 1] !== undefined &&
+        raw[at - 1].trim() === ''
+    ) {
         at--;
     }
 

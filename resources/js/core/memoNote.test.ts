@@ -84,9 +84,9 @@ describe('safeDailyKey', () => {
 
 describe('appendUnderHeading', () => {
     it('creates the heading in an empty note', () => {
-        expect(appendUnderHeading('', 'Audio Memos', '- [[Audio memo A]]')).toBe(
-            '## Audio Memos\n- [[Audio memo A]]\n',
-        );
+        expect(
+            appendUnderHeading('', 'Audio Memos', '- [[Audio memo A]]'),
+        ).toBe('## Audio Memos\n- [[Audio memo A]]\n');
     });
 
     it('stacks new links under an existing heading, in order', () => {

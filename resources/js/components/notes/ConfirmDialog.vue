@@ -38,7 +38,9 @@ function onOpenChange(open: boolean): void {
                 </Button>
                 <Button
                     type="button"
-                    :variant="confirmState.destructive ? 'destructive' : 'default'"
+                    :variant="
+                        confirmState.destructive ? 'destructive' : 'default'
+                    "
                     @click="resolveConfirm(true)"
                 >
                     {{ confirmState.confirmLabel ?? 'Confirm' }}

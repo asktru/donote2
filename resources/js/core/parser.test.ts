@@ -19,7 +19,9 @@ describe('parseLine — URLs and inline markdown in titles', () => {
     });
 
     it('does not treat an @handle inside a URL as a mention', () => {
-        const line = parseLine('- [ ] Ping https://x.com/@someone about it @Bob');
+        const line = parseLine(
+            '- [ ] Ping https://x.com/@someone about it @Bob',
+        );
 
         expect(line.mentions).toEqual(['Bob']);
     });

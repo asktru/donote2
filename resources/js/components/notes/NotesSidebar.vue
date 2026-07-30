@@ -120,7 +120,6 @@ const calendarSections: {
     { kind: 'yearly', label: 'Yearly', icon: CalendarClock },
 ];
 
-
 const activeNoteId = computed(() =>
     currentView.value.kind === 'note' ? currentView.value.id : null,
 );
@@ -218,10 +217,7 @@ const syncLabel = computed(() => {
     <aside
         class="flex h-full w-full shrink-0 flex-col border-r border-border/60 bg-muted/20"
     >
-        <div
-            v-if="isMacDesktopShell"
-            class="app-region-drag h-7 shrink-0"
-        />
+        <div v-if="isMacDesktopShell" class="app-region-drag h-7 shrink-0" />
         <div class="flex items-center gap-1 px-3 pt-3 pb-1">
             <TeamSwitcher in-header class="min-w-0 flex-1" />
             <Tooltip>
@@ -466,47 +462,49 @@ const syncLabel = computed(() => {
                     </div>
                 </div>
                 <template v-if="!isSectionCollapsed('notes')">
-                <FolderTree
-                    path=""
-                    :depth="0"
-                    :folders="mainFolders"
-                    :notes="ownNotes"
-                    :active-note-id="activeNoteId"
-                    @open-note="(id, split) => openNote(id, { split })"
-                />
+                    <FolderTree
+                        path=""
+                        :depth="0"
+                        :folders="mainFolders"
+                        :notes="ownNotes"
+                        :active-note-id="activeNoteId"
+                        @open-note="(id, split) => openNote(id, { split })"
+                    />
 
-                <div v-if="sharedNotes.length > 0" class="mt-3">
-                    <p
-                        class="flex items-center gap-1.5 px-2 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
-                    >
-                        <Users class="size-3" /> Shared with me
-                    </p>
-                    <button
-                        v-for="shared in sharedNotes"
-                        :key="shared.id"
-                        type="button"
-                        :class="
-                            cn(
-                                'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-muted/70',
-                                activeNoteId === shared.id
-                                    ? 'bg-muted font-medium text-primary'
-                                    : 'text-foreground/90',
-                            )
-                        "
-                        @click="(event) => onNoteClick(event, shared.id)"
-                    >
-                        <FileText class="size-4 shrink-0 text-muted-foreground" />
-                        <span class="min-w-0 flex-1 truncate">{{
-                            shared.title || 'Untitled'
-                        }}</span>
-                        <span
-                            v-if="shared.access === 'read'"
-                            class="shrink-0 text-[10px] text-muted-foreground"
-                            title="Read-only"
-                            >view</span
+                    <div v-if="sharedNotes.length > 0" class="mt-3">
+                        <p
+                            class="flex items-center gap-1.5 px-2 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
                         >
-                    </button>
-                </div>
+                            <Users class="size-3" /> Shared with me
+                        </p>
+                        <button
+                            v-for="shared in sharedNotes"
+                            :key="shared.id"
+                            type="button"
+                            :class="
+                                cn(
+                                    'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-muted/70',
+                                    activeNoteId === shared.id
+                                        ? 'bg-muted font-medium text-primary'
+                                        : 'text-foreground/90',
+                                )
+                            "
+                            @click="(event) => onNoteClick(event, shared.id)"
+                        >
+                            <FileText
+                                class="size-4 shrink-0 text-muted-foreground"
+                            />
+                            <span class="min-w-0 flex-1 truncate">{{
+                                shared.title || 'Untitled'
+                            }}</span>
+                            <span
+                                v-if="shared.access === 'read'"
+                                class="shrink-0 text-[10px] text-muted-foreground"
+                                title="Read-only"
+                                >view</span
+                            >
+                        </button>
+                    </div>
                 </template>
             </section>
 

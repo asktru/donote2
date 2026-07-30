@@ -21,8 +21,7 @@ export const promptNotes = computed<PromptNote[]>(() =>
     liveNotes.value
         .filter(
             (note) =>
-                note.type === 'note' &&
-                noteMetaFor(note.id).type === 'prompt',
+                note.type === 'note' && noteMetaFor(note.id).type === 'prompt',
         )
         .map((note) => {
             const meta = noteMetaFor(note.id);

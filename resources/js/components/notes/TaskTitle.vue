@@ -11,10 +11,10 @@ const segments = computed(() => inlineSegments(props.text));
 <template>
     <!-- Inline styling mirrors the editor's tokens (shared CSS variables). -->
     <span
-        ><template v-for="(seg, index) in segments" :key="index"><strong
-                v-if="seg.kind === 'bold'"
-                class="font-semibold"
-                >{{ seg.text }}</strong
+        ><template v-for="(seg, index) in segments" :key="index"
+            ><strong v-if="seg.kind === 'bold'" class="font-semibold">{{
+                seg.text
+            }}</strong
             ><em v-else-if="seg.kind === 'italic'">{{ seg.text }}</em
             ><code
                 v-else-if="seg.kind === 'code'"

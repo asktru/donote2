@@ -248,9 +248,7 @@ export const trashedNotes = computed<LocalNote[]>(() =>
 export const ARCHIVE_FOLDER = '@Archive';
 
 export function isArchivedFolder(folder: string): boolean {
-    return (
-        folder === ARCHIVE_FOLDER || folder.startsWith(`${ARCHIVE_FOLDER}/`)
-    );
+    return folder === ARCHIVE_FOLDER || folder.startsWith(`${ARCHIVE_FOLDER}/`);
 }
 
 export function isArchivedNote(note: { folder: string }): boolean {

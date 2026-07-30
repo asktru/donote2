@@ -204,7 +204,9 @@ function onBlur(): void {
                     type="button"
                     :class="[
                         'flex w-full flex-col items-start px-2.5 py-1.5 text-left',
-                        index === highlighted ? 'bg-muted' : 'hover:bg-muted/60',
+                        index === highlighted
+                            ? 'bg-muted'
+                            : 'hover:bg-muted/60',
                     ]"
                     @mouseenter="highlighted = index"
                     @mousedown.prevent="pick(person)"

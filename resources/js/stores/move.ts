@@ -73,18 +73,16 @@ export async function completeMoveToNote(destId: string): Promise<void> {
     if (dest !== undefined) {
         // Above the Done section: moved work is live work, and the section is
         // collapsed by default — landing in it would look like a vanishing.
-        await updateNoteContent(
-            destId,
-            appendToBody(dest.content, move.text),
-        );
+        await updateNoteContent(destId, appendToBody(dest.content, move.text));
     }
 
     // Cut from the source through the live editor (source of truth), taking
     // the block's trailing newline so no blank line is left behind.
     const doc = move.view.state.doc;
-    const end = move.to < doc.length && doc.sliceString(move.to, move.to + 1) === '\n'
-        ? move.to + 1
-        : move.to;
+    const end =
+        move.to < doc.length && doc.sliceString(move.to, move.to + 1) === '\n'
+            ? move.to + 1
+            : move.to;
     move.view.dispatch({ changes: { from: move.from, to: end, insert: '' } });
 }
 

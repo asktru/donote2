@@ -25,8 +25,7 @@ watch(
         value.value = promptState.value.initialValue ?? '';
         await nextTick();
         const el = (inputEl.value?.$el ?? inputEl.value) as
-            | HTMLInputElement
-            | undefined;
+            HTMLInputElement | undefined;
         el?.focus();
         el?.select();
     },

@@ -55,7 +55,8 @@ export function isNativeIos(): boolean {
         return false;
     }
 
-    const cap = (window as unknown as { Capacitor?: CapacitorGlobal }).Capacitor;
+    const cap = (window as unknown as { Capacitor?: CapacitorGlobal })
+        .Capacitor;
 
     return cap?.isNativePlatform?.() === true && cap.getPlatform?.() === 'ios';
 }

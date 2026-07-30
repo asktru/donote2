@@ -141,7 +141,11 @@ function upcomingMonth(base: Date, monthIndex: number): Date {
 }
 
 /** A month/day this year, rolling to next year if already past. */
-function upcomingMonthDay(base: Date, monthIndex: number, day: number): Date | null {
+function upcomingMonthDay(
+    base: Date,
+    monthIndex: number,
+    day: number,
+): Date | null {
     let candidate = new Date(base.getFullYear(), monthIndex, day);
 
     if (candidate.getMonth() !== monthIndex || candidate.getDate() !== day) {
@@ -155,7 +159,10 @@ function upcomingMonthDay(base: Date, monthIndex: number, day: number): Date | n
     return candidate;
 }
 
-export function parseNaturalDate(input: string, ref: Date = new Date()): string | null {
+export function parseNaturalDate(
+    input: string,
+    ref: Date = new Date(),
+): string | null {
     const raw = input.trim();
 
     if (raw === '') {
@@ -224,7 +231,9 @@ export function parseNaturalDate(input: string, ref: Date = new Date()): string 
     const weekday = lower.match(/^(next|this)?\s*([a-z]+)$/);
 
     if (weekday && weekday[2] in WEEKDAYS) {
-        return daily(onWeekday(base, WEEKDAYS[weekday[2]], weekday[1] === 'next'));
+        return daily(
+            onWeekday(base, WEEKDAYS[weekday[2]], weekday[1] === 'next'),
+        );
     }
 
     // Bare month name.

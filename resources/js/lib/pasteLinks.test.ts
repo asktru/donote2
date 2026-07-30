@@ -61,7 +61,9 @@ describe('pasteAsMarkdownLink', () => {
                 'https://app.clickup.com/t/9003144822/PT-12817',
                 'the PT ticket',
             ),
-        ).toBe('[the PT ticket](https://app.clickup.com/t/9003144822/PT-12817)');
+        ).toBe(
+            '[the PT ticket](https://app.clickup.com/t/9003144822/PT-12817)',
+        );
     });
 
     it('titles known URLs even without a selection', () => {
@@ -70,7 +72,9 @@ describe('pasteAsMarkdownLink', () => {
                 'https://app.clickup.com/t/9003144822/PT-12817',
                 '',
             ),
-        ).toBe('[ClickUp: PT-12817](https://app.clickup.com/t/9003144822/PT-12817)');
+        ).toBe(
+            '[ClickUp: PT-12817](https://app.clickup.com/t/9003144822/PT-12817)',
+        );
     });
 
     it('passes through unknown URLs without a selection', () => {

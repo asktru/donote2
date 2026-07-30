@@ -43,7 +43,10 @@ describe('wrapNativePlugin', () => {
             events,
         });
 
-        const result = await bridge.events('2026-07-12T00:00:00Z', '2026-07-13T00:00:00Z');
+        const result = await bridge.events(
+            '2026-07-12T00:00:00Z',
+            '2026-07-13T00:00:00Z',
+        );
 
         expect(events).toHaveBeenCalledWith({
             from: '2026-07-12T00:00:00Z',
@@ -60,7 +63,11 @@ describe('wrapNativePlugin', () => {
             events: vi.fn(),
         });
 
-        await expect(bridge.status()).resolves.toEqual({ status: 'authorized' });
-        await expect(bridge.requestAccess()).resolves.toEqual({ granted: true });
+        await expect(bridge.status()).resolves.toEqual({
+            status: 'authorized',
+        });
+        await expect(bridge.requestAccess()).resolves.toEqual({
+            granted: true,
+        });
     });
 });

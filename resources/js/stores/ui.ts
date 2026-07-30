@@ -73,7 +73,10 @@ export const sidebarWidth = ref<number>(readSidebarWidth());
 
 /** Set the sidebar width (clamped) and remember it across sessions. */
 export function setSidebarWidth(width: number): void {
-    const clamped = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, Math.round(width)));
+    const clamped = Math.min(
+        SIDEBAR_MAX,
+        Math.max(SIDEBAR_MIN, Math.round(width)),
+    );
     sidebarWidth.value = clamped;
 
     try {

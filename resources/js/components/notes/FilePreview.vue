@@ -193,8 +193,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, true));
                 <pre
                     v-else
                     class="size-full overflow-auto rounded-lg border border-white/20 bg-background px-5 py-4 font-mono text-[13px] leading-relaxed whitespace-pre-wrap text-foreground"
-                    >{{ filePreview.content }}</pre
-                >
+                    >{{ filePreview.content }}</pre>
             </div>
         </div>
     </Teleport>

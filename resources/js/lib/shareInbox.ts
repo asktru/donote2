@@ -63,9 +63,7 @@ export function itemsForTeam(
     items: ShareInboxItem[],
     teamSlug: string,
 ): ShareInboxItem[] {
-    return items.filter(
-        (item) => !item.teamSlug || item.teamSlug === teamSlug,
-    );
+    return items.filter((item) => !item.teamSlug || item.teamSlug === teamSlug);
 }
 
 /** Folder shared pages land in — easy to triage, out of the notes tree root. */

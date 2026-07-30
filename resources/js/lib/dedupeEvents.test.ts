@@ -12,7 +12,12 @@ interface Row {
 describe('dedupeEvents', () => {
     it('collapses events with the same title, start, and end', () => {
         const rows: Row[] = [
-            { title: 'Standup', start: '09:00', end: '09:15', source: 'google' },
+            {
+                title: 'Standup',
+                start: '09:00',
+                end: '09:15',
+                source: 'google',
+            },
             { title: 'Standup', start: '09:00', end: '09:15', source: 'apple' },
         ];
 
@@ -46,8 +51,18 @@ describe('dedupeEvents', () => {
 
     it('collapses the same instant expressed in different zones/offsets', () => {
         const rows: Row[] = [
-            { title: 'Standup', start: '2026-07-13T07:00:00-04:00', end: '2026-07-13T07:30:00-04:00', source: 'google' },
-            { title: 'Standup', start: '2026-07-13T11:00:00Z', end: '2026-07-13T11:30:00Z', source: 'apple' },
+            {
+                title: 'Standup',
+                start: '2026-07-13T07:00:00-04:00',
+                end: '2026-07-13T07:30:00-04:00',
+                source: 'google',
+            },
+            {
+                title: 'Standup',
+                start: '2026-07-13T11:00:00Z',
+                end: '2026-07-13T11:30:00Z',
+                source: 'apple',
+            },
         ];
 
         const result = dedupeEvents(rows);

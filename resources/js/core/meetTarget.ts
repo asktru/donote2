@@ -50,7 +50,8 @@ export function pickMeetEvent<T extends MeetCandidate>(
     const candidates = byStart(joinable(events));
 
     const inProgress = candidates.find(
-        (event) => eventMoment(event.start) <= at && eventMoment(event.end) > at,
+        (event) =>
+            eventMoment(event.start) <= at && eventMoment(event.end) > at,
     );
 
     if (inProgress) {

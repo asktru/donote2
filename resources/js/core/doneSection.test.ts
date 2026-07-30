@@ -235,17 +235,19 @@ describe('appendToBody', () => {
             '- [x] Tag v1.0',
         ].join('\n');
 
-        expect(appendToBody(note, '- [ ] From the agenda').split('\n')).toEqual([
-            '# Launch',
-            '- [ ] Ship it',
-            '',
-            '- [ ] From the agenda',
-            '',
-            '---',
-            '# Done …',
-            '## Launch',
-            '- [x] Tag v1.0',
-        ]);
+        expect(appendToBody(note, '- [ ] From the agenda').split('\n')).toEqual(
+            [
+                '# Launch',
+                '- [ ] Ship it',
+                '',
+                '- [ ] From the agenda',
+                '',
+                '---',
+                '# Done …',
+                '## Launch',
+                '- [x] Tag v1.0',
+            ],
+        );
     });
 
     it('appends at the end when there is no section', () => {

@@ -71,7 +71,10 @@ describe('notesToPrune', () => {
         // visible set is expected, not evidence of remote deletion.
         expect(
             notesToPrune(
-                [{ id: 'placeholder', version: 0, dirty: 0 }, synced('revoked')],
+                [
+                    { id: 'placeholder', version: 0, dirty: 0 },
+                    synced('revoked'),
+                ],
                 new Set(),
             ),
         ).toEqual(['revoked']);

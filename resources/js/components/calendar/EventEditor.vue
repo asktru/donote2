@@ -76,9 +76,7 @@ const nameByEmail = computed(() => {
 
 const otherColleagues = computed(() =>
     teamMembers.value.filter(
-        (member) =>
-            member.email &&
-            !attendees.value.includes(member.email),
+        (member) => member.email && !attendees.value.includes(member.email),
     ),
 );
 
@@ -183,8 +181,10 @@ const slotStyle = computed<Record<string, string> | null>(() => {
     }
 
     const day = availabilityDay.value;
-    const from = differenceInMinutes(new Date(startLocal.value), day) - DAY_START_MIN;
-    const to = differenceInMinutes(new Date(endLocal.value), day) - DAY_START_MIN;
+    const from =
+        differenceInMinutes(new Date(startLocal.value), day) - DAY_START_MIN;
+    const to =
+        differenceInMinutes(new Date(endLocal.value), day) - DAY_START_MIN;
 
     return {
         left: `${(Math.max(0, from) / DAY_WINDOW_MIN) * 100}%`,
@@ -212,7 +212,10 @@ async function save(): Promise<void> {
 
     if (allDay.value) {
         start = startDate.value;
-        end = format(addDays(new Date(endDate.value || startDate.value), 1), 'yyyy-MM-dd');
+        end = format(
+            addDays(new Date(endDate.value || startDate.value), 1),
+            'yyyy-MM-dd',
+        );
     } else {
         const startAt = new Date(startLocal.value);
         const endAt = new Date(endLocal.value);
@@ -254,7 +257,9 @@ async function save(): Promise<void> {
     <Dialog v-model:open="open">
         <DialogContent class="max-w-md gap-0 p-0">
             <DialogHeader class="px-5 pt-5 pb-2">
-                <DialogTitle>{{ isMeeting ? 'New meeting' : 'New timeblock' }}</DialogTitle>
+                <DialogTitle>{{
+                    isMeeting ? 'New meeting' : 'New timeblock'
+                }}</DialogTitle>
                 <DialogDescription class="sr-only">
                     Create a calendar event.
                 </DialogDescription>
@@ -330,103 +335,119 @@ async function save(): Promise<void> {
                 </label>
 
                 <template v-if="isMeeting">
-                <!-- Invitees -->
-                <div>
-                    <div class="flex flex-wrap items-center gap-1">
-                        <span
-                            v-for="email in attendees"
-                            :key="email"
-                            class="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs"
-                        >
-                            {{ nameByEmail.get(email) ?? email }}
-                            <button
-                                type="button"
-                                class="text-muted-foreground hover:text-foreground"
-                                @click="removeInvitee(email)"
+                    <!-- Invitees -->
+                    <div>
+                        <div class="flex flex-wrap items-center gap-1">
+                            <span
+                                v-for="email in attendees"
+                                :key="email"
+                                class="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs"
                             >
-                                <X class="size-3" />
-                            </button>
-                        </span>
-                    </div>
-                    <div class="mt-1">
-                        <!--
+                                {{ nameByEmail.get(email) ?? email }}
+                                <button
+                                    type="button"
+                                    class="text-muted-foreground hover:text-foreground"
+                                    @click="removeInvitee(email)"
+                                >
+                                    <X class="size-3" />
+                                </button>
+                            </span>
+                        </div>
+                        <div class="mt-1">
+                            <!--
                             The field swallows Esc to drop its own query, so
                             close the dialog here once it has nothing left.
                         -->
-                        <DirectoryAutocomplete
-                            placeholder="Invite by name or email…"
-                            @add="(email) => addInvitee(email)"
-                            @escape="(cleared) => !cleared && closeEventEditor()"
-                        />
-                    </div>
-                    <div
-                        v-if="otherColleagues.length > 0"
-                        class="mt-1 flex flex-wrap gap-1"
-                    >
-                        <button
-                            v-for="member in otherColleagues"
-                            :key="member.email"
-                            type="button"
-                            class="rounded-full border border-border/70 px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted/60"
-                            @click="addInvitee(member.email)"
-                        >
-                            + {{ member.name }}
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Availability preview -->
-                <div v-if="attendees.length > 0" class="space-y-1">
-                    <p class="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-                        Availability · {{ format(availabilityDay, 'EEE, MMM d') }} · 6a–10p
-                    </p>
-                    <div
-                        v-for="email in attendees"
-                        :key="email"
-                        class="flex items-center gap-2"
-                    >
-                        <span class="w-20 shrink-0 truncate text-[11px] text-muted-foreground">
-                            {{ nameByEmail.get(email) ?? email }}
-                        </span>
-                        <div
-                            class="relative h-4 flex-1 overflow-hidden rounded bg-muted/40"
-                        >
-                            <span
-                                v-for="(interval, index) in busyByEmail[email] ?? []"
-                                :key="index"
-                                class="absolute inset-y-0 rounded-sm bg-muted-foreground/50"
-                                :style="busyStyle(interval, availabilityDay)"
-                                :title="busyLabel(interval)"
-                            />
-                            <span
-                                v-if="slotStyle"
-                                class="pointer-events-none absolute inset-y-0 rounded-sm border border-primary bg-primary/30"
-                                :style="slotStyle"
+                            <DirectoryAutocomplete
+                                placeholder="Invite by name or email…"
+                                @add="(email) => addInvitee(email)"
+                                @escape="
+                                    (cleared) => !cleared && closeEventEditor()
+                                "
                             />
                         </div>
+                        <div
+                            v-if="otherColleagues.length > 0"
+                            class="mt-1 flex flex-wrap gap-1"
+                        >
+                            <button
+                                v-for="member in otherColleagues"
+                                :key="member.email"
+                                type="button"
+                                class="rounded-full border border-border/70 px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted/60"
+                                @click="addInvitee(member.email)"
+                            >
+                                + {{ member.name }}
+                            </button>
+                        </div>
                     </div>
-                </div>
 
-                <label
-                    class="flex items-center gap-2 text-sm"
-                    title="Attach a Google Meet link"
-                >
-                    <input v-model="addMeet" type="checkbox" class="size-4" />
-                    <Video class="size-4 text-muted-foreground" /> Add Google Meet
-                </label>
+                    <!-- Availability preview -->
+                    <div v-if="attendees.length > 0" class="space-y-1">
+                        <p
+                            class="text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                        >
+                            Availability ·
+                            {{ format(availabilityDay, 'EEE, MMM d') }} · 6a–10p
+                        </p>
+                        <div
+                            v-for="email in attendees"
+                            :key="email"
+                            class="flex items-center gap-2"
+                        >
+                            <span
+                                class="w-20 shrink-0 truncate text-[11px] text-muted-foreground"
+                            >
+                                {{ nameByEmail.get(email) ?? email }}
+                            </span>
+                            <div
+                                class="relative h-4 flex-1 overflow-hidden rounded bg-muted/40"
+                            >
+                                <span
+                                    v-for="(interval, index) in busyByEmail[
+                                        email
+                                    ] ?? []"
+                                    :key="index"
+                                    class="absolute inset-y-0 rounded-sm bg-muted-foreground/50"
+                                    :style="
+                                        busyStyle(interval, availabilityDay)
+                                    "
+                                    :title="busyLabel(interval)"
+                                />
+                                <span
+                                    v-if="slotStyle"
+                                    class="pointer-events-none absolute inset-y-0 rounded-sm border border-primary bg-primary/30"
+                                    :style="slotStyle"
+                                />
+                            </div>
+                        </div>
+                    </div>
 
-                <input
-                    v-model="location"
-                    type="text"
-                    placeholder="Location (optional)"
-                    class="h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
-                />
-                <textarea
-                    v-model="description"
-                    rows="2"
-                    placeholder="Notes (optional)"
-                    class="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary"
-                />
+                    <label
+                        class="flex items-center gap-2 text-sm"
+                        title="Attach a Google Meet link"
+                    >
+                        <input
+                            v-model="addMeet"
+                            type="checkbox"
+                            class="size-4"
+                        />
+                        <Video class="size-4 text-muted-foreground" /> Add
+                        Google Meet
+                    </label>
+
+                    <input
+                        v-model="location"
+                        type="text"
+                        placeholder="Location (optional)"
+                        class="h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
+                    />
+                    <textarea
+                        v-model="description"
+                        rows="2"
+                        placeholder="Notes (optional)"
+                        class="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary"
+                    />
                 </template>
 
                 <p v-if="error" class="text-xs text-destructive">{{ error }}</p>

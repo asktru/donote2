@@ -66,7 +66,9 @@ describe('parseNoteMeta', () => {
         expect(parseNoteMeta('---\nmode: read-only\n---\nBody').readOnly).toBe(
             true,
         );
-        expect(parseNoteMeta('---\nmode: Read-Only\n---\n').readOnly).toBe(true);
+        expect(parseNoteMeta('---\nmode: Read-Only\n---\n').readOnly).toBe(
+            true,
+        );
         expect(parseNoteMeta('---\ntype: area\n---\n').readOnly).toBe(false);
         expect(parseNoteMeta('# plain note').readOnly).toBe(false);
     });

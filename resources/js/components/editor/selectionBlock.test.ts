@@ -14,9 +14,12 @@ function stateOf(doc: string, anchor: number, head = anchor): EditorState {
 
 describe('selectionBlock', () => {
     it('captures the current line and its nested children when nothing is selected', () => {
-        const doc = ['- Parent', '    - Child', '        - Grandchild', '- Sibling'].join(
-            '\n',
-        );
+        const doc = [
+            '- Parent',
+            '    - Child',
+            '        - Grandchild',
+            '- Sibling',
+        ].join('\n');
         // Cursor somewhere inside the "Parent" line.
         const block = selectionBlock(stateOf(doc, 3));
 
