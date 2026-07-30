@@ -212,3 +212,216 @@ test('the OAuth redirect requests full calendar scope', function () {
     expect($location)->toContain('auth%2Fcalendar')
         ->and($location)->not->toContain('calendar.readonly');
 });
+
+/**
+ * A Google event payload with the current user on the guest list.
+ *
+ * @param  array<string, mixed>  $extra
+ * @return array<string, mixed>
+ */
+function invitedEvent(string $id, string $selfStatus = 'needsAction', array $extra = []): array
+{
+    return array_merge([
+        'id' => $id,
+        'summary' => 'Sync',
+        'start' => ['dateTime' => '2026-07-20T09:00:00-07:00'],
+        'end' => ['dateTime' => '2026-07-20T09:30:00-07:00'],
+        'attendees' => [
+            ['email' => 'boss@example.com', 'responseStatus' => 'accepted', 'organizer' => true],
+            ['email' => 'me@example.com', 'responseStatus' => $selfStatus, 'self' => true],
+        ],
+    ], $extra);
+}
+
+test('answering an invitation patches only the user own attendee entry', function () {
+    $user = User::factory()->create();
+    googleAccount($user);
+
+    Http::fake([
+        '*/calendars/*/events/evt-1*' => Http::sequence()
+            ->push(invitedEvent('evt-1'))
+            ->push(invitedEvent('evt-1', 'accepted')),
+    ]);
+
+    $this->actingAs($user)
+        ->postJson(route('google.events.rsvp'), [
+            'calendar_id' => 'cal-1',
+            'event_id' => 'evt-1',
+            'response' => 'accepted',
+            'scope' => 'one',
+        ])
+        ->assertSuccessful()
+        ->assertJsonPath('event.id', 'evt-1');
+
+    Http::assertSent(fn ($request) => $request->method() === 'PATCH'
+        && str_contains($request->url(), '/events/evt-1')
+        && $request['attendees'][1]['responseStatus'] === 'accepted'
+        && $request['attendees'][0]['responseStatus'] === 'accepted'
+        && $request['attendees'][0]['email'] === 'boss@example.com');
+});
+
+test('answering a whole series patches the recurring master', function () {
+    $user = User::factory()->create();
+    googleAccount($user);
+
+    Http::fake([
+        '*/calendars/*/events/evt-1*' => Http::response(
+            invitedEvent('evt-1', 'needsAction', ['recurringEventId' => 'series-1']),
+        ),
+        '*/calendars/*/events/series-1*' => Http::response(invitedEvent('series-1')),
+    ]);
+
+    $this->actingAs($user)
+        ->postJson(route('google.events.rsvp'), [
+            'calendar_id' => 'cal-1',
+            'event_id' => 'evt-1',
+            'response' => 'declined',
+            'scope' => 'series',
+        ])
+        ->assertSuccessful();
+
+    Http::assertSent(fn ($request) => $request->method() === 'PATCH'
+        && str_contains($request->url(), '/events/series-1')
+        && $request['attendees'][1]['responseStatus'] === 'declined');
+});
+
+test('answering a series on a one-off event patches the event itself', function () {
+    $user = User::factory()->create();
+    googleAccount($user);
+
+    Http::fake(['*/calendars/*/events/evt-1*' => Http::response(invitedEvent('evt-1'))]);
+
+    $this->actingAs($user)
+        ->postJson(route('google.events.rsvp'), [
+            'calendar_id' => 'cal-1',
+            'event_id' => 'evt-1',
+            'response' => 'tentative',
+            'scope' => 'series',
+        ])
+        ->assertSuccessful();
+
+    Http::assertSent(fn ($request) => $request->method() === 'PATCH'
+        && str_contains($request->url(), '/events/evt-1')
+        && $request['attendees'][1]['responseStatus'] === 'tentative');
+});
+
+test('answering an event the user is not invited to is rejected', function () {
+    $user = User::factory()->create();
+    googleAccount($user);
+
+    Http::fake([
+        '*/calendars/*/events/evt-1*' => Http::response([
+            'id' => 'evt-1',
+            'summary' => 'Someone else meeting',
+            'start' => ['dateTime' => '2026-07-20T09:00:00-07:00'],
+            'end' => ['dateTime' => '2026-07-20T09:30:00-07:00'],
+        ]),
+    ]);
+
+    $this->actingAs($user)
+        ->postJson(route('google.events.rsvp'), [
+            'calendar_id' => 'cal-1',
+            'event_id' => 'evt-1',
+            'response' => 'accepted',
+            'scope' => 'one',
+        ])
+        ->assertStatus(422);
+
+    Http::assertNotSent(fn ($request) => $request->method() === 'PATCH');
+});
+
+test('answering on an unconnected calendar is rejected', function () {
+    $user = User::factory()->create();
+    googleAccount($user);
+
+    $this->actingAs($user)
+        ->postJson(route('google.events.rsvp'), [
+            'calendar_id' => 'not-mine',
+            'event_id' => 'evt-1',
+            'response' => 'accepted',
+            'scope' => 'one',
+        ])
+        ->assertStatus(422);
+});
+
+test('an unknown response or scope is rejected', function () {
+    $user = User::factory()->create();
+    googleAccount($user);
+
+    $this->actingAs($user)
+        ->postJson(route('google.events.rsvp'), [
+            'calendar_id' => 'cal-1',
+            'event_id' => 'evt-1',
+            'response' => 'maybe-later',
+            'scope' => 'one',
+        ])
+        ->assertStatus(422);
+
+    $this->actingAs($user)
+        ->postJson(route('google.events.rsvp'), [
+            'calendar_id' => 'cal-1',
+            'event_id' => 'evt-1',
+            'response' => 'accepted',
+            'scope' => 'everything',
+        ])
+        ->assertStatus(422);
+});
+
+/**
+ * Two windows of list results for the same range, so a second fetch shows
+ * whether the five-minute read cache was consulted or bypassed.
+ *
+ * @return array<string, mixed>
+ */
+function eventListSequence(): array
+{
+    return [
+        '*/calendars/*/events?*' => Http::sequence()
+            ->push(['items' => [
+                ['id' => 'evt-1', 'summary' => 'Before', 'start' => ['dateTime' => '2026-07-20T09:00:00Z'], 'end' => ['dateTime' => '2026-07-20T10:00:00Z']],
+            ]])
+            ->push(['items' => [
+                ['id' => 'evt-2', 'summary' => 'After', 'start' => ['dateTime' => '2026-07-20T11:00:00Z'], 'end' => ['dateTime' => '2026-07-20T12:00:00Z']],
+            ]]),
+        '*/calendars/*/events/evt-1*' => Http::response(invitedEvent('evt-1')),
+    ];
+}
+
+test('a repeat fetch of the same range is served from the cache', function () {
+    $user = User::factory()->create();
+    googleAccount($user);
+    Http::fake(eventListSequence());
+
+    $range = ['start' => '2026-07-20T00:00:00Z', 'end' => '2026-07-21T00:00:00Z'];
+
+    $this->actingAs($user)->getJson(route('google.events', $range))->assertSuccessful();
+
+    $this->actingAs($user)
+        ->getJson(route('google.events', $range))
+        ->assertSuccessful()
+        ->assertJsonPath('events.0.summary', 'Before');
+});
+
+test('answering an invitation makes the next event fetch bypass the cache', function () {
+    $user = User::factory()->create();
+    googleAccount($user);
+    Http::fake(eventListSequence());
+
+    $range = ['start' => '2026-07-20T00:00:00Z', 'end' => '2026-07-21T00:00:00Z'];
+
+    $this->actingAs($user)->getJson(route('google.events', $range))->assertSuccessful();
+
+    $this->actingAs($user)
+        ->postJson(route('google.events.rsvp'), [
+            'calendar_id' => 'cal-1',
+            'event_id' => 'evt-1',
+            'response' => 'accepted',
+            'scope' => 'one',
+        ])
+        ->assertSuccessful();
+
+    $this->actingAs($user)
+        ->getJson(route('google.events', $range))
+        ->assertSuccessful()
+        ->assertJsonPath('events.0.summary', 'After');
+});

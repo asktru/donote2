@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    eventHasPassed,
     eventMoment,
     eventsInRange,
     horizonRange,
@@ -125,5 +126,40 @@ describe('horizonRange', () => {
 
         expect(now.getTime() - start.getTime()).toBe(fourWeeks);
         expect(end.getTime() - now.getTime()).toBe(fourWeeks);
+    });
+});
+
+describe('eventHasPassed', () => {
+    const NOW = new Date('2026-07-15T12:00:00');
+
+    it('is false for a timed event still to come', () => {
+        expect(
+            eventHasPassed({ allDay: false, end: '2026-07-15T13:00:00' }, NOW),
+        ).toBe(false);
+    });
+
+    it('is false while a timed event is running', () => {
+        expect(
+            eventHasPassed({ allDay: false, end: '2026-07-15T12:30:00' }, NOW),
+        ).toBe(false);
+    });
+
+    it('is true once a timed event has ended', () => {
+        expect(
+            eventHasPassed({ allDay: false, end: '2026-07-15T11:59:00' }, NOW),
+        ).toBe(true);
+    });
+
+    it('is false for an all-day event on its last day', () => {
+        // The end date is exclusive: this event covers the 15th.
+        expect(eventHasPassed({ allDay: true, end: '2026-07-16' }, NOW)).toBe(
+            false,
+        );
+    });
+
+    it('is true for an all-day event that ended yesterday', () => {
+        expect(eventHasPassed({ allDay: true, end: '2026-07-15' }, NOW)).toBe(
+            true,
+        );
     });
 });

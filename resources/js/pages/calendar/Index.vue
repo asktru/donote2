@@ -4,6 +4,7 @@ import {
     ChevronLeft,
     ChevronRight,
     Globe,
+    MailQuestionMark,
     Plus,
     Search,
     SlidersHorizontal,
@@ -19,6 +20,7 @@ import EventDetailPanel from '@/components/calendar/EventDetailPanel.vue';
 import EventEditor from '@/components/calendar/EventEditor.vue';
 import EventSearchDialog from '@/components/calendar/EventSearchDialog.vue';
 import MonthView from '@/components/calendar/MonthView.vue';
+import PendingInvitesPopover from '@/components/calendar/PendingInvitesPopover.vue';
 import TimeGridView from '@/components/calendar/TimeGridView.vue';
 import TimezonePicker from '@/components/calendar/TimezonePicker.vue';
 import RecordingIndicator from '@/components/notes/RecordingIndicator.vue';
@@ -46,10 +48,7 @@ import {
 } from '@/lib/nativeTabs';
 import type { NativeFabAction } from '@/lib/nativeTabs';
 import { isMacDesktopShell, isNarrowViewport } from '@/lib/platform';
-import {
-    publishShareTargets,
-    startShareInboxWatcher,
-} from '@/lib/shareInbox';
+import { publishShareTargets, startShareInboxWatcher } from '@/lib/shareInbox';
 import { zoneCity } from '@/lib/timezones';
 import { cn } from '@/lib/utils';
 import {
@@ -71,6 +70,7 @@ import {
     openEventDetail,
     openEventEditor,
     overlayEvents,
+    pendingInvitations,
     secondZone,
     selectedEvent,
     setCalendarView,
@@ -173,7 +173,13 @@ const supported = (
 
 const allZones: string[] = supported
     ? supported('timeZone')
-    : ['Europe/Kyiv', 'Europe/London', 'America/New_York', 'America/Los_Angeles', 'Asia/Tokyo'];
+    : [
+          'Europe/Kyiv',
+          'Europe/London',
+          'America/New_York',
+          'America/Los_Angeles',
+          'Asia/Tokyo',
+      ];
 
 const notesHref = computed(() => `/${props.workspace.teamSlug}/notes`);
 
@@ -230,13 +236,20 @@ const HOUR_MS = 60 * 60 * 1000;
 const fabOpen = ref(false);
 const eventSearchOpen = ref(false);
 
+const invitesOpen = ref(false);
+
 /**
- * Land on a searched event: move the anchor to its day, keep whichever view
- * is current, and open the detail panel on it.
+ * Land on an event picked from a list: move the anchor to its day, keep
+ * whichever view is current, and open the detail panel on it.
  */
-function openSearchResult(event: CalendarEvent): void {
+function goToEvent(event: CalendarEvent): void {
     anchor.value = startOfDay(new Date(eventMoment(event.start)));
     openEventDetail(event);
+}
+
+function openInvitation(event: CalendarEvent): void {
+    goToEvent(event);
+    invitesOpen.value = false;
 }
 const meetPickerOpen = ref(false);
 const timezonePickerOpen = ref(false);
@@ -307,7 +320,8 @@ function createAt(at: Date): void {
 /** A sensible default slot on the anchor day (next hour today, else 9am). */
 function defaultSlot(): Date {
     const now = new Date();
-    const onToday = startOfDay(anchor.value).getTime() === startOfDay(now).getTime();
+    const onToday =
+        startOfDay(anchor.value).getTime() === startOfDay(now).getTime();
     const at = startOfDay(anchor.value);
     at.setHours(onToday ? Math.min(now.getHours() + 1, 22) : 9, 0, 0, 0);
 
@@ -465,7 +479,11 @@ function onKeydown(event: KeyboardEvent): void {
     }
 
     // ⌘⌃1 Notes / ⌘⌃2 Calendar — switch top-level section.
-    if (event.metaKey && event.ctrlKey && (event.key === '1' || event.key === '2')) {
+    if (
+        event.metaKey &&
+        event.ctrlKey &&
+        (event.key === '1' || event.key === '2')
+    ) {
         event.preventDefault();
 
         if (event.key === '1') {
@@ -476,11 +494,7 @@ function onKeydown(event: KeyboardEvent): void {
     }
 
     // ⌘1/2/3 — Day / Week / Month (calendar page only).
-    if (
-        (event.metaKey || event.ctrlKey) &&
-        !event.shiftKey &&
-        !event.altKey
-    ) {
+    if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey) {
         const view = { '1': 'day', '2': 'week', '3': 'month' }[event.key];
 
         if (view) {
@@ -641,12 +655,12 @@ onBeforeUnmount(() => {
 
     <div
         data-native-tabs-pad
-        class="flex h-dvh min-h-0 flex-col bg-background text-foreground pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+        class="flex h-dvh min-h-0 flex-col bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-foreground"
     >
         <header
             :class="
                 cn(
-                    'flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/60 py-1.5 pr-3 sm:pr-4',
+                    'relative flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/60 py-1.5 pr-3 sm:pr-4',
                     // Clear the macOS traffic lights in the Electron shell.
                     // Left padding is split out from a px-* shorthand: the
                     // responsive `sm:px-4` came later in the compiled CSS and
@@ -665,7 +679,9 @@ onBeforeUnmount(() => {
                 >
                     Notes
                 </Link>
-                <span class="rounded-md bg-muted px-2 py-1 font-medium sm:px-2.5">
+                <span
+                    class="rounded-md bg-muted px-2 py-1 font-medium sm:px-2.5"
+                >
                     Calendar
                 </span>
             </nav>
@@ -699,11 +715,37 @@ onBeforeUnmount(() => {
                 </Button>
             </div>
 
-            <h1 class="min-w-0 flex-1 truncate text-sm font-semibold sm:text-base">
+            <h1
+                class="min-w-0 flex-1 truncate text-sm font-semibold sm:text-base"
+            >
                 {{ anchorLabel }}
             </h1>
 
             <div class="ml-auto flex items-center gap-1.5 sm:gap-2">
+                <!-- Invitations waiting on an answer. Hidden entirely when
+                     there are none, so an empty calendar has no dead chrome. -->
+                <Button
+                    v-if="pendingInvitations.length > 0"
+                    variant="ghost"
+                    size="icon"
+                    :class="
+                        cn(
+                            'relative size-8',
+                            invitesOpen
+                                ? 'text-primary'
+                                : 'text-muted-foreground',
+                        )
+                    "
+                    :aria-label="`${pendingInvitations.length} pending ${pendingInvitations.length === 1 ? 'invitation' : 'invitations'}`"
+                    :title="`${pendingInvitations.length} pending ${pendingInvitations.length === 1 ? 'invitation' : 'invitations'}`"
+                    @click="invitesOpen = !invitesOpen"
+                >
+                    <MailQuestionMark class="size-4" />
+                    <span
+                        class="absolute top-1 right-1 size-2 rounded-full bg-red-500 ring-2 ring-background"
+                    />
+                </Button>
+
                 <Button
                     v-if="googleConnected"
                     variant="ghost"
@@ -746,14 +788,18 @@ onBeforeUnmount(() => {
                             @select.prevent
                             @update:model-value="setHideDeclined($event)"
                         >
-                            <span class="min-w-0 flex-1">Hide declined events</span>
+                            <span class="min-w-0 flex-1"
+                                >Hide declined events</span
+                            >
                         </DropdownMenuCheckboxItem>
                         <DropdownMenuCheckboxItem
                             :model-value="showHidden"
                             @select.prevent
                             @update:model-value="showHidden = $event"
                         >
-                            <span class="min-w-0 flex-1">Show hidden events</span>
+                            <span class="min-w-0 flex-1"
+                                >Show hidden events</span
+                            >
                         </DropdownMenuCheckboxItem>
 
                         <template v-if="calendarList.length > 0">
@@ -768,18 +814,23 @@ onBeforeUnmount(() => {
                                 :key="calendar.id"
                                 :model-value="!hiddenCalendars.has(calendar.id)"
                                 @select.prevent
-                                @update:model-value="toggleCalendar(calendar.id)"
+                                @update:model-value="
+                                    toggleCalendar(calendar.id)
+                                "
                             >
                                 <span
                                     class="mr-1.5 inline-block size-2 shrink-0 rounded-full"
                                     :style="{
-                                        backgroundColor: calendar.color ?? 'var(--primary)',
+                                        backgroundColor:
+                                            calendar.color ?? 'var(--primary)',
                                     }"
                                 />
                                 <span class="min-w-0 flex-1 truncate">{{
                                     calendar.name
                                 }}</span>
-                                <span class="ml-2 text-[10px] text-muted-foreground">
+                                <span
+                                    class="ml-2 text-[10px] text-muted-foreground"
+                                >
                                     {{ calendar.source }}
                                 </span>
                             </DropdownMenuCheckboxItem>
@@ -819,50 +870,55 @@ onBeforeUnmount(() => {
                     </button>
                 </div>
             </div>
+
+            <PendingInvitesPopover
+                v-model:open="invitesOpen"
+                @pick="openInvitation"
+            />
         </header>
 
         <div class="flex min-h-0 flex-1 overflow-hidden">
-        <div class="min-h-0 flex-1 overflow-hidden px-2 py-1" data-cal-body>
-            <p
-                v-if="!googleConnected"
-                class="border-b border-border/40 px-2 py-1.5 text-xs text-muted-foreground"
-            >
-                Connect Google Calendar in
-                <Link href="/settings/integrations" class="underline"
-                    >Settings</Link
+            <div class="min-h-0 flex-1 overflow-hidden px-2 py-1" data-cal-body>
+                <p
+                    v-if="!googleConnected"
+                    class="border-b border-border/40 px-2 py-1.5 text-xs text-muted-foreground"
                 >
-                to see your events.
-            </p>
-            <p
-                v-if="eventsFailed"
-                class="px-2 py-1.5 text-xs text-destructive"
-            >
-                Couldn't load events.
-            </p>
+                    Connect Google Calendar in
+                    <Link href="/settings/integrations" class="underline"
+                        >Settings</Link
+                    >
+                    to see your events.
+                </p>
+                <p
+                    v-if="eventsFailed"
+                    class="px-2 py-1.5 text-xs text-destructive"
+                >
+                    Couldn't load events.
+                </p>
 
-            <MonthView
-                v-if="calendarView === 'month'"
-                :days="gridDays"
-                :anchor-month="anchor.getMonth()"
-                :events="displayEvents"
-                :show-hidden="showHidden"
-                :selected-key="selectedEvent?.key ?? null"
-                @open-event="openEvent"
-                @open-day="openDay"
-            />
-            <TimeGridView
-                v-else
-                :days="gridDays"
-                :events="displayEvents"
-                :second-zone="secondZone"
-                :show-hidden="showHidden"
-                :overlays="overlayEvents"
-                :hide-header="isNarrow && calendarView === 'day'"
-                :selected-key="selectedEvent?.key ?? null"
-                @open-event="openEvent"
-                @create-at="createAt"
-            />
-        </div>
+                <MonthView
+                    v-if="calendarView === 'month'"
+                    :days="gridDays"
+                    :anchor-month="anchor.getMonth()"
+                    :events="displayEvents"
+                    :show-hidden="showHidden"
+                    :selected-key="selectedEvent?.key ?? null"
+                    @open-event="openEvent"
+                    @open-day="openDay"
+                />
+                <TimeGridView
+                    v-else
+                    :days="gridDays"
+                    :events="displayEvents"
+                    :second-zone="secondZone"
+                    :show-hidden="showHidden"
+                    :overlays="overlayEvents"
+                    :hide-header="isNarrow && calendarView === 'day'"
+                    :selected-key="selectedEvent?.key ?? null"
+                    @open-event="openEvent"
+                    @create-at="createAt"
+                />
+            </div>
 
             <EventDetailPanel />
         </div>
@@ -975,7 +1031,9 @@ onBeforeUnmount(() => {
                 />
 
                 <div v-if="colleagueSuggestions.length > 0">
-                    <p class="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                    <p
+                        class="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                    >
                         From your team
                     </p>
                     <div class="flex flex-wrap gap-1">
@@ -1003,10 +1061,7 @@ onBeforeUnmount(() => {
         </div>
 
         <EventEditor />
-        <EventSearchDialog
-            v-model:open="eventSearchOpen"
-            @pick="openSearchResult"
-        />
+        <EventSearchDialog v-model:open="eventSearchOpen" @pick="goToEvent" />
         <ShortcutsDialog page="calendar" />
         <TimezonePicker
             v-model:open="timezonePickerOpen"

@@ -13,7 +13,9 @@ import {
 import { format, parseISO } from 'date-fns';
 import { computed } from 'vue';
 
+import RsvpControls from '@/components/calendar/RsvpControls.vue';
 import { Button } from '@/components/ui/button';
+import { isInvitation } from '@/core/pendingInvites';
 import { htmlToText } from '@/lib/htmlText';
 import { cn } from '@/lib/utils';
 import {
@@ -27,6 +29,17 @@ import type { RsvpStatus } from '@/stores/calendar';
 
 const isHidden = computed<boolean>(() =>
     selectedEvent.value ? isEventHidden(selectedEvent.value) : false,
+);
+
+/**
+ * You can only answer a Google invitation someone else sent you: the Apple
+ * bridge is read-only, and an event you organized has nothing to answer.
+ */
+const canRespond = computed<boolean>(
+    () =>
+        selectedEvent.value !== null &&
+        selectedEvent.value.source === 'google' &&
+        isInvitation(selectedEvent.value),
 );
 
 /** Google sends the description as HTML; render it as readable plain text. */
@@ -109,7 +122,9 @@ const RSVP_CLASS: Record<RsvpStatus, string> = {
         <aside
             class="fixed inset-x-0 bottom-0 z-50 flex max-h-[85%] flex-col rounded-t-2xl border border-border/60 bg-background pb-[env(safe-area-inset-bottom)] shadow-2xl sm:inset-y-0 sm:right-0 sm:left-auto sm:max-h-none sm:w-[380px] sm:rounded-none sm:border-y-0 sm:border-r-0 lg:static lg:z-auto lg:w-[380px] lg:shrink-0 lg:border-y-0 lg:border-r-0 lg:border-l lg:pb-0 lg:shadow-none"
         >
-            <header class="flex items-start gap-2 border-b border-border/60 p-4">
+            <header
+                class="flex items-start gap-2 border-b border-border/60 p-4"
+            >
                 <span
                     class="mt-1.5 size-3 shrink-0 rounded-full"
                     :style="{
@@ -135,7 +150,9 @@ const RSVP_CLASS: Record<RsvpStatus, string> = {
 
             <div class="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 text-sm">
                 <div class="flex items-start gap-2">
-                    <CalendarClock class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    <CalendarClock
+                        class="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                    />
                     <span>
                         {{ when }}
                         <span
@@ -151,7 +168,9 @@ const RSVP_CLASS: Record<RsvpStatus, string> = {
                     v-if="selectedEvent.location"
                     class="flex items-start gap-2"
                 >
-                    <MapPin class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    <MapPin
+                        class="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                    />
                     <span class="min-w-0">{{ selectedEvent.location }}</span>
                 </div>
 
@@ -172,8 +191,13 @@ const RSVP_CLASS: Record<RsvpStatus, string> = {
                     {{ descriptionText }}
                 </p>
 
-                <div v-if="selectedEvent.attendees.length > 0" class="space-y-1.5">
-                    <p class="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                <div
+                    v-if="selectedEvent.attendees.length > 0"
+                    class="space-y-1.5"
+                >
+                    <p
+                        class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                    >
                         {{ selectedEvent.attendees.length }} guests
                     </p>
                     <div
@@ -188,23 +212,30 @@ const RSVP_CLASS: Record<RsvpStatus, string> = {
                         <span v-else class="size-3.5 shrink-0" />
                         <span class="min-w-0 flex-1 truncate">
                             {{ attendee.name || attendee.email }}
-                            <span v-if="attendee.organizer" class="text-xs text-muted-foreground">
+                            <span
+                                v-if="attendee.organizer"
+                                class="text-xs text-muted-foreground"
+                            >
                                 · organizer</span
                             >
                         </span>
                     </div>
                 </div>
 
-                <span
-                    :class="
-                        cn(
-                            'inline-block rounded-full px-2 py-0.5 text-xs font-medium',
-                            RSVP_CLASS[selectedEvent.responseStatus],
-                        )
-                    "
-                >
-                    {{ RSVP_LABEL[selectedEvent.responseStatus] }}
-                </span>
+                <div class="space-y-2">
+                    <span
+                        :class="
+                            cn(
+                                'inline-block rounded-full px-2 py-0.5 text-xs font-medium',
+                                RSVP_CLASS[selectedEvent.responseStatus],
+                            )
+                        "
+                    >
+                        {{ RSVP_LABEL[selectedEvent.responseStatus] }}
+                    </span>
+
+                    <RsvpControls v-if="canRespond" :event="selectedEvent" />
+                </div>
 
                 <p class="text-xs text-muted-foreground">
                     {{ selectedEvent.calendarName }}
@@ -213,7 +244,9 @@ const RSVP_CLASS: Record<RsvpStatus, string> = {
                     >
                 </p>
 
-                <div class="flex flex-wrap gap-2 border-t border-border/60 pt-3">
+                <div
+                    class="flex flex-wrap gap-2 border-t border-border/60 pt-3"
+                >
                     <template v-if="isHidden">
                         <Button
                             variant="outline"

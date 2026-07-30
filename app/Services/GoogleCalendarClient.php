@@ -116,6 +116,64 @@ class GoogleCalendarClient
             ->json();
     }
 
+    /**
+     * Read a single event.
+     *
+     * @return array<string, mixed>
+     */
+    public function getEvent(string $calendarId, string $eventId): array
+    {
+        return $this->http()
+            ->get(self::BASE.'/calendars/'.urlencode($calendarId).'/events/'.urlencode($eventId))
+            ->throw()
+            ->json();
+    }
+
+    /**
+     * Answer an invitation as the current user.
+     *
+     * Google replaces the attendee list on patch rather than merging it, so
+     * the answer has to be a read-then-write: fetch the event, swap the
+     * `self` attendee's status, send the whole list back.
+     *
+     * With $wholeSeries the answer is written to the recurring master, which
+     * applies it to every occurrence. A one-off event has no master, so the
+     * instance itself is the only copy there is to answer.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws \RuntimeException when the user is not on the guest list
+     */
+    public function respondToEvent(
+        string $calendarId,
+        string $eventId,
+        string $response,
+        bool $wholeSeries,
+    ): array {
+        $event = $this->getEvent($calendarId, $eventId);
+
+        if ($wholeSeries && ! empty($event['recurringEventId'])) {
+            $eventId = (string) $event['recurringEventId'];
+            $event = $this->getEvent($calendarId, $eventId);
+        }
+
+        $attendees = is_array($event['attendees'] ?? null) ? $event['attendees'] : [];
+        $answered = false;
+
+        foreach ($attendees as $index => $attendee) {
+            if (($attendee['self'] ?? false) === true) {
+                $attendees[$index]['responseStatus'] = $response;
+                $answered = true;
+            }
+        }
+
+        if (! $answered) {
+            throw new \RuntimeException("You're not an invitee on this event.");
+        }
+
+        return $this->patchEvent($calendarId, $eventId, ['attendees' => $attendees]);
+    }
+
     public function deleteEvent(string $calendarId, string $eventId): void
     {
         $this->http()

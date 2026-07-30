@@ -3,8 +3,8 @@ import { Repeat } from '@lucide/vue';
 import { format, isSameDay, isWeekend, parseISO, startOfDay } from 'date-fns';
 import { computed } from 'vue';
 
-
 import { useNow } from '@/composables/useNow';
+import { eventHasPassed } from '@/core/eventWindow';
 import { cn } from '@/lib/utils';
 import type { CalendarEvent } from '@/stores/calendar';
 
@@ -49,11 +49,7 @@ function parseAllDay(value: string): Date {
 
 /** A chip for a finished event reads muted, matching the time grid. */
 function isPast(event: GridEvent): boolean {
-    if (event.allDay) {
-        return parseAllDay(event.end) <= startOfDay(now.value);
-    }
-
-    return parseISO(event.end) < now.value;
+    return eventHasPassed(event, now.value);
 }
 
 function eventsFor(day: Date): GridEvent[] {
