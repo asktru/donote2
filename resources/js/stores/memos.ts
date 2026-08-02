@@ -50,6 +50,8 @@ const AUDIO_BITS_PER_SECOND = 32000;
 const TRANSCRIPTS_FOLDER = 'Transcripts';
 
 interface ActiveRecording {
+    /** Slug of the team active when recording started — the filing target. */
+    teamSlug: string | null;
     recorder: MediaRecorder;
     chunks: Blob[];
     /** Bytes captured in the current segment; drives size-based rotation. */
@@ -78,11 +80,11 @@ let rotating = false;
 let nativeSession: {
     groupId: string;
     dateKey: string;
+    teamSlug: string | null;
     startedAt: number;
 } | null = null;
 /** Serializes native segment/stopped events so parts persist in order. */
 let nativeChain: Promise<void> = Promise.resolve();
-let db: WorkspaceDb | null = null;
 let uploaderTimer: ReturnType<typeof setInterval> | null = null;
 let elapsedTimer: ReturnType<typeof setInterval> | null = null;
 let booted = false;
@@ -95,6 +97,8 @@ export const memoQueue = ref<MemoRecord[]>([]);
 
 export interface MemoGroup {
     groupId: string;
+    /** Team the recording belongs to; it files there, not where you are. */
+    teamSlug: string;
     createdAt: string;
     durationSec: number;
     partsDone: number;
@@ -124,6 +128,7 @@ export const memoGroups = computed<MemoGroup[]>(() => {
 
                 return {
                     groupId: sorted[0].groupId,
+                    teamSlug: sorted[0].teamSlug,
                     createdAt: sorted[0].createdAt,
                     durationSec: sorted.reduce(
                         (sum, m) => sum + m.durationSec,
@@ -148,24 +153,119 @@ export const activeMemoCount = computed(
     () => memoGroups.value.length + (isRecording.value ? 1 : 0),
 );
 
-function workspaceDb(): WorkspaceDb | null {
-    if (db === null) {
-        const config = workspaceConfig();
+/**
+ * Memos live in the per-team workspace DB of the team they were RECORDED in,
+ * so handles are resolved per team on every use — the earlier module-level
+ * cache kept pointing at the launch team across SPA team switches, silently
+ * writing recordings into (and uploading under) the wrong team.
+ */
+const teamDbs = new Map<string, WorkspaceDb>();
 
-        if (config) {
-            db = openWorkspaceDb(config.teamSlug, config.userId);
-        }
+function dbForTeam(teamSlug: string): WorkspaceDb | null {
+    const config = workspaceConfig();
+
+    if (!config) {
+        return null;
     }
 
-    return db;
+    let database = teamDbs.get(teamSlug) ?? null;
+
+    if (database === null) {
+        database = openWorkspaceDb(teamSlug, config.userId);
+        teamDbs.set(teamSlug, database);
+    }
+
+    return database;
+}
+
+/** The CURRENT team's DB — only for work that is inherently current-team. */
+function workspaceDb(): WorkspaceDb | null {
+    const config = workspaceConfig();
+
+    return config ? dbForTeam(config.teamSlug) : null;
+}
+
+/**
+ * Teams that may still hold queued memos, persisted across reloads so a
+ * recording made in one team keeps uploading (and eventually files) even
+ * when the app relaunches into another team.
+ */
+function registryKey(): string | null {
+    const config = workspaceConfig();
+
+    return config ? `donote-memo-teams-${config.userId}` : null;
+}
+
+function memoTeamSlugs(): string[] {
+    const config = workspaceConfig();
+    const key = registryKey();
+
+    if (!config || key === null) {
+        return [];
+    }
+
+    let stored: string[] = [];
+
+    try {
+        const raw = localStorage.getItem(key);
+        const parsed: unknown = raw === null ? [] : JSON.parse(raw);
+
+        stored = Array.isArray(parsed)
+            ? parsed.filter((slug): slug is string => typeof slug === 'string')
+            : [];
+    } catch {
+        // Unreadable registry — fall back to the current team alone.
+    }
+
+    return [...new Set([config.teamSlug, ...stored])];
+}
+
+function rememberMemoTeam(teamSlug: string): void {
+    const key = registryKey();
+
+    if (key === null) {
+        return;
+    }
+
+    try {
+        const slugs = new Set(memoTeamSlugs());
+        slugs.add(teamSlug);
+        localStorage.setItem(key, JSON.stringify([...slugs]));
+    } catch {
+        // Storage unavailable — worst case the queue pauses until the
+        // recording's team is opened again.
+    }
+}
+
+function forgetMemoTeam(teamSlug: string): void {
+    const key = registryKey();
+
+    if (key === null) {
+        return;
+    }
+
+    try {
+        const slugs = memoTeamSlugs().filter((slug) => slug !== teamSlug);
+        localStorage.setItem(key, JSON.stringify(slugs));
+    } catch {
+        // Ignore — a stale registry entry is harmless.
+    }
 }
 
 async function refreshQueue(): Promise<void> {
-    const database = workspaceDb();
+    const records: MemoRecord[] = [];
 
-    if (database) {
-        memoQueue.value = await database.memos.orderBy('createdAt').toArray();
+    for (const slug of memoTeamSlugs()) {
+        const database = dbForTeam(slug);
+
+        if (database) {
+            records.push(...(await database.memos.toArray()));
+        }
     }
+
+    memoQueue.value = records.sort((a, b) =>
+        a.createdAt.localeCompare(b.createdAt),
+    );
 }
 
 /** Mic always; in the desktop shell we also mix in system audio so calls
@@ -289,11 +389,14 @@ async function persistPart(
     current: ActiveRecording,
     blob: Blob,
 ): Promise<void> {
-    const database = workspaceDb();
+    const teamSlug = current.teamSlug ?? workspaceConfig()?.teamSlug ?? null;
+    const database = teamSlug !== null ? dbForTeam(teamSlug) : null;
 
-    if (!database) {
+    if (!database || teamSlug === null) {
         return;
     }
+
+    rememberMemoTeam(teamSlug);
 
     await database.memos.put({
         id: crypto.randomUUID(),
@@ -301,6 +404,7 @@ async function persistPart(
         part: current.part,
         partsTotal: null,
         dateKey: current.dateKey,
+        teamSlug,
         blob,
         mimeType: blob.type || 'audio/webm',
         durationSec: Math.round((Date.now() - current.segmentStartedAt) / 1000),
@@ -371,11 +475,32 @@ async function nativePartExists(
     return existing !== undefined;
 }
 
+/** Locate the team DB holding a memo group's parts (session or registry). */
+async function dbContainingGroup(
+    groupId: string,
+): Promise<{ database: WorkspaceDb; teamSlug: string } | null> {
+    for (const teamSlug of memoTeamSlugs()) {
+        const database = dbForTeam(teamSlug);
+
+        if (
+            database &&
+            (await database.memos.where('groupId').equals(groupId).count()) > 0
+        ) {
+            return { database, teamSlug };
+        }
+    }
+
+    return null;
+}
+
 /** Fold a finished native segment file into the same offline memo queue. */
 async function persistNativeSegment(event: NativeSegmentEvent): Promise<void> {
-    const database = workspaceDb();
+    const session =
+        nativeSession?.groupId === event.groupId ? nativeSession : null;
+    const teamSlug = session?.teamSlug ?? workspaceConfig()?.teamSlug ?? null;
+    const database = teamSlug !== null ? dbForTeam(teamSlug) : null;
 
-    if (!database || !nativeRecorder) {
+    if (!database || teamSlug === null || !nativeRecorder) {
         return;
     }
 
@@ -386,8 +511,8 @@ async function persistNativeSegment(event: NativeSegmentEvent): Promise<void> {
     }
 
     const blob = await readSegmentBlob(event.path);
-    const session =
-        nativeSession?.groupId === event.groupId ? nativeSession : null;
+
+    rememberMemoTeam(teamSlug);
 
     await database.memos.put({
         id: crypto.randomUUID(),
@@ -395,6 +520,7 @@ async function persistNativeSegment(event: NativeSegmentEvent): Promise<void> {
         part: event.part,
         partsTotal: null,
         dateKey: session?.dateKey ?? todayDailyKey(),
+        teamSlug,
         blob,
         mimeType: event.mimeType || 'audio/mp4',
         durationSec: event.durationSec,
@@ -426,16 +552,18 @@ async function handleNativeStopped(event: NativeStoppedEvent): Promise<void> {
         elapsedTimer = null;
     }
 
-    const database = workspaceDb();
+    const located = await dbContainingGroup(event.groupId);
 
-    if (database) {
-        const parts = await database.memos
+    if (located) {
+        const parts = await located.database.memos
             .where('groupId')
             .equals(event.groupId)
             .toArray();
 
         for (const part of parts) {
-            await database.memos.update(part.id, { partsTotal: event.parts });
+            await located.database.memos.update(part.id, {
+                partsTotal: event.parts,
+            });
         }
 
         await refreshQueue();
@@ -519,9 +647,15 @@ async function syncNativeRecorder(): Promise<void> {
     }
 
     if (status.recording && status.groupId && status.startedAt) {
+        // Resuming after a relaunch: the relaunch may have landed in another
+        // team, so recover the recording's team from its persisted parts
+        // before falling back to the current one.
+        const located = await dbContainingGroup(status.groupId);
+
         nativeSession = {
             groupId: status.groupId,
             dateKey: dateKeyFor('daily', new Date(status.startedAt)),
+            teamSlug: located?.teamSlug ?? workspaceConfig()?.teamSlug ?? null,
             startedAt: status.startedAt,
         };
         isRecording.value = true;
@@ -565,14 +699,24 @@ async function adoptNativePending(): Promise<void> {
 
     try {
         const { items } = await nativeRecorder.pendingSegments();
-        const database = workspaceDb();
 
-        if (!database || items.length === 0) {
+        if (workspaceDb() === null || items.length === 0) {
             return;
         }
 
         for (const item of items) {
             try {
+                // Earlier parts of the same group pin its team; otherwise
+                // adopt into the current team as the best remaining guess.
+                const located = await dbContainingGroup(item.groupId);
+                const teamSlug =
+                    located?.teamSlug ?? workspaceConfig()?.teamSlug ?? null;
+                const database = teamSlug !== null ? dbForTeam(teamSlug) : null;
+
+                if (!database || teamSlug === null) {
+                    continue;
+                }
+
                 if (await nativePartExists(database, item.groupId, item.part)) {
                     await nativeRecorder.removeSegment({ path: item.path });
                     continue;
@@ -580,12 +724,15 @@ async function adoptNativePending(): Promise<void> {
 
                 const blob = await readSegmentBlob(item.path);
 
+                rememberMemoTeam(teamSlug);
+
                 await database.memos.put({
                     id: crypto.randomUUID(),
                     groupId: item.groupId,
                     part: item.part,
                     partsTotal: null,
                     dateKey: dateKeyFor('daily', new Date(item.createdAt)),
+                    teamSlug,
                     blob,
                     mimeType: 'audio/mp4',
                     // 32 kbps AAC ≈ 4 KB/s — close enough for display.
@@ -619,7 +766,12 @@ export async function startRecording(): Promise<void> {
 
         const { groupId, startedAt } = await nativeRecorder.start();
 
-        nativeSession = { groupId, dateKey: todayDailyKey(), startedAt };
+        nativeSession = {
+            groupId,
+            dateKey: todayDailyKey(),
+            teamSlug: workspaceConfig()?.teamSlug ?? null,
+            startedAt,
+        };
         isRecording.value = true;
         recordingHasSystemAudio.value = false;
         recordingSeconds.value = 0;
@@ -637,6 +789,7 @@ export async function startRecording(): Promise<void> {
     const capture = await captureStreams();
 
     active = {
+        teamSlug: workspaceConfig()?.teamSlug ?? null,
         recorder: makeRecorder(capture.stream),
         chunks: [],
         bytes: 0,
@@ -714,7 +867,8 @@ export async function stopRecording(): Promise<void> {
     await persistPart(current, blob);
     teardownRecording();
 
-    const database = workspaceDb();
+    const database =
+        current.teamSlug !== null ? dbForTeam(current.teamSlug) : null;
 
     if (database) {
         // Recording is complete — stamp the part count on every part so
@@ -759,10 +913,13 @@ export async function discardRecording(): Promise<void> {
 
         await nativeRecorder.discard();
 
-        const database = workspaceDb();
+        const located = await dbContainingGroup(groupId);
 
-        if (database) {
-            await database.memos.where('groupId').equals(groupId).delete();
+        if (located) {
+            await located.database.memos
+                .where('groupId')
+                .equals(groupId)
+                .delete();
             await refreshQueue();
         }
 
@@ -778,20 +935,25 @@ export async function discardRecording(): Promise<void> {
 
     teardownRecording();
 
-    const database = workspaceDb();
+    if (current) {
+        const located = await dbContainingGroup(current.groupId);
 
-    if (current && database) {
-        await database.memos.where('groupId').equals(current.groupId).delete();
-        await refreshQueue();
+        if (located) {
+            await located.database.memos
+                .where('groupId')
+                .equals(current.groupId)
+                .delete();
+            await refreshQueue();
+        }
     }
 }
 
 /** Remove a queued recording (stuck upload, unwanted memo). */
 export async function cancelMemoGroup(groupId: string): Promise<void> {
-    const database = workspaceDb();
+    const located = await dbContainingGroup(groupId);
 
-    if (database) {
-        await database.memos.where('groupId').equals(groupId).delete();
+    if (located) {
+        await located.database.memos.where('groupId').equals(groupId).delete();
         await refreshQueue();
     }
 }
@@ -830,8 +992,16 @@ function transcriptTitle(first: MemoRecord): string {
  * anything. The link is written exactly once (at creation); it is never
  * re-healed. Idempotent and safe to call repeatedly.
  */
-async function fileGroup(groupId: string): Promise<void> {
-    const database = workspaceDb();
+async function fileGroup(groupId: string, teamSlug: string): Promise<void> {
+    // Filing writes into the ACTIVE workspace's notes, so it is deferred
+    // until the recording's team is the one open — uploads/transcription
+    // proceed anywhere, and the transcript files the next time this team is
+    // active. Never file into whichever team happens to be open.
+    if (teamSlug !== workspaceConfig()?.teamSlug) {
+        return;
+    }
+
+    const database = dbForTeam(teamSlug);
 
     if (!database) {
         return;
@@ -935,30 +1105,39 @@ const FILED_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Drop filed memos once they're old enough that the note edit has synced. */
 async function purgeFiledMemos(): Promise<void> {
-    const database = workspaceDb();
-
-    if (!database) {
-        return;
-    }
-
     const cutoff = Date.now() - FILED_TTL_MS;
-    const filed = await database.memos
-        .where('status')
-        .equals('filed')
-        .toArray();
 
-    for (const memo of filed) {
-        if (Date.parse(memo.createdAt) < cutoff) {
-            await database.memos.delete(memo.id);
+    for (const teamSlug of memoTeamSlugs()) {
+        const database = dbForTeam(teamSlug);
+
+        if (!database) {
+            continue;
+        }
+
+        const filed = await database.memos
+            .where('status')
+            .equals('filed')
+            .toArray();
+
+        for (const memo of filed) {
+            if (Date.parse(memo.createdAt) < cutoff) {
+                await database.memos.delete(memo.id);
+            }
+        }
+
+        // Nothing left for this team — its registry entry has done its job.
+        if ((await database.memos.count()) === 0) {
+            forgetMemoTeam(teamSlug);
         }
     }
 }
 
 async function uploadMemo(memo: MemoRecord): Promise<void> {
-    const config = workspaceConfig();
-    const database = workspaceDb();
+    // Upload for the memo's OWN team — recorded there, filed there — even
+    // when a different team is currently open.
+    const database = dbForTeam(memo.teamSlug);
 
-    if (!config || !database) {
+    if (!database) {
         return;
     }
 
@@ -978,7 +1157,7 @@ async function uploadMemo(memo: MemoRecord): Promise<void> {
         );
 
         const { text } = await apiUpload<{ text: string }>(
-            `/api/${config.teamSlug}/memos/transcriptions`,
+            `/api/${memo.teamSlug}/memos/transcriptions`,
             form,
             // Never let a stalled transcription wedge the queue forever — the
             // hung part is what tempts a risky app relaunch. Fail and retry.
@@ -989,7 +1168,7 @@ async function uploadMemo(memo: MemoRecord): Promise<void> {
             status: 'done',
             transcript: text,
         });
-        await fileGroup(memo.groupId);
+        await fileGroup(memo.groupId, memo.teamSlug);
     } catch (error) {
         await database.memos.update(memo.id, {
             status: 'failed',
@@ -1004,39 +1183,44 @@ async function uploadMemo(memo: MemoRecord): Promise<void> {
 
 /** Try every queued part; called on start, on reconnect, and periodically. */
 export async function processQueue(): Promise<void> {
-    if (!navigator.onLine) {
+    if (!navigator.onLine || workspaceDb() === null) {
         return;
     }
 
-    const database = workspaceDb();
+    // Every team with queued memos uploads — a recording made in one team
+    // keeps transcribing even after switching to (or relaunching into)
+    // another. Only filing waits for its team to be active.
+    for (const teamSlug of memoTeamSlugs()) {
+        const database = dbForTeam(teamSlug);
 
-    if (!database) {
-        return;
-    }
-
-    const queued = await database.memos.orderBy('createdAt').toArray();
-
-    // Upload anything not yet transcribed. `filed` is retired; `done` is
-    // handled by the reconciliation pass below.
-    for (const memo of queued) {
-        if (
-            (memo.status === 'pending' ||
-                memo.status === 'uploading' ||
-                memo.status === 'failed') &&
-            !uploadsInFlight.has(memo.id)
-        ) {
-            await uploadMemo(memo);
+        if (!database) {
+            continue;
         }
-    }
 
-    // Reconcile every group: file completed ones, and re-heal any whose
-    // transcript went missing from its note (e.g. a sync overwrote it).
-    const groupIds = new Set(
-        (await database.memos.toArray()).map((memo) => memo.groupId),
-    );
+        const queued = await database.memos.orderBy('createdAt').toArray();
 
-    for (const groupId of groupIds) {
-        await fileGroup(groupId);
+        // Upload anything not yet transcribed. `filed` is retired; `done` is
+        // handled by the reconciliation pass below.
+        for (const memo of queued) {
+            if (
+                (memo.status === 'pending' ||
+                    memo.status === 'uploading' ||
+                    memo.status === 'failed') &&
+                !uploadsInFlight.has(memo.id)
+            ) {
+                await uploadMemo(memo);
+            }
+        }
+
+        // Reconcile every group: file completed ones, and re-heal any whose
+        // transcript went missing from its note (e.g. a sync overwrote it).
+        const groupIds = new Set(
+            (await database.memos.toArray()).map((memo) => memo.groupId),
+        );
+
+        for (const groupId of groupIds) {
+            await fileGroup(groupId, teamSlug);
+        }
     }
 }
 
@@ -1045,38 +1229,41 @@ export async function processQueue(): Promise<void> {
  * is recording now, so close those groups at whatever was captured.
  */
 async function adoptOrphanedGroups(): Promise<void> {
-    const database = workspaceDb();
+    for (const teamSlug of memoTeamSlugs()) {
+        const database = dbForTeam(teamSlug);
 
-    if (!database) {
-        return;
-    }
-
-    const all = await database.memos.toArray();
-    const openGroups = new Map<string, number>();
-
-    for (const memo of all) {
-        // A native recording that survived a web-view reload is still open —
-        // its parts get partsTotal from the 'stopped' event, not from here.
-        if (memo.groupId === nativeSession?.groupId) {
+        if (!database) {
             continue;
         }
 
-        if (memo.partsTotal === null) {
-            openGroups.set(
-                memo.groupId,
-                Math.max(openGroups.get(memo.groupId) ?? 0, memo.part + 1),
-            );
+        const all = await database.memos.toArray();
+        const openGroups = new Map<string, number>();
+
+        for (const memo of all) {
+            // A native recording that survived a web-view reload is still
+            // open — its parts get partsTotal from the 'stopped' event, not
+            // from here.
+            if (memo.groupId === nativeSession?.groupId) {
+                continue;
+            }
+
+            if (memo.partsTotal === null) {
+                openGroups.set(
+                    memo.groupId,
+                    Math.max(openGroups.get(memo.groupId) ?? 0, memo.part + 1),
+                );
+            }
         }
-    }
 
-    for (const [groupId, total] of openGroups) {
-        const parts = await database.memos
-            .where('groupId')
-            .equals(groupId)
-            .toArray();
+        for (const [groupId, total] of openGroups) {
+            const parts = await database.memos
+                .where('groupId')
+                .equals(groupId)
+                .toArray();
 
-        for (const part of parts) {
-            await database.memos.update(part.id, { partsTotal: total });
+            for (const part of parts) {
+                await database.memos.update(part.id, { partsTotal: total });
+            }
         }
     }
 }
@@ -1108,6 +1295,10 @@ function handlePageHide(): void {
  */
 export function startMemoUploader(): void {
     if (booted) {
+        // Re-entered after an SPA team switch (the notes page remounts):
+        // pick up the newly-active team's queue and try deferred filings.
+        void refreshQueue().then(processQueue);
+
         return;
     }
 

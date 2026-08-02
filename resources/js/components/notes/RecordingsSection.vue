@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePage } from '@inertiajs/vue3';
 import { CloudUpload, Loader2, Mic, TriangleAlert, X } from '@lucide/vue';
 import { computed } from 'vue';
 
@@ -14,6 +15,24 @@ import {
 const hasContent = computed(
     () => isRecording.value || memoGroups.value.length > 0,
 );
+
+const page = usePage();
+
+/**
+ * A memo files into the team it was RECORDED in; when that isn't the team
+ * currently open, label the row so a "Waiting…" entry is understandable.
+ */
+function teamLabel(group: MemoGroup): string | null {
+    if (group.teamSlug === page.props.currentTeam?.slug) {
+        return null;
+    }
+
+    const team = (page.props.teams ?? []).find(
+        (candidate) => candidate.slug === group.teamSlug,
+    );
+
+    return team?.name ?? group.teamSlug;
+}
 
 function statusLabel(group: MemoGroup): string {
     if (group.status === 'failed') {
@@ -108,6 +127,12 @@ function timeLabel(group: MemoGroup): string {
                 <span class="block truncate text-xs">
                     <Mic class="mr-0.5 inline size-3" />
                     {{ timeLabel(memoGroup) }}
+                    <span
+                        v-if="teamLabel(memoGroup)"
+                        class="ml-1 rounded bg-muted px-1 py-px text-[10px] text-muted-foreground"
+                    >
+                        {{ teamLabel(memoGroup) }}
+                    </span>
                 </span>
                 <span
                     class="block truncate text-[11px] text-muted-foreground"

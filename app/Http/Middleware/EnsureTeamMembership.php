@@ -24,7 +24,11 @@ class EnsureTeamMembership
 
         $this->ensureTeamMemberHasRequiredRole($user, $team, $minimumRole);
 
-        if ($request->route('current_team') && ! $user->isCurrentTeam($team)) {
+        // Only deliberate page navigations persist the team. Background API
+        // calls (the 30s sync poll, memo upload retries) also carry a
+        // {current_team} slug — letting them switch meant any other open
+        // client kept overwriting the user's team choice between launches.
+        if ($request->route('current_team') && ! $request->is('api/*') && ! $user->isCurrentTeam($team)) {
             $user->switchTeam($team);
         }
 

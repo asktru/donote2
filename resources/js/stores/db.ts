@@ -58,6 +58,13 @@ export interface MemoRecord {
     partsTotal: number | null;
     /** Daily key of the day the memo was recorded. */
     dateKey: string;
+    /**
+     * Slug of the team that was active when the recording STARTED. Uploads
+     * and filing target this team no matter which team is active later —
+     * switching teams (or relaunching into another one) must never move a
+     * transcript into the wrong workspace.
+     */
+    teamSlug: string;
     blob: Blob;
     mimeType: string;
     durationSec: number;
@@ -136,6 +143,17 @@ export function openWorkspaceDb(teamSlug: string, userId: number): WorkspaceDb {
     db.version(5).stores({
         calendarEvents: 'key, start',
     });
+
+    // Memos predating team stamping all live in the DB of the team they were
+    // recorded in — this database — so its slug is the correct backfill.
+    db.version(6).upgrade((transaction) =>
+        transaction
+            .table('memos')
+            .toCollection()
+            .modify((memo: Partial<MemoRecord>) => {
+                memo.teamSlug = memo.teamSlug ?? teamSlug;
+            }),
+    );
 
     return db;
 }
